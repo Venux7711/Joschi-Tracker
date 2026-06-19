@@ -18,28 +18,64 @@ const ANIFIT_SORTEN = [
   'Bio Steak Sensation (Rind)',
 ]
 
+const MENGE_LABELS = ['Nichts', 'Sehr wenig', 'Wenig', 'Mittel', 'Viel']
+
+function MengeSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="label mb-0">{label}</span>
+        <span className="text-sm font-medium text-amber-600">{MENGE_LABELS[value]}</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={4}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+      />
+      <div className="flex justify-between text-xs text-gray-400 mt-1">
+        <span>Nichts</span>
+        <span>Viel</span>
+      </div>
+    </div>
+  )
+}
+
 export default function NewFeedingPage() {
   const router = useRouter()
   const supabase = createClient()
 
   const [catId, setCatId] = useState<string | null>(null)
-  const [foodBrand, setFoodBrand] = useState('')
+  const [foodBrand, setFoodBrand] = useState('Anifit')
   const [foodType, setFoodType] = useState('')
   const [amountGrams, setAmountGrams] = useState('')
   const [loggedAt, setLoggedAt] = useState('')
   const [notes, setNotes] = useState('')
+  const [treatAmount, setTreatAmount] = useState(0)
+  const [dryFoodAmount, setDryFoodAmount] = useState(0)
+  const [extras, setExtras] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [prevBrands, setPrevBrands] = useState<string[]>([])
   const [prevTypes, setPrevTypes] = useState<string[]>([])
 
+  const isAnifit = foodBrand.trim().toLowerCase() === 'anifit'
+
   useEffect(() => {
     setLoggedAt(toLocalISOString())
 
     const init = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
       const { data: cats } = await supabase
@@ -68,6 +104,11 @@ export default function NewFeedingPage() {
     init()
   }, [])
 
+  // Sorte zurücksetzen wenn Marke wechselt
+  useEffect(() => {
+    setFoodType('')
+  }, [foodBrand])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!catId) {
@@ -77,9 +118,7 @@ export default function NewFeedingPage() {
     setLoading(true)
     setError(null)
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     const { error: insertError } = await supabase.from('feeding_logs').insert({
@@ -90,6 +129,9 @@ export default function NewFeedingPage() {
       food_type: foodType.trim(),
       amount_grams: amountGrams ? parseInt(amountGrams, 10) : null,
       notes: notes.trim() || null,
+      treat_amount: treatAmount > 0 ? treatAmount : null,
+      dry_food_amount: dryFoodAmount > 0 ? dryFoodAmount : null,
+      extras: extras.trim() || null,
     })
 
     if (insertError) {
@@ -100,16 +142,24 @@ export default function NewFeedingPage() {
     }
   }
 
+  // Marken-Liste: Anifit immer zuerst, dann andere
+  const brandOptions = [
+    'Anifit',
+    ...prevBrands.filter((b) => b.toLowerCase() !== 'anifit'),
+  ]
+
+  // Sorten-Liste: Anifit-Produkte oder frühere Eingaben
+  const typeOptions = isAnifit
+    ? ANIFIT_SORTEN
+    : prevTypes
+
   return (
     <div className="min-h-screen bg-amber-50">
       <Header />
 
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center gap-3 mb-6">
-          <Link
-            href="/dashboard"
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
+          <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">
             ← Zurück
           </Link>
           <h1 className="text-xl font-bold text-gray-800">🍽️ Futter eintragen</h1>
@@ -117,67 +167,52 @@ export default function NewFeedingPage() {
 
         <div className="card p-5">
           <form onSubmit={handleSubmit} className="space-y-5">
+
             {/* Marke */}
             <div>
-              <label htmlFor="foodBrand" className="label">
-                Marke *
-              </label>
-              <input
+              <label htmlFor="foodBrand" className="label">Marke *</label>
+              <select
                 id="foodBrand"
-                type="text"
-                list="brands-list"
                 value={foodBrand}
                 onChange={(e) => setFoodBrand(e.target.value)}
                 className="input-field"
-                placeholder="z.B. Royal Canin"
                 required
-              />
-              <datalist id="brands-list">
-                <option value="Anifit" />
-                {prevBrands.filter((b) => b.toLowerCase() !== 'anifit').map((b) => (
-                  <option key={b} value={b} />
+              >
+                {brandOptions.map((b) => (
+                  <option key={b} value={b}>{b}</option>
                 ))}
-              </datalist>
+                {!brandOptions.some((b) => b.toLowerCase() === foodBrand.toLowerCase()) && foodBrand && (
+                  <option value={foodBrand}>{foodBrand}</option>
+                )}
+              </select>
             </div>
 
             {/* Sorte */}
             <div>
-              <label htmlFor="foodType" className="label">
-                Sorte *
-              </label>
-              <input
-                id="foodType"
-                type="text"
-                list="types-list"
-                value={foodType}
-                onChange={(e) => setFoodType(e.target.value)}
-                className="input-field"
-                placeholder="z.B. Nassfutter Huhn"
-                required
-              />
-              <datalist id="types-list">
-                {prevTypes.map((t) => (
-                  <option key={t} value={t} />
-                ))}
-              </datalist>
-
-              {foodBrand.trim().toLowerCase() === 'anifit' && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {ANIFIT_SORTEN.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setFoodType(s)}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                        foodType === s
-                          ? 'bg-amber-500 text-white border-amber-500'
-                          : 'bg-white text-gray-600 border-gray-200 hover:border-amber-400 hover:text-amber-600'
-                      }`}
-                    >
-                      {s}
-                    </button>
+              <label htmlFor="foodType" className="label">Sorte *</label>
+              {typeOptions.length > 0 ? (
+                <select
+                  id="foodType"
+                  value={foodType}
+                  onChange={(e) => setFoodType(e.target.value)}
+                  className="input-field"
+                  required
+                >
+                  <option value="">Sorte wählen …</option>
+                  {typeOptions.map((t) => (
+                    <option key={t} value={t}>{t}</option>
                   ))}
-                </div>
+                </select>
+              ) : (
+                <input
+                  id="foodType"
+                  type="text"
+                  value={foodType}
+                  onChange={(e) => setFoodType(e.target.value)}
+                  className="input-field"
+                  placeholder="z.B. Nassfutter Huhn"
+                  required
+                />
               )}
             </div>
 
@@ -194,15 +229,13 @@ export default function NewFeedingPage() {
                 value={amountGrams}
                 onChange={(e) => setAmountGrams(e.target.value)}
                 className="input-field"
-                placeholder="z.B. 85"
+                placeholder="z.B. 800"
               />
             </div>
 
             {/* Uhrzeit */}
             <div>
-              <label htmlFor="loggedAt" className="label">
-                Uhrzeit *
-              </label>
+              <label htmlFor="loggedAt" className="label">Uhrzeit *</label>
               <input
                 id="loggedAt"
                 type="datetime-local"
@@ -210,6 +243,37 @@ export default function NewFeedingPage() {
                 onChange={(e) => setLoggedAt(e.target.value)}
                 className="input-field"
                 required
+              />
+            </div>
+
+            <hr className="border-gray-100" />
+
+            {/* Leckerli */}
+            <MengeSlider
+              label="🍖 Leckerli"
+              value={treatAmount}
+              onChange={setTreatAmount}
+            />
+
+            {/* Trockenfutter */}
+            <MengeSlider
+              label="🥣 Trockenfutter"
+              value={dryFoodAmount}
+              onChange={setDryFoodAmount}
+            />
+
+            {/* Sonstiges */}
+            <div>
+              <label htmlFor="extras" className="label">
+                Sonstiges bekommen <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                id="extras"
+                type="text"
+                value={extras}
+                onChange={(e) => setExtras(e.target.value)}
+                className="input-field"
+                placeholder="z.B. Thunfisch, Hühnchen gekocht …"
               />
             </div>
 
@@ -223,7 +287,7 @@ export default function NewFeedingPage() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="input-field resize-none"
-                rows={3}
+                rows={2}
                 placeholder="z.B. hat alles aufgefressen"
               />
             </div>
