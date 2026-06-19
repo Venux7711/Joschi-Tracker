@@ -47,8 +47,8 @@ export default function NewFeedingPage() {
         .limit(100)
 
       if (logs) {
-        const brands = [...new Set(logs.map((l) => l.food_brand))].filter(Boolean)
-        const types = [...new Set(logs.map((l) => l.food_type))].filter(Boolean)
+        const brands = Array.from(new Set(logs.map((l) => l.food_brand))).filter(Boolean)
+        const types = Array.from(new Set(logs.map((l) => l.food_type))).filter(Boolean)
         setPrevBrands(brands)
         setPrevTypes(types)
       }
