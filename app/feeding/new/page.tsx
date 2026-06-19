@@ -145,37 +145,39 @@ export default function NewFeedingPage() {
               <label htmlFor="foodType" className="label">
                 Sorte *
               </label>
-              {foodBrand.toLowerCase() === 'anifit' ? (
-                <select
-                  id="foodType"
-                  value={foodType}
-                  onChange={(e) => setFoodType(e.target.value)}
-                  className="input-field"
-                  required
-                >
-                  <option value="">Sorte wählen …</option>
+              <input
+                id="foodType"
+                type="text"
+                list="types-list"
+                value={foodType}
+                onChange={(e) => setFoodType(e.target.value)}
+                className="input-field"
+                placeholder="z.B. Nassfutter Huhn"
+                required
+              />
+              <datalist id="types-list">
+                {prevTypes.map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+
+              {foodBrand.trim().toLowerCase() === 'anifit' && (
+                <div className="mt-2 flex flex-wrap gap-2">
                   {ANIFIT_SORTEN.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setFoodType(s)}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        foodType === s
+                          ? 'bg-amber-500 text-white border-amber-500'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-amber-400 hover:text-amber-600'
+                      }`}
+                    >
+                      {s}
+                    </button>
                   ))}
-                </select>
-              ) : (
-                <>
-                  <input
-                    id="foodType"
-                    type="text"
-                    list="types-list"
-                    value={foodType}
-                    onChange={(e) => setFoodType(e.target.value)}
-                    className="input-field"
-                    placeholder="z.B. Nassfutter Huhn"
-                    required
-                  />
-                  <datalist id="types-list">
-                    {prevTypes.map((t) => (
-                      <option key={t} value={t} />
-                    ))}
-                  </datalist>
-                </>
+                </div>
               )}
             </div>
 
