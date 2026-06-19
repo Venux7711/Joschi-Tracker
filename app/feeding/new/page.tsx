@@ -20,6 +20,8 @@ const ANIFIT_SORTEN = [
 
 const MENGE_LABELS = ['Nichts', 'Sehr wenig', 'Wenig', 'Mittel', 'Viel']
 
+const ANIFIT_BRAND = 'Anifit'
+
 function MengeSlider({
   label,
   value,
@@ -65,6 +67,8 @@ export default function NewFeedingPage() {
   const [dryFoodAmount, setDryFoodAmount] = useState(0)
   const [extras, setExtras] = useState('')
   const [loading, setLoading] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanSuccess, setScanSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [prevBrands, setPrevBrands] = useState<string[]>([])
   const [prevTypes, setPrevTypes] = useState<string[]>([])
@@ -108,6 +112,32 @@ export default function NewFeedingPage() {
   useEffect(() => {
     setFoodType('')
   }, [foodBrand])
+
+  const handleScanImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setScanning(true)
+    setScanSuccess(false)
+    setError(null)
+
+    const formData = new FormData()
+    formData.append('image', file)
+
+    try {
+      const res = await fetch('/api/analyze-can', { method: 'POST', body: formData })
+      const data = await res.json()
+
+      if (data.brand) setFoodBrand(data.brand)
+      if (data.type) setFoodType(data.type)
+      if (data.amount_grams) setAmountGrams(String(data.amount_grams))
+      setScanSuccess(true)
+    } catch {
+      setError('Dosenscan fehlgeschlagen. Bitte manuell eingeben.')
+    } finally {
+      setScanning(false)
+      e.target.value = ''
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -163,6 +193,31 @@ export default function NewFeedingPage() {
             ← Zurück
           </Link>
           <h1 className="text-xl font-bold text-gray-800">🍽️ Futter eintragen</h1>
+        </div>
+
+        {/* Dosenscan */}
+        <div className="card p-4 mb-4">
+          <label className="flex flex-col items-center gap-2 cursor-pointer">
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handleScanImage}
+              disabled={scanning}
+            />
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-colors ${
+              scanning ? 'bg-amber-100' : scanSuccess ? 'bg-green-100' : 'bg-amber-50 hover:bg-amber-100'
+            }`}>
+              {scanning ? '⏳' : scanSuccess ? '✅' : '📷'}
+            </div>
+            <span className="text-sm font-medium text-gray-700">
+              {scanning ? 'Dose wird analysiert…' : scanSuccess ? 'Felder ausgefüllt!' : 'Dose fotografieren'}
+            </span>
+            <span className="text-xs text-gray-400">
+              Kamera öffnen → Formular wird automatisch ausgefüllt
+            </span>
+          </label>
         </div>
 
         <div className="card p-5">
