@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
@@ -17,11 +18,17 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       setError('Falsche E-Mail oder falsches Passwort.')
       setLoading(false)
+      return
+    }
+
+    // Einmalpasswort gesetzt → Passwort ändern erzwingen
+    if (data.user?.user_metadata?.must_change_password) {
+      router.push('/auth/change-password')
     } else {
       router.push('/dashboard')
       router.refresh()
@@ -84,6 +91,15 @@ export default function LoginPage() {
             {loading ? 'Anmelden...' : 'Anmelden'}
           </button>
         </form>
+
+        <div className="text-center mt-4">
+          <Link
+            href="/auth/forgot-password"
+            className="text-sm text-amber-600 hover:text-amber-700 underline"
+          >
+            Passwort vergessen?
+          </Link>
+        </div>
       </div>
     </div>
   )
