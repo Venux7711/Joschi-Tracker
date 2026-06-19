@@ -7,6 +7,17 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { toLocalISOString } from '@/lib/utils'
 
+const ANIFIT_SORTEN = [
+  'Puterichs Delight (Truthahn)',
+  'Powertöpfchen (Lamm/Huhn)',
+  'Délice de Coeur (Huhn)',
+  'Fisch à la Mode (Lachs/Huhn/Rentier)',
+  'Nautilus Ragout (Hering/Lachs)',
+  'Eismeer Terrine (Hering/Weißfisch/Lachs)',
+  'Bio Enten-Energie (Ente)',
+  'Bio Steak Sensation (Rind)',
+]
+
 export default function NewFeedingPage() {
   const router = useRouter()
   const supabase = createClient()
@@ -122,7 +133,8 @@ export default function NewFeedingPage() {
                 required
               />
               <datalist id="brands-list">
-                {prevBrands.map((b) => (
+                <option value="Anifit" />
+                {prevBrands.filter((b) => b.toLowerCase() !== 'anifit').map((b) => (
                   <option key={b} value={b} />
                 ))}
               </datalist>
@@ -133,21 +145,38 @@ export default function NewFeedingPage() {
               <label htmlFor="foodType" className="label">
                 Sorte *
               </label>
-              <input
-                id="foodType"
-                type="text"
-                list="types-list"
-                value={foodType}
-                onChange={(e) => setFoodType(e.target.value)}
-                className="input-field"
-                placeholder="z.B. Nassfutter Huhn"
-                required
-              />
-              <datalist id="types-list">
-                {prevTypes.map((t) => (
-                  <option key={t} value={t} />
-                ))}
-              </datalist>
+              {foodBrand.toLowerCase() === 'anifit' ? (
+                <select
+                  id="foodType"
+                  value={foodType}
+                  onChange={(e) => setFoodType(e.target.value)}
+                  className="input-field"
+                  required
+                >
+                  <option value="">Sorte wählen …</option>
+                  {ANIFIT_SORTEN.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <input
+                    id="foodType"
+                    type="text"
+                    list="types-list"
+                    value={foodType}
+                    onChange={(e) => setFoodType(e.target.value)}
+                    className="input-field"
+                    placeholder="z.B. Nassfutter Huhn"
+                    required
+                  />
+                  <datalist id="types-list">
+                    {prevTypes.map((t) => (
+                      <option key={t} value={t} />
+                    ))}
+                  </datalist>
+                </>
+              )}
             </div>
 
             {/* Menge */}
