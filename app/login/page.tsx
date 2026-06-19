@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
@@ -39,7 +40,9 @@ export default function LoginPage() {
     <div className="min-h-screen bg-amber-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="text-6xl mb-3">🐱</div>
+          <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-amber-300 shadow-md mx-auto mb-3">
+            <Image src="/joschi.jpg" alt="Joschi" fill className="object-cover object-top" priority />
+          </div>
           <h1 className="text-2xl font-bold text-gray-800">Joschi Tracker</h1>
           <p className="text-gray-500 text-sm mt-1">Gesundheitstracker für Joschi</p>
         </div>

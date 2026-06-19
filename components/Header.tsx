@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -19,7 +20,9 @@ export default function Header() {
     <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
       <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="text-2xl">🐱</span>
+          <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-amber-300 flex-shrink-0">
+            <Image src="/joschi.jpg" alt="Joschi" fill className="object-cover object-top" />
+          </div>
           <span className="font-semibold text-gray-800 text-lg">Joschi</span>
         </Link>
 
