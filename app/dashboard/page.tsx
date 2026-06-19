@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import Header from '@/components/Header'
 import {
   formatTime,
@@ -113,6 +114,26 @@ export default async function DashboardPage() {
       <Header />
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+
+        {/* Joschi Portrait */}
+        <div className="flex items-center gap-4">
+          <div className="relative w-20 h-20 rounded-full overflow-hidden border-4 border-amber-300 shadow-md flex-shrink-0">
+            <Image
+              src="/joschi.jpg"
+              alt="Joschi"
+              fill
+              className="object-cover object-top"
+              priority
+            />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Joschi</h2>
+            <p className="text-sm text-gray-500">
+              {new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+          </div>
+        </div>
+
         {/* Heutiger Status */}
         <section>
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">

@@ -14,8 +14,8 @@ export const metadata: Metadata = {
     title: 'Joschi',
   },
   icons: {
-    icon: '/icon.svg',
-    apple: '/icon.svg',
+    icon: '/joschi.jpg',
+    apple: '/joschi.jpg',
   },
 }
 
