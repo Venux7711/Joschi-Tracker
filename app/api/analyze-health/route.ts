@@ -59,13 +59,14 @@ Bitte analysiere und antworte auf Deutsch mit folgender Struktur:
 
 Sei präzise und klar. Maximal 250 Wörter. Falls zu wenig Daten vorhanden: Sag das ehrlich.`
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
     const result = await model.generateContent(prompt)
     const analysis = result.response.text()
 
     return NextResponse.json({ analysis })
   } catch (err) {
-    console.error('analyze-health error:', err)
-    return NextResponse.json({ error: 'Analyse fehlgeschlagen' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('analyze-health error:', msg)
+    return NextResponse.json({ error: 'Analyse fehlgeschlagen', detail: msg }, { status: 500 })
   }
 }

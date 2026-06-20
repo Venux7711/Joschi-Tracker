@@ -39,7 +39,7 @@ export default function AiInsights({
 }) {
   const [analysis, setAnalysis] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const analyze = async () => {
     setLoading(true)
@@ -51,10 +51,10 @@ export default function AiInsights({
         body: JSON.stringify({ feedings, health }),
       })
       const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      if (data.error) throw new Error(data.detail ?? data.error)
       setAnalysis(data.analysis)
-    } catch {
-      setError(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unbekannter Fehler')
     }
     setLoading(false)
   }
@@ -93,8 +93,9 @@ export default function AiInsights({
       )}
 
       {error && (
-        <div className="px-4 py-3 text-sm text-red-500 text-center">
-          Analyse fehlgeschlagen. Bitte erneut versuchen.
+        <div className="px-4 py-3 text-xs text-red-500 text-center space-y-1">
+          <p className="font-medium">Analyse fehlgeschlagen</p>
+          <p className="text-red-400 break-all">{error}</p>
         </div>
       )}
 
