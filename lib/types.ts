@@ -17,8 +17,24 @@ export interface FeedingLog {
   food_brand: string
   food_type: string
   amount_grams: number | null
+  treat_amount: number | null
+  dry_food_amount: number | null
+  extras: string | null
   notes: string | null
   created_at: string
+}
+
+export interface PantryItem {
+  id: string
+  cat_id: string
+  user_id: string
+  brand: string
+  type: string
+  quantity: number
+  restock_date: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface HealthLog {

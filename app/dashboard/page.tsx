@@ -11,8 +11,9 @@ import {
   getAppetiteLabel,
   getActivityLabel,
 } from '@/lib/utils'
-import type { FeedingLog, HealthLog, StoolConsistency } from '@/lib/types'
+import type { FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@/lib/types'
 import AiInsights from '@/components/AiInsights'
+import { ANIFIT_FOODS, getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
 
 function getPastNDays(n: number): Date[] {
   return Array.from({ length: n }, (_, i) => {
@@ -60,11 +61,15 @@ export default async function DashboardPage() {
   const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29); thirtyDaysAgo.setHours(0, 0, 0, 0)
 
   // Alle Daten auf einmal holen
+  const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); sevenDaysAgo.setHours(0, 0, 0, 0)
+  const threeDaysAgo = new Date(); threeDaysAgo.setDate(threeDaysAgo.getDate() - 2); threeDaysAgo.setHours(0, 0, 0, 0)
+
   const [
     { data: todayFeedingsRaw },
     { data: todayHealthRaw },
     { data: allHealth30 },
     { data: allFeedings30 },
+    { data: pantryRaw },
   ] = await Promise.all([
     supabase.from('feeding_logs').select('*').eq('cat_id', cat.id)
       .gte('logged_at', todayStart.toISOString()).lte('logged_at', todayEnd.toISOString())
@@ -78,12 +83,14 @@ export default async function DashboardPage() {
     supabase.from('feeding_logs').select('*')
       .eq('cat_id', cat.id).gte('logged_at', thirtyDaysAgo.toISOString())
       .order('logged_at', { ascending: true }),
+    supabase.from('pantry_items').select('*').eq('cat_id', cat.id).gt('quantity', 0),
   ])
 
   const feedings = (todayFeedingsRaw ?? []) as FeedingLog[]
   const healthLogs = (todayHealthRaw ?? []) as HealthLog[]
   const health30 = (allHealth30 ?? []) as HealthLog[]
   const feedings30 = (allFeedings30 ?? []) as FeedingLog[]
+  const pantry = (pantryRaw ?? []) as PantryItem[]
 
   // === Statistiken berechnen ===
 
@@ -152,6 +159,66 @@ export default async function DashboardPage() {
     .sort((a, b) => (b.diarrhea / b.total) - (a.diarrhea / a.total))
     .slice(0, 6)
 
+  // === Futter-Empfehlung aus Vorrat ===
+  // Proteine der letzten 7 Tage ermitteln
+  const recentFeedings7 = feedings30.filter(f => new Date(f.logged_at) >= sevenDaysAgo)
+  const recentProteins = new Set(
+    recentFeedings7.flatMap(f => getFoodInfo(f.food_brand, f.food_type)?.proteins ?? [])
+  )
+  // Diarrhoe letzte 3 Tage?
+  const recentDiarrhea = health30.some(h =>
+    new Date(h.logged_at) >= threeDaysAgo && h.stool_consistency === 'diarrhea'
+  )
+
+  type FoodRec = {
+    item: PantryItem
+    info: ReturnType<typeof getFoodInfo>
+    score: number
+    reasons: string[]
+  }
+
+  const scored: FoodRec[] = pantry.map(item => {
+    const info = getFoodInfo(item.brand, item.type)
+    const proteins = info?.proteins ?? []
+    const newProteins = proteins.filter(p => !recentProteins.has(p))
+    const corrKey = `${item.brand}||${item.type}`
+    const corr = foodMap.get(corrKey)
+    const diarrheaRate = corr ? corr.diarrhea / corr.total : 0
+
+    const reasons: string[] = []
+    let score = 0
+
+    if (newProteins.length > 0) {
+      score += 10
+      reasons.push(`Neue Proteinquelle: ${newProteins.join(', ')}`)
+    } else {
+      reasons.push(`Protein zuletzt gegeben: ${proteins.join(', ')}`)
+    }
+
+    if (info?.proteinType === 'mono') {
+      score += recentDiarrhea ? 8 : 3
+      if (recentDiarrhea) reasons.push('Mono-Protein bevorzugt (kürzlicher Durchfall)')
+    }
+
+    if (diarrheaRate === 0 && corr && corr.total >= 2) {
+      score += 5
+      reasons.push('Bisher kein Durchfall nach diesem Futter')
+    } else if (diarrheaRate > 0.5) {
+      score -= 8
+      reasons.push(`Hohe Durchfall-Korrelation (${Math.round(diarrheaRate * 100)}%)`)
+    }
+
+    return { item, info, score, reasons }
+  }).sort((a, b) => b.score - a.score)
+
+  const recommendation = scored[0] ?? null
+
+  // KI-Daten – jetzt mit Vorrat und Proteininfo
+  const aiPantry = pantry.map(p => {
+    const info = getFoodInfo(p.brand, p.type)
+    return `${p.type} (${info ? getProteinLabel(info) : p.brand}) – ${p.quantity} Dose${p.quantity !== 1 ? 'n' : ''}`
+  })
+
   // Daten für KI aufbereiten
   const aiFeedings = feedings30.map(f => ({
     date: new Date(f.logged_at).toLocaleDateString('de-DE'),
@@ -200,6 +267,43 @@ export default async function DashboardPage() {
             <div className="text-amber-100 text-xs">Mahlzeiten</div>
           </div>
         </div>
+
+        {/* ── FUTTER-EMPFEHLUNG ── */}
+        {recommendation && (
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100 overflow-hidden shadow-sm">
+            <div className="px-4 py-3 border-b border-amber-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">🎯 Empfehlung für heute</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Basierend auf Vorrat, Protein-Rotation & Verträglichkeit</p>
+              </div>
+            </div>
+            <div className="px-4 py-3">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-bold text-gray-800 leading-tight">
+                    {recommendation.item.type || recommendation.item.brand}
+                  </p>
+                  {recommendation.info && (
+                    <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 ${getProteinBadgeColor(recommendation.info)}`}>
+                      {getProteinLabel(recommendation.info)}
+                    </span>
+                  )}
+                  <div className="mt-2 space-y-0.5">
+                    {recommendation.reasons.slice(0, 2).map((r, i) => (
+                      <p key={i} className="text-xs text-gray-500 flex items-start gap-1">
+                        <span className="text-amber-400 mt-px">›</span>{r}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex-shrink-0 text-right">
+                  <span className="text-2xl font-bold text-amber-600">{recommendation.item.quantity}</span>
+                  <p className="text-[10px] text-gray-400">im Vorrat</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── STATS KARTEN ── */}
         <div className="grid grid-cols-2 gap-3">
@@ -371,11 +475,19 @@ export default async function DashboardPage() {
               {foodCorrelation.map((s) => {
                 const pct = Math.round((s.diarrhea / s.total) * 100)
                 const barColor = pct >= 60 ? 'bg-red-400' : pct >= 30 ? 'bg-yellow-400' : 'bg-green-400'
+                const info = getFoodInfo(s.brand, s.type)
                 return (
                   <div key={`${s.brand}||${s.type}`}>
-                    <div className="flex items-baseline justify-between mb-1">
-                      <span className="text-xs text-gray-700 truncate max-w-[70%]">{s.type || s.brand}</span>
-                      <span className={`text-xs font-semibold ${pct >= 60 ? 'text-red-500' : pct >= 30 ? 'text-yellow-600' : 'text-green-600'}`}>
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-xs text-gray-700 truncate">{s.type || s.brand}</span>
+                        {info && (
+                          <span className={`text-[9px] font-semibold px-1.5 py-px rounded-full flex-shrink-0 ${getProteinBadgeColor(info)}`}>
+                            {info.proteinType === 'mono' ? 'Mono' : 'Multi'}
+                          </span>
+                        )}
+                      </div>
+                      <span className={`text-xs font-semibold flex-shrink-0 ${pct >= 60 ? 'text-red-500' : pct >= 30 ? 'text-yellow-600' : 'text-green-600'}`}>
                         {pct}% <span className="text-gray-400 font-normal">({s.diarrhea}/{s.total}×)</span>
                       </span>
                     </div>
@@ -391,7 +503,7 @@ export default async function DashboardPage() {
         )}
 
         {/* ── KI-AUSWERTUNG ── */}
-        <AiInsights feedings={aiFeedings} health={aiHealth} />
+        <AiInsights feedings={aiFeedings} health={aiHealth} pantry={aiPantry} />
 
         {/* ── QUICK ACTIONS ── */}
         <div className="grid grid-cols-2 gap-3 pb-4">

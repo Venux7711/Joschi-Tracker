@@ -33,9 +33,11 @@ function renderAnalysis(text: string) {
 export default function AiInsights({
   feedings,
   health,
+  pantry = [],
 }: {
   feedings: FeedingEntry[]
   health: HealthEntry[]
+  pantry?: string[]
 }) {
   const [analysis, setAnalysis] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -43,12 +45,12 @@ export default function AiInsights({
 
   const analyze = async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const res = await fetch('/api/analyze-health', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedings, health }),
+        body: JSON.stringify({ feedings, health, pantry }),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.detail ?? data.error)
@@ -87,7 +89,7 @@ export default function AiInsights({
         <div className="px-4 py-5 text-center">
           <div className="inline-flex items-center gap-2 text-sm text-violet-600">
             <span className="animate-spin">⟳</span>
-            Analysiere {feedings.length} Futter-Einträge und {health.length} Befinden-Einträge…
+            Analysiere {feedings.length} Futter-Einträge, {health.length} Befinden-Einträge{pantry.length > 0 ? ` und ${pantry.length} Vorrats-Positionen` : ''}…
           </div>
         </div>
       )}

@@ -10,7 +10,7 @@ const ACTIVITY: Record<string, string> = { normal: 'Normal', tired: 'Müde', ver
 
 export async function POST(req: NextRequest) {
   try {
-    const { feedings, health } = await req.json()
+    const { feedings, health, pantry = [] } = await req.json()
 
     const feedingLines = feedings.map((f: {
       date: string; brand: string; type: string; grams?: number
@@ -35,29 +35,40 @@ export async function POST(req: NextRequest) {
       return line
     }).join('\n')
 
+    const pantrySection = pantry.length > 0
+      ? `\n═══ AKTUELLER VORRAT ═══\n${(pantry as string[]).join('\n')}`
+      : ''
+
     const prompt = `Du bist ein erfahrener Tiergesundheits-Assistent. Analysiere folgende Daten für Joschi, eine goldene Langhaar-Perserkatze mit wiederkehrendem Durchfall.
+
+WICHTIG zu Proteinquellen:
+- Mono-Protein = nur eine Fleischquelle (z.B. nur Truthahn) → besser bei Unverträglichkeiten, leichter zu diagnostizieren
+- Multi-Protein = mehrere Fleischquellen (z.B. Lachs+Huhn+Rentier) → höheres Allergiepotenzial
+- Protein-Rotation ist wichtig: nicht immer dieselbe Quelle
+- Geflügel (Huhn, Truthahn, Ente) und Fisch (Lachs, Hering) sind unterschiedliche Proteinfamilien
 
 ═══ FUTTER-PROTOKOLL (letzte 30 Tage) ═══
 ${feedingLines || 'Keine Futter-Daten vorhanden.'}
 
 ═══ BEFINDEN-PROTOKOLL (letzte 30 Tage) ═══
 ${healthLines || 'Keine Befinden-Daten vorhanden.'}
+${pantrySection}
 
 Bitte analysiere und antworte auf Deutsch mit folgender Struktur:
 
 **Muster & Korrelationen**
-[Gibt es erkennbare Zusammenhänge zwischen Futter und Durchfall? Welche Sorten traten häufig vor Durchfall-Episoden auf?]
+[Zusammenhänge zwischen Futter (besonders Mono/Multi-Protein) und Durchfall-Episoden]
 
-**Auffälligkeiten**
-[Was fällt auf? Zeitliche Muster, Häufigkeit, Schweregrade?]
+**Protein-Analyse**
+[Welche Proteinquellen überwiegen? Gibt es Auffälligkeiten bei Mono vs. Multi-Protein und der Verträglichkeit?]
 
 **Verträglichkeit**
-[Welche Futtermittel scheinen besser oder schlechter verträglich zu sein?]
+[Welche Sorten scheinen besser oder schlechter verträglich? Konkret mit Prozentzahlen wenn möglich]
 
-**Empfehlungen**
-[Konkrete, umsetzbare Vorschläge zur weiteren Beobachtung oder Ernährungsanpassung]
+**Empfehlung nächste Mahlzeit**
+[Basierend auf Vorrat, Protein-Rotation und Verträglichkeit: Was sollte als nächstes gegeben werden und warum?]
 
-Sei präzise und klar. Maximal 250 Wörter. Falls zu wenig Daten vorhanden: Sag das ehrlich.`
+Sei präzise. Maximal 280 Wörter. Falls zu wenig Daten: Sag das ehrlich.`
 
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
     const result = await model.generateContent(prompt)
