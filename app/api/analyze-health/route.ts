@@ -70,7 +70,10 @@ Bitte analysiere und antworte auf Deutsch mit folgender Struktur:
 
 Sei präzise. Maximal 280 Wörter. Falls zu wenig Daten: Sag das ehrlich.`
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+    const model = genAI.getGenerativeModel(
+      { model: 'gemini-1.5-flash' },
+      { apiVersion: 'v1' }
+    )
     const result = await model.generateContent(prompt)
     const analysis = result.response.text()
 

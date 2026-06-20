@@ -328,7 +328,7 @@ export default async function DashboardPage() {
 
         {/* ── HERO ── */}
         <div className="bg-gradient-to-br from-amber-400 to-amber-500 rounded-3xl p-5 flex items-center gap-4 shadow-md">
-          <JoschiPhoto size={20} />
+          <JoschiPhoto size={80} />
           <div className="flex-1 min-w-0">
             <p className="text-amber-100 text-sm">{greeting} 👋</p>
             <h1 className="text-white text-2xl font-bold">Joschi</h1>
