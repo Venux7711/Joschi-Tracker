@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 export default function ChangePasswordPage() {
   const [password, setPassword] = useState('')
@@ -10,7 +9,6 @@ export default function ChangePasswordPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -25,13 +23,15 @@ export default function ChangePasswordPage() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.updateUser({
-      password,
-      data: { must_change_password: false },
+    const res = await fetch('/api/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
     })
+    const data = await res.json()
 
-    if (error) {
-      setError('Fehler beim Speichern. Bitte erneut versuchen.')
+    if (!res.ok) {
+      setError(data.error ?? 'Fehler beim Speichern. Bitte erneut versuchen.')
       setLoading(false)
     } else {
       router.push('/dashboard')

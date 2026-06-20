@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import Header from '@/components/Header'
 import {
   formatTime,
@@ -13,7 +12,8 @@ import {
 } from '@/lib/utils'
 import type { FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@/lib/types'
 import AiInsights from '@/components/AiInsights'
-import { ANIFIT_FOODS, getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
+import JoschiPhoto from '@/components/JoschiPhoto'
+import { getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
 
 function getPastNDays(n: number): Date[] {
   return Array.from({ length: n }, (_, i) => {
@@ -43,7 +43,7 @@ export default async function DashboardPage() {
   if (!user) redirect('/login')
 
   // Katze holen oder anlegen
-  let { data: cats } = await supabase.from('cats').select('*').eq('owner_id', user.id).limit(1)
+  let { data: cats } = await supabase.from('cats').select('*').limit(1)
   let cat = cats?.[0]
   if (!cat) {
     const { data: newCat } = await supabase.from('cats').insert({ name: 'Joschi', owner_id: user.id }).select().single()
@@ -240,6 +240,20 @@ export default async function DashboardPage() {
     notes: h.notes ?? undefined,
   }))
 
+  // === Fütterungs-Statistik: Sorten der letzten 30 Tage ===
+  type FoodFreq = { brand: string; type: string; count: number; lastDate: Date }
+  const freqMap = new Map<string, FoodFreq>()
+  for (const f of feedings30) {
+    const key = `${f.food_brand}||${f.food_type}`
+    const d = new Date(f.logged_at)
+    if (!freqMap.has(key)) freqMap.set(key, { brand: f.food_brand, type: f.food_type, count: 0, lastDate: d })
+    const entry = freqMap.get(key)!
+    entry.count++
+    if (d > entry.lastDate) entry.lastDate = d
+  }
+  const foodFrequency = Array.from(freqMap.values())
+    .sort((a, b) => b.lastDate.getTime() - a.lastDate.getTime())
+
   const today = new Date()
   const greeting = today.getHours() < 12 ? 'Guten Morgen' : today.getHours() < 17 ? 'Guten Tag' : 'Guten Abend'
 
@@ -251,9 +265,7 @@ export default async function DashboardPage() {
 
         {/* ── HERO ── */}
         <div className="bg-gradient-to-br from-amber-400 to-amber-500 rounded-3xl p-5 flex items-center gap-4 shadow-md">
-          <div className="relative w-20 h-20 rounded-full overflow-hidden border-4 border-white/60 shadow-lg flex-shrink-0">
-            <Image src="/joschi.jpg" alt="Joschi" fill className="object-cover object-top" priority />
-          </div>
+          <JoschiPhoto size={20} />
           <div className="flex-1 min-w-0">
             <p className="text-amber-100 text-sm">{greeting} 👋</p>
             <h1 className="text-white text-2xl font-bold">Joschi</h1>
@@ -481,6 +493,47 @@ export default async function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* ── FÜTTERUNGS-STATISTIK ── */}
+        {foodFrequency.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-50">
+              <h3 className="text-sm font-semibold text-gray-700">🍽️ Futter-Übersicht (30 Tage)</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Welche Sorten wie oft gegeben wurden</p>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {foodFrequency.map((f) => {
+                const info = getFoodInfo(f.brand, f.type)
+                const maxCount = Math.max(...foodFrequency.map(x => x.count))
+                const barWidth = Math.round((f.count / maxCount) * 100)
+                const daysSince = Math.floor((today.getTime() - f.lastDate.getTime()) / (1000 * 60 * 60 * 24))
+                return (
+                  <div key={`${f.brand}||${f.type}`} className="px-4 py-2.5">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-xs font-medium text-gray-800 truncate">{f.type || f.brand}</span>
+                        {info && (
+                          <span className={`text-[9px] font-semibold px-1.5 py-px rounded-full flex-shrink-0 ${getProteinBadgeColor(info)}`}>
+                            {info.proteinType === 'mono' ? 'Mono' : 'Multi'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 text-right">
+                        <span className="text-xs font-bold text-gray-700">{f.count}×</span>
+                        <span className="text-[10px] text-gray-400">
+                          {daysSince === 0 ? 'heute' : daysSince === 1 ? 'gestern' : `vor ${daysSince}d`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${barWidth}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ── FUTTER-KORRELATION ── */}
         {foodCorrelation.length >= 2 && (

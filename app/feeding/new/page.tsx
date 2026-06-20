@@ -87,7 +87,6 @@ function NewFeedingForm() {
       const { data: cats } = await supabase
         .from('cats')
         .select('id')
-        .eq('owner_id', user.id)
         .limit(1)
 
       if (cats && cats.length > 0) setCatId(cats[0].id)

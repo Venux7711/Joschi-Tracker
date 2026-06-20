@@ -29,6 +29,7 @@ export default function LoginPage() {
 
     // Einmalpasswort gesetzt → Passwort ändern erzwingen
     if (data.user?.user_metadata?.must_change_password) {
+      router.refresh()
       router.push('/auth/change-password')
     } else {
       router.push('/dashboard')

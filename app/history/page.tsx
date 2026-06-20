@@ -48,7 +48,6 @@ export default async function HistoryPage() {
   const { data: cats } = await supabase
     .from('cats')
     .select('id')
-    .eq('owner_id', user.id)
     .limit(1)
 
   const cat = cats?.[0]
