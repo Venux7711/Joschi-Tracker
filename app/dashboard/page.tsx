@@ -109,7 +109,7 @@ export default async function DashboardPage() {
     const dayLogs = health30.filter(h => isSameDay(new Date(h.logged_at), day))
     const hasDiarrhea = dayLogs.some(h => h.stool_consistency === 'diarrhea')
     if (hasDiarrhea) break
-    if (dayLogs.length > 0) streak++
+    streak++ // kein Eintrag = alles normal
   }
 
   // 14-Tage Stuhlgang-Trend
