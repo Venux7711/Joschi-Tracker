@@ -8,11 +8,11 @@ import {
   isSameDay,
   getStoolLabel,
   getStoolColor,
-  getStoolDot,
   getAppetiteLabel,
   getActivityLabel,
 } from '@/lib/utils'
 import type { FeedingLog, HealthLog, StoolConsistency } from '@/lib/types'
+import AiInsights from '@/components/AiInsights'
 
 function getPastNDays(n: number): Date[] {
   return Array.from({ length: n }, (_, i) => {
@@ -64,6 +64,7 @@ export default async function DashboardPage() {
     { data: todayFeedingsRaw },
     { data: todayHealthRaw },
     { data: allHealth30 },
+    { data: allFeedings30 },
   ] = await Promise.all([
     supabase.from('feeding_logs').select('*').eq('cat_id', cat.id)
       .gte('logged_at', todayStart.toISOString()).lte('logged_at', todayEnd.toISOString())
@@ -71,14 +72,18 @@ export default async function DashboardPage() {
     supabase.from('health_logs').select('*').eq('cat_id', cat.id)
       .gte('logged_at', todayStart.toISOString()).lte('logged_at', todayEnd.toISOString())
       .order('logged_at', { ascending: false }),
-    supabase.from('health_logs').select('logged_at, stool_consistency, vomiting, appetite, activity, fur_issue')
+    supabase.from('health_logs').select('*')
       .eq('cat_id', cat.id).gte('logged_at', thirtyDaysAgo.toISOString())
       .order('logged_at', { ascending: false }),
+    supabase.from('feeding_logs').select('*')
+      .eq('cat_id', cat.id).gte('logged_at', thirtyDaysAgo.toISOString())
+      .order('logged_at', { ascending: true }),
   ])
 
   const feedings = (todayFeedingsRaw ?? []) as FeedingLog[]
   const healthLogs = (todayHealthRaw ?? []) as HealthLog[]
   const health30 = (allHealth30 ?? []) as HealthLog[]
+  const feedings30 = (allFeedings30 ?? []) as FeedingLog[]
 
   // === Statistiken berechnen ===
 
@@ -120,6 +125,53 @@ export default async function DashboardPage() {
   const vomiting7Days = past7.filter(day =>
     health30.some(h => isSameDay(new Date(h.logged_at), day) && h.vomiting)
   ).length
+
+  // === Futter-Diarrhoe-Korrelation ===
+  // Für jede Futter-Sorte: wie oft gegessen, wie oft am gleichen/nächsten Tag Durchfall
+  type FoodStat = { brand: string; type: string; total: number; diarrhea: number }
+  const foodMap = new Map<string, FoodStat>()
+
+  for (const f of feedings30) {
+    const key = `${f.food_brand}||${f.food_type}`
+    const fDay = new Date(f.logged_at)
+    const nextDay = new Date(fDay); nextDay.setDate(nextDay.getDate() + 1)
+
+    const hasDiarrhea = health30.some(h => {
+      const hDay = new Date(h.logged_at)
+      return (isSameDay(hDay, fDay) || isSameDay(hDay, nextDay)) && h.stool_consistency === 'diarrhea'
+    })
+
+    if (!foodMap.has(key)) foodMap.set(key, { brand: f.food_brand, type: f.food_type, total: 0, diarrhea: 0 })
+    const stat = foodMap.get(key)!
+    stat.total++
+    if (hasDiarrhea) stat.diarrhea++
+  }
+
+  const foodCorrelation = Array.from(foodMap.values())
+    .filter(s => s.total >= 2)
+    .sort((a, b) => (b.diarrhea / b.total) - (a.diarrhea / a.total))
+    .slice(0, 6)
+
+  // Daten für KI aufbereiten
+  const aiFeedings = feedings30.map(f => ({
+    date: new Date(f.logged_at).toLocaleDateString('de-DE'),
+    brand: f.food_brand,
+    type: f.food_type,
+    grams: f.amount_grams ?? undefined,
+    treat: (f as FeedingLog & { treat_amount?: number }).treat_amount ?? undefined,
+    dry: (f as FeedingLog & { dry_food_amount?: number }).dry_food_amount ?? undefined,
+    extras: (f as FeedingLog & { extras?: string }).extras ?? undefined,
+  }))
+
+  const aiHealth = health30.map(h => ({
+    date: new Date(h.logged_at).toLocaleDateString('de-DE'),
+    stool: h.stool_consistency,
+    appetite: h.appetite,
+    activity: h.activity,
+    vomiting: h.vomiting,
+    furIssue: h.fur_issue,
+    notes: h.notes ?? undefined,
+  }))
 
   const today = new Date()
   const greeting = today.getHours() < 12 ? 'Guten Morgen' : today.getHours() < 17 ? 'Guten Tag' : 'Guten Abend'
@@ -307,6 +359,39 @@ export default async function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* ── FUTTER-KORRELATION ── */}
+        {foodCorrelation.length >= 2 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-50">
+              <h3 className="text-sm font-semibold text-gray-700">📊 Futter & Durchfall</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Wie oft trat Durchfall am selben oder nächsten Tag auf?</p>
+            </div>
+            <div className="px-4 py-3 space-y-2.5">
+              {foodCorrelation.map((s) => {
+                const pct = Math.round((s.diarrhea / s.total) * 100)
+                const barColor = pct >= 60 ? 'bg-red-400' : pct >= 30 ? 'bg-yellow-400' : 'bg-green-400'
+                return (
+                  <div key={`${s.brand}||${s.type}`}>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <span className="text-xs text-gray-700 truncate max-w-[70%]">{s.type || s.brand}</span>
+                      <span className={`text-xs font-semibold ${pct >= 60 ? 'text-red-500' : pct >= 30 ? 'text-yellow-600' : 'text-green-600'}`}>
+                        {pct}% <span className="text-gray-400 font-normal">({s.diarrhea}/{s.total}×)</span>
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="px-4 pb-3 text-[10px] text-gray-300">Nur Sorten mit ≥2 Einträgen · Korrelation ≠ Kausalität</p>
+          </div>
+        )}
+
+        {/* ── KI-AUSWERTUNG ── */}
+        <AiInsights feedings={aiFeedings} health={aiHealth} />
 
         {/* ── QUICK ACTIONS ── */}
         <div className="grid grid-cols-2 gap-3 pb-4">
