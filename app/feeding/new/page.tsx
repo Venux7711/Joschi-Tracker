@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
@@ -53,8 +53,10 @@ function MengeSlider({
   )
 }
 
-export default function NewFeedingPage() {
+function NewFeedingForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const dateParam = searchParams.get('date')
   const supabase = createClient()
 
   const [catId, setCatId] = useState<string | null>(null)
@@ -76,7 +78,7 @@ export default function NewFeedingPage() {
   const isAnifit = foodBrand.trim().toLowerCase() === 'anifit'
 
   useEffect(() => {
-    setLoggedAt(toLocalISOString())
+    setLoggedAt(dateParam ? `${dateParam}T12:00` : toLocalISOString())
 
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -365,5 +367,13 @@ export default function NewFeedingPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function NewFeedingPage() {
+  return (
+    <Suspense>
+      <NewFeedingForm />
+    </Suspense>
   )
 }

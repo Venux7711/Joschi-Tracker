@@ -146,37 +146,28 @@ export default async function HistoryPage() {
         <div className="space-y-3">
           {dayEntries.map(({ date, healthLogs, feedingLogs, hasDiarrhea, hasIssues }) => {
             const isEmpty = healthLogs.length === 0 && feedingLogs.length === 0
+            const y = date.getFullYear()
+            const m = String(date.getMonth() + 1).padStart(2, '0')
+            const d = String(date.getDate()).padStart(2, '0')
+            const dateStr = `${y}-${m}-${d}`
 
             return (
               <div
                 key={date.toISOString()}
-                className={`card overflow-hidden ${
-                  hasDiarrhea ? 'border-red-200' : ''
-                }`}
+                className={`card overflow-hidden ${hasDiarrhea ? 'border-red-200' : ''}`}
               >
                 {/* Tages-Header */}
-                <div
-                  className={`flex items-center justify-between px-4 py-2.5 border-b ${
-                    hasDiarrhea
-                      ? 'bg-red-50 border-red-100'
-                      : 'bg-gray-50 border-gray-100'
-                  }`}
-                >
-                  <span
-                    className={`font-medium text-sm ${
-                      hasDiarrhea ? 'text-red-700' : 'text-gray-700'
-                    }`}
-                  >
-                    {formatDayFull(date)}
-                    {hasDiarrhea && ' ⚠'}
+                <div className={`flex items-center justify-between px-4 py-2.5 border-b ${hasDiarrhea ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
+                  <span className={`font-medium text-sm ${hasDiarrhea ? 'text-red-700' : 'text-gray-700'}`}>
+                    {formatDayFull(date)}{hasDiarrhea && ' ⚠'}
                   </span>
-                  <div className="flex gap-2">
-                    {hasIssues && !hasDiarrhea && (
-                      <span className="text-xs text-orange-500">Problem</span>
-                    )}
-                    {isEmpty && (
-                      <span className="text-xs text-gray-400">Kein Eintrag</span>
-                    )}
+                  <div className="flex items-center gap-2">
+                    <Link href={`/feeding/new?date=${dateStr}`} className="text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full hover:bg-amber-100 transition-colors font-medium">
+                      + Futter
+                    </Link>
+                    <Link href={`/health/new?date=${dateStr}`} className="text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors font-medium">
+                      + Befinden
+                    </Link>
                   </div>
                 </div>
 

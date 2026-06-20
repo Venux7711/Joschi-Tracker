@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
@@ -72,8 +72,10 @@ function YesNoToggle({
   )
 }
 
-export default function NewHealthPage() {
+function NewHealthForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const dateParam = searchParams.get('date')
   const supabase = createClient()
 
   const [catId, setCatId] = useState<string | null>(null)
@@ -88,7 +90,7 @@ export default function NewHealthPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setLoggedAt(toLocalISOString())
+    setLoggedAt(dateParam ? `${dateParam}T12:00` : toLocalISOString())
 
     const init = async () => {
       const {
@@ -277,5 +279,13 @@ export default function NewHealthPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function NewHealthPage() {
+  return (
+    <Suspense>
+      <NewHealthForm />
+    </Suspense>
   )
 }
