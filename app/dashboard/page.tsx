@@ -5,8 +5,6 @@ import Image from 'next/image'
 import Header from '@/components/Header'
 import {
   formatTime,
-  getDayStart,
-  getDayEnd,
   isSameDay,
   getStoolLabel,
   getStoolColor,
@@ -14,262 +12,320 @@ import {
   getAppetiteLabel,
   getActivityLabel,
 } from '@/lib/utils'
-import type { FeedingLog, HealthLog } from '@/lib/types'
+import type { FeedingLog, HealthLog, StoolConsistency } from '@/lib/types'
 
-function getPast7Days(): Date[] {
-  const days: Date[] = []
-  for (let i = 6; i >= 0; i--) {
+function getPastNDays(n: number): Date[] {
+  return Array.from({ length: n }, (_, i) => {
     const d = new Date()
-    d.setDate(d.getDate() - i)
-    days.push(d)
-  }
-  return days
+    d.setDate(d.getDate() - (n - 1 - i))
+    return d
+  })
 }
 
-function formatDayShort(date: Date): string {
-  return date.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric' })
+function dayLabel(date: Date): string {
+  return date.toLocaleDateString('de-DE', { weekday: 'short' }).slice(0, 2)
+}
+
+function stoolDotBg(v: StoolConsistency | undefined): string {
+  if (!v) return 'bg-gray-100 border-2 border-dashed border-gray-200'
+  return {
+    normal: 'bg-green-400',
+    soft: 'bg-yellow-400',
+    diarrhea: 'bg-red-500',
+    not_observed: 'bg-gray-300',
+  }[v]
 }
 
 export default async function DashboardPage() {
   const supabase = createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   // Katze holen oder anlegen
-  let { data: cats } = await supabase
-    .from('cats')
-    .select('*')
-    .eq('owner_id', user.id)
-    .limit(1)
-
+  let { data: cats } = await supabase.from('cats').select('*').eq('owner_id', user.id).limit(1)
   let cat = cats?.[0]
-
   if (!cat) {
-    const { data: newCat } = await supabase
-      .from('cats')
-      .insert({ name: 'Joschi', owner_id: user.id })
-      .select()
-      .single()
+    const { data: newCat } = await supabase.from('cats').insert({ name: 'Joschi', owner_id: user.id }).select().single()
     cat = newCat
   }
+  if (!cat) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <p className="text-gray-500">Fehler beim Laden. Seite neu laden.</p>
+    </div>
+  )
 
-  if (!cat) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Fehler beim Laden. Bitte Seite neu laden.</p>
-      </div>
-    )
+  // Datumsrahmen
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999)
+  const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29); thirtyDaysAgo.setHours(0, 0, 0, 0)
+
+  // Alle Daten auf einmal holen
+  const [
+    { data: todayFeedingsRaw },
+    { data: todayHealthRaw },
+    { data: allHealth30 },
+  ] = await Promise.all([
+    supabase.from('feeding_logs').select('*').eq('cat_id', cat.id)
+      .gte('logged_at', todayStart.toISOString()).lte('logged_at', todayEnd.toISOString())
+      .order('logged_at', { ascending: true }),
+    supabase.from('health_logs').select('*').eq('cat_id', cat.id)
+      .gte('logged_at', todayStart.toISOString()).lte('logged_at', todayEnd.toISOString())
+      .order('logged_at', { ascending: false }),
+    supabase.from('health_logs').select('logged_at, stool_consistency, vomiting, appetite, activity, fur_issue')
+      .eq('cat_id', cat.id).gte('logged_at', thirtyDaysAgo.toISOString())
+      .order('logged_at', { ascending: false }),
+  ])
+
+  const feedings = (todayFeedingsRaw ?? []) as FeedingLog[]
+  const healthLogs = (todayHealthRaw ?? []) as HealthLog[]
+  const health30 = (allHealth30 ?? []) as HealthLog[]
+
+  // === Statistiken berechnen ===
+
+  const past30 = getPastNDays(30)
+  const past14 = getPastNDays(14)
+
+  // 30-Tage Durchfall-Tage
+  const diarrhea30Days = past30.filter(day =>
+    health30.some(h => isSameDay(new Date(h.logged_at), day) && h.stool_consistency === 'diarrhea')
+  ).length
+
+  // Durchfall-freie Streak (Tage zurück ohne Durchfall-Eintrag)
+  let streak = 0
+  for (let i = past30.length - 1; i >= 0; i--) {
+    const day = past30[i]
+    const dayLogs = health30.filter(h => isSameDay(new Date(h.logged_at), day))
+    const hasDiarrhea = dayLogs.some(h => h.stool_consistency === 'diarrhea')
+    if (hasDiarrhea) break
+    if (dayLogs.length > 0) streak++
   }
 
-  const todayStart = getDayStart()
-  const todayEnd = getDayEnd()
+  // 14-Tage Stuhlgang-Trend
+  const trend14 = past14.map(day => {
+    const dayLogs = health30.filter(h => isSameDay(new Date(h.logged_at), day))
+    // Schlechtester Wert des Tages (diarrhea > soft > normal > not_observed)
+    const priority: Record<StoolConsistency, number> = { diarrhea: 3, soft: 2, normal: 1, not_observed: 0 }
+    const worst = dayLogs.reduce<StoolConsistency | undefined>((acc, h) => {
+      if (!acc) return h.stool_consistency
+      return priority[h.stool_consistency] > priority[acc] ? h.stool_consistency : acc
+    }, undefined)
+    return { day, stool: worst }
+  })
 
-  // Heutige Futter-Einträge
-  const { data: todayFeedings } = await supabase
-    .from('feeding_logs')
-    .select('*')
-    .eq('cat_id', cat.id)
-    .gte('logged_at', todayStart)
-    .lte('logged_at', todayEnd)
-    .order('logged_at', { ascending: true })
+  // Aktuellster Stuhlgang
+  const latestStool = health30.length > 0 ? health30[0].stool_consistency : undefined
 
-  // Heutige Befinden-Einträge
-  const { data: todayHealth } = await supabase
-    .from('health_logs')
-    .select('*')
-    .eq('cat_id', cat.id)
-    .gte('logged_at', todayStart)
-    .lte('logged_at', todayEnd)
-    .order('logged_at', { ascending: false })
+  // Erbrech-Tage in letzten 7 Tagen
+  const past7 = getPastNDays(7)
+  const vomiting7Days = past7.filter(day =>
+    health30.some(h => isSameDay(new Date(h.logged_at), day) && h.vomiting)
+  ).length
 
-  // Letzte 7 Tage – alle Logs
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-  sevenDaysAgo.setHours(0, 0, 0, 0)
-
-  const { data: weekFeedings } = await supabase
-    .from('feeding_logs')
-    .select('logged_at')
-    .eq('cat_id', cat.id)
-    .gte('logged_at', sevenDaysAgo.toISOString())
-
-  const { data: weekHealth } = await supabase
-    .from('health_logs')
-    .select('logged_at, stool_consistency, vomiting, fur_issue')
-    .eq('cat_id', cat.id)
-    .gte('logged_at', sevenDaysAgo.toISOString())
-
-  const past7Days = getPast7Days()
-
-  const healthLogs = (todayHealth ?? []) as HealthLog[]
-  const latestHealth = healthLogs[0]
-  const feedings = (todayFeedings ?? []) as FeedingLog[]
+  const today = new Date()
+  const greeting = today.getHours() < 12 ? 'Guten Morgen' : today.getHours() < 17 ? 'Guten Tag' : 'Guten Abend'
 
   return (
-    <div className="min-h-screen bg-amber-50">
+    <div className="min-h-screen bg-gray-50">
       <Header />
 
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-2xl mx-auto px-4 py-5 space-y-5">
 
-        {/* Joschi Portrait */}
-        <div className="flex items-center gap-4">
-          <div className="relative w-20 h-20 rounded-full overflow-hidden border-4 border-amber-300 shadow-md flex-shrink-0">
-            <Image
-              src="/joschi.jpg"
-              alt="Joschi"
-              fill
-              className="object-cover object-top"
-              priority
-            />
+        {/* ── HERO ── */}
+        <div className="bg-gradient-to-br from-amber-400 to-amber-500 rounded-3xl p-5 flex items-center gap-4 shadow-md">
+          <div className="relative w-20 h-20 rounded-full overflow-hidden border-4 border-white/60 shadow-lg flex-shrink-0">
+            <Image src="/joschi.jpg" alt="Joschi" fill className="object-cover object-top" priority />
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">Joschi</h2>
-            <p className="text-sm text-gray-500">
-              {new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
+          <div className="flex-1 min-w-0">
+            <p className="text-amber-100 text-sm">{greeting} 👋</p>
+            <h1 className="text-white text-2xl font-bold">Joschi</h1>
+            <p className="text-amber-100 text-sm">
+              {today.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <div className="text-white/80 text-xs mb-0.5">Heute</div>
+            <div className="text-white text-2xl font-bold">{feedings.length}×</div>
+            <div className="text-amber-100 text-xs">Mahlzeiten</div>
           </div>
         </div>
 
-        {/* Heutiger Status */}
-        <section>
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-            Heute
-          </h2>
+        {/* ── STATS KARTEN ── */}
+        <div className="grid grid-cols-2 gap-3">
 
-          <div className="grid grid-cols-2 gap-3">
-            {/* Befinden */}
-            <div className="card p-4">
-              <p className="text-xs text-gray-400 mb-1">Befinden</p>
-              {healthLogs.length > 0 ? (
-                <div className="space-y-2">
-                  {healthLogs.map((h) => (
-                    <Link key={h.id} href={`/health/${h.id}/edit`} className="block hover:opacity-75 transition-opacity">
-                      <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${getStoolColor(h.stool_consistency)}`}>
+          {/* Streak */}
+          <div className={`rounded-2xl p-4 ${streak >= 3 ? 'bg-green-50 border border-green-100' : streak > 0 ? 'bg-amber-50 border border-amber-100' : 'bg-red-50 border border-red-100'}`}>
+            <div className={`text-3xl font-bold ${streak >= 3 ? 'text-green-600' : streak > 0 ? 'text-amber-600' : 'text-red-500'}`}>
+              {streak}
+            </div>
+            <div className="text-sm font-medium text-gray-700 mt-0.5">Tage ohne Durchfall</div>
+            <div className="text-xs text-gray-400 mt-1">
+              {streak === 0 ? 'Zuletzt Durchfall' : streak === 1 ? 'Heute gut ✓' : `${streak} Tage in Folge ✓`}
+            </div>
+          </div>
+
+          {/* 30-Tage Durchfall */}
+          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+            <div className={`text-3xl font-bold ${diarrhea30Days === 0 ? 'text-green-600' : diarrhea30Days <= 5 ? 'text-amber-500' : 'text-red-500'}`}>
+              {diarrhea30Days}
+            </div>
+            <div className="text-sm font-medium text-gray-700 mt-0.5">Durchfall-Tage</div>
+            <div className="text-xs text-gray-400 mt-1">letzte 30 Tage · {30 - diarrhea30Days} gut</div>
+          </div>
+
+          {/* Aktueller Stuhl */}
+          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+            {latestStool ? (
+              <>
+                <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full mb-1 ${getStoolColor(latestStool)}`}>
+                  {getStoolLabel(latestStool)}
+                </span>
+                <div className="text-sm font-medium text-gray-700">Letzter Stuhlgang</div>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  {new Date(health30[0]?.logged_at ?? '').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-gray-300">–</div>
+                <div className="text-sm font-medium text-gray-700 mt-0.5">Kein Befund</div>
+                <div className="text-xs text-gray-400 mt-1">noch nichts eingetragen</div>
+              </>
+            )}
+          </div>
+
+          {/* Erbrechen 7 Tage */}
+          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+            <div className={`text-3xl font-bold ${vomiting7Days === 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {vomiting7Days}×
+            </div>
+            <div className="text-sm font-medium text-gray-700 mt-0.5">Erbrochen</div>
+            <div className="text-xs text-gray-400 mt-1">letzte 7 Tage</div>
+          </div>
+        </div>
+
+        {/* ── 14-TAGE STUHLGANG-TREND ── */}
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">14-Tage Stuhlgang-Trend</h3>
+          <div className="flex gap-1 justify-between">
+            {trend14.map(({ day, stool }, i) => (
+              <div key={i} className="flex flex-col items-center gap-1.5 flex-1">
+                <div className={`w-full aspect-square rounded-full ${stoolDotBg(stool)} min-w-[14px]`} />
+                <span className="text-[9px] text-gray-400 leading-none">{dayLabel(day)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-3 mt-3 flex-wrap">
+            {[
+              { label: 'Normal', cls: 'bg-green-400' },
+              { label: 'Weich', cls: 'bg-yellow-400' },
+              { label: 'Durchfall', cls: 'bg-red-500' },
+              { label: 'Nicht gesehen', cls: 'bg-gray-300' },
+            ].map(({ label, cls }) => (
+              <span key={label} className="flex items-center gap-1 text-[10px] text-gray-500">
+                <span className={`w-2.5 h-2.5 rounded-full ${cls} inline-block`} />
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* ── HEUTE: FUTTER ── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+            <h3 className="text-sm font-semibold text-gray-700">🍽️ Futter heute</h3>
+            <Link href="/feeding/new" className="text-xs font-medium text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full hover:bg-amber-100 transition-colors">
+              + Eintrag
+            </Link>
+          </div>
+
+          {feedings.length === 0 ? (
+            <div className="px-4 py-5 text-center">
+              <p className="text-sm text-gray-400">Noch kein Futter eingetragen</p>
+              <Link href="/feeding/new" className="inline-block mt-2 text-sm text-amber-600 font-medium">Jetzt eintragen →</Link>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {feedings.map((f) => (
+                <div key={f.id} className="flex items-center px-4 py-3 gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{f.food_brand}</p>
+                    <p className="text-xs text-gray-400 truncate">
+                      {f.food_type}{f.amount_grams ? ` · ${f.amount_grams}g` : ''} · {formatTime(f.logged_at)}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/feeding/${f.id}/edit`}
+                    className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-gray-400 hover:text-amber-600 transition-colors text-base"
+                  >
+                    ✏️
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── HEUTE: BEFINDEN ── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+            <h3 className="text-sm font-semibold text-gray-700">💊 Befinden heute</h3>
+            <Link href="/health/new" className="text-xs font-medium text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full hover:bg-amber-100 transition-colors">
+              + Eintrag
+            </Link>
+          </div>
+
+          {healthLogs.length === 0 ? (
+            <div className="px-4 py-5 text-center">
+              <p className="text-sm text-gray-400">Noch kein Befinden eingetragen</p>
+              <Link href="/health/new" className="inline-block mt-2 text-sm text-amber-600 font-medium">Jetzt eintragen →</Link>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {healthLogs.map((h) => (
+                <div key={h.id} className="flex items-center px-4 py-3 gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getStoolColor(h.stool_consistency)}`}>
                         {getStoolLabel(h.stool_consistency)}
                       </span>
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        {getAppetiteLabel(h.appetite)} · {formatTime(h.logged_at)}
-                      </div>
-                      {h.vomiting && <span className="text-xs text-red-500 block">⚠ Erbrochen</span>}
-                      {h.fur_issue && <span className="text-xs text-orange-500 block">⚠ Fell-Problem</span>}
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 mt-1">Noch nichts eingetragen</p>
-              )}
-            </div>
-
-            {/* Futter */}
-            <div className="card p-4">
-              <p className="text-xs text-gray-400 mb-1">Futter heute</p>
-              {feedings.length > 0 ? (
-                <div className="space-y-2">
-                  {feedings.map((f) => (
-                    <Link key={f.id} href={`/feeding/${f.id}/edit`} className="block hover:opacity-75 transition-opacity">
-                      <p className="text-sm font-medium text-gray-700 leading-tight">{f.food_brand}</p>
-                      <p className="text-xs text-gray-400">
-                        {f.food_type}{f.amount_grams ? ` · ${f.amount_grams}g` : ''} · {formatTime(f.logged_at)}
-                      </p>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 mt-1">Noch nichts eingetragen</p>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* Schnell-Aktionen */}
-        <section className="grid grid-cols-2 gap-3">
-          <Link href="/feeding/new" className="card p-4 flex flex-col items-center gap-2 hover:bg-amber-50 transition-colors active:scale-95">
-            <span className="text-3xl">🍽️</span>
-            <span className="text-sm font-medium text-gray-700 text-center">Futter eintragen</span>
-          </Link>
-          <Link href="/health/new" className="card p-4 flex flex-col items-center gap-2 hover:bg-amber-50 transition-colors active:scale-95">
-            <span className="text-3xl">💊</span>
-            <span className="text-sm font-medium text-gray-700 text-center">Befinden eintragen</span>
-          </Link>
-        </section>
-
-        {/* 7-Tage-Übersicht */}
-        <section>
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-            Letzte 7 Tage
-          </h2>
-          <div className="card divide-y divide-gray-50">
-            {past7Days.map((day, idx) => {
-              const isToday = idx === 6
-
-              const dayFeedings = (weekFeedings ?? []).filter((f) =>
-                isSameDay(new Date(f.logged_at), day)
-              )
-
-              const dayHealthLogs = (weekHealth ?? []).filter((h) =>
-                isSameDay(new Date(h.logged_at), day)
-              )
-
-              const latestDayHealth = dayHealthLogs[0]
-              const hasDiarrhea = dayHealthLogs.some(
-                (h) => h.stool_consistency === 'diarrhea'
-              )
-              const hasIssues =
-                hasDiarrhea ||
-                dayHealthLogs.some((h) => h.vomiting || h.fur_issue)
-
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={`flex items-center gap-3 px-4 py-3 ${
-                    hasDiarrhea ? 'bg-red-50' : ''
-                  }`}
-                >
-                  <div className="w-16 shrink-0">
-                    <p
-                      className={`text-xs font-medium ${
-                        isToday ? 'text-amber-600' : 'text-gray-500'
-                      }`}
-                    >
-                      {isToday ? 'Heute' : formatDayShort(day)}
+                      {h.vomiting && <span className="text-xs text-red-500 font-medium">⚠ Erbrochen</span>}
+                      {h.fur_issue && <span className="text-xs text-orange-500 font-medium">⚠ Fell</span>}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Appetit: {getAppetiteLabel(h.appetite)} · {getActivityLabel(h.activity)} · {formatTime(h.logged_at)}
                     </p>
+                    {h.notes && <p className="text-xs text-gray-400 italic mt-0.5 truncate">{h.notes}</p>}
                   </div>
-
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    {latestDayHealth ? (
-                      <div
-                        className={`w-2.5 h-2.5 rounded-full shrink-0 ${getStoolDot(
-                          latestDayHealth.stool_consistency
-                        )}`}
-                        title={getStoolLabel(latestDayHealth.stool_consistency)}
-                      />
-                    ) : (
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-gray-200" />
-                    )}
-
-                    <p className="text-xs text-gray-500 truncate">
-                      {dayFeedings.length > 0
-                        ? `${dayFeedings.length}× Futter`
-                        : 'Kein Futter'}
-                    </p>
-
-                    {hasIssues && (
-                      <span className="text-xs text-red-500 shrink-0">⚠</span>
-                    )}
-                  </div>
-
-                  {dayHealthLogs.length === 0 && dayFeedings.length === 0 && (
-                    <span className="text-xs text-gray-300">—</span>
-                  )}
+                  <Link
+                    href={`/health/${h.id}/edit`}
+                    className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-gray-400 hover:text-amber-600 transition-colors text-base"
+                  >
+                    ✏️
+                  </Link>
                 </div>
-              )
-            })}
-          </div>
-        </section>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── QUICK ACTIONS ── */}
+        <div className="grid grid-cols-2 gap-3 pb-4">
+          <Link href="/feeding/new" className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-2xl p-4 flex items-center gap-3 transition-colors shadow-sm">
+            <span className="text-2xl">🍽️</span>
+            <div>
+              <div className="font-semibold text-sm">Futter</div>
+              <div className="text-amber-100 text-xs">eintragen</div>
+            </div>
+          </Link>
+          <Link href="/health/new" className="bg-white hover:bg-gray-50 active:bg-gray-100 text-gray-700 rounded-2xl p-4 flex items-center gap-3 transition-colors border border-gray-100 shadow-sm">
+            <span className="text-2xl">💊</span>
+            <div>
+              <div className="font-semibold text-sm">Befinden</div>
+              <div className="text-gray-400 text-xs">eintragen</div>
+            </div>
+          </Link>
+        </div>
+
       </main>
     </div>
   )

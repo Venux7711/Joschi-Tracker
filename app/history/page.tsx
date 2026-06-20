@@ -184,49 +184,48 @@ export default async function HistoryPage() {
                   <div className="divide-y divide-gray-50">
                     {/* Befinden */}
                     {healthLogs.length > 0 && (
-                      <div className="px-4 py-3 space-y-2">
-                        <p className="text-xs text-gray-400">Befinden</p>
+                      <div className="divide-y divide-gray-50">
                         {healthLogs.map((h) => (
-                          <Link key={h.id} href={`/health/${h.id}/edit`} className="block hover:bg-gray-50 rounded-lg -mx-1 px-1 py-1 transition-colors">
-                            <div className="flex flex-wrap gap-2">
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${getStoolColor(h.stool_consistency)}`}>
-                                {getStoolLabel(h.stool_consistency)}
-                              </span>
-                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                                Appetit: {getAppetiteLabel(h.appetite)}
-                              </span>
-                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                                {getActivityLabel(h.activity)}
-                              </span>
-                              {h.vomiting && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Erbrochen</span>}
-                              {h.fur_issue && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Kot im Fell</span>}
-                              <span className="text-xs text-gray-400 ml-auto">
-                                {new Date(h.logged_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} ✏️
-                              </span>
+                          <div key={h.id} className="flex items-center gap-3 px-4 py-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap gap-1.5 items-center">
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${getStoolColor(h.stool_consistency)}`}>
+                                  {getStoolLabel(h.stool_consistency)}
+                                </span>
+                                {h.vomiting && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Erbrochen</span>}
+                                {h.fur_issue && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Fell</span>}
+                              </div>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                Appetit: {getAppetiteLabel(h.appetite)} · {getActivityLabel(h.activity)} · {new Date(h.logged_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
                             </div>
-                            {h.notes && <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{h.notes}&rdquo;</p>}
-                          </Link>
+                            <Link
+                              href={`/health/${h.id}/edit`}
+                              className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-base"
+                            >✏️</Link>
+                          </div>
                         ))}
                       </div>
                     )}
 
                     {/* Futter */}
                     {feedingLogs.length > 0 && (
-                      <div className="px-4 py-3">
-                        <p className="text-xs text-gray-400 mb-2">Futter ({feedingLogs.length}×)</p>
-                        <div className="space-y-1.5">
-                          {feedingLogs.map((f) => (
-                            <Link key={f.id} href={`/feeding/${f.id}/edit`} className="flex items-baseline gap-2 hover:bg-gray-50 rounded-lg -mx-1 px-1 py-1 transition-colors">
-                              <span className="text-xs text-gray-400 w-10 shrink-0">
+                      <div className="divide-y divide-gray-50">
+                        {feedingLogs.map((f) => (
+                          <div key={f.id} className="flex items-center gap-3 px-4 py-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-700 truncate">{f.food_brand} – {f.food_type}</p>
+                              <p className="text-xs text-gray-400">
+                                {f.amount_grams ? `${f.amount_grams}g · ` : ''}
                                 {new Date(f.logged_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                              <span className="text-sm text-gray-700 flex-1">
-                                {f.food_brand} – {f.food_type}{f.amount_grams ? ` (${f.amount_grams}g)` : ''}
-                              </span>
-                              <span className="text-xs text-gray-300">✏️</span>
-                            </Link>
-                          ))}
-                        </div>
+                              </p>
+                            </div>
+                            <Link
+                              href={`/feeding/${f.id}/edit`}
+                              className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-base"
+                            >✏️</Link>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
