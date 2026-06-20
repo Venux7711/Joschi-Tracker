@@ -85,7 +85,6 @@ export default async function DashboardPage() {
     .gte('logged_at', todayStart)
     .lte('logged_at', todayEnd)
     .order('logged_at', { ascending: false })
-    .limit(1)
 
   // Letzte 7 Tage – alle Logs
   const sevenDaysAgo = new Date()
@@ -106,7 +105,8 @@ export default async function DashboardPage() {
 
   const past7Days = getPast7Days()
 
-  const latestHealth = todayHealth?.[0] as HealthLog | undefined
+  const healthLogs = (todayHealth ?? []) as HealthLog[]
+  const latestHealth = healthLogs[0]
   const feedings = (todayFeedings ?? []) as FeedingLog[]
 
   return (
@@ -144,24 +144,20 @@ export default async function DashboardPage() {
             {/* Befinden */}
             <div className="card p-4">
               <p className="text-xs text-gray-400 mb-1">Befinden</p>
-              {latestHealth ? (
-                <div className="space-y-1">
-                  <span
-                    className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${getStoolColor(
-                      latestHealth.stool_consistency
-                    )}`}
-                  >
-                    {getStoolLabel(latestHealth.stool_consistency)}
-                  </span>
-                  <div className="flex gap-2 text-xs text-gray-500 flex-wrap">
-                    <span>Appetit: {getAppetiteLabel(latestHealth.appetite)}</span>
-                  </div>
-                  {latestHealth.vomiting && (
-                    <span className="text-xs text-red-500">⚠ Erbrochen</span>
-                  )}
-                  {latestHealth.fur_issue && (
-                    <span className="text-xs text-orange-500 block">⚠ Fell-Problem</span>
-                  )}
+              {healthLogs.length > 0 ? (
+                <div className="space-y-2">
+                  {healthLogs.map((h) => (
+                    <Link key={h.id} href={`/health/${h.id}/edit`} className="block hover:opacity-75 transition-opacity">
+                      <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${getStoolColor(h.stool_consistency)}`}>
+                        {getStoolLabel(h.stool_consistency)}
+                      </span>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {getAppetiteLabel(h.appetite)} · {formatTime(h.logged_at)}
+                      </div>
+                      {h.vomiting && <span className="text-xs text-red-500 block">⚠ Erbrochen</span>}
+                      {h.fur_issue && <span className="text-xs text-orange-500 block">⚠ Fell-Problem</span>}
+                    </Link>
+                  ))}
                 </div>
               ) : (
                 <p className="text-sm text-gray-400 mt-1">Noch nichts eingetragen</p>
@@ -172,19 +168,14 @@ export default async function DashboardPage() {
             <div className="card p-4">
               <p className="text-xs text-gray-400 mb-1">Futter heute</p>
               {feedings.length > 0 ? (
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {feedings.map((f) => (
-                    <div key={f.id}>
-                      <p className="text-sm font-medium text-gray-700 leading-tight">
-                        {f.food_brand}
-                      </p>
+                    <Link key={f.id} href={`/feeding/${f.id}/edit`} className="block hover:opacity-75 transition-opacity">
+                      <p className="text-sm font-medium text-gray-700 leading-tight">{f.food_brand}</p>
                       <p className="text-xs text-gray-400">
-                        {f.food_type}
-                        {f.amount_grams ? ` · ${f.amount_grams}g` : ''}
-                        {' · '}
-                        {formatTime(f.logged_at)}
+                        {f.food_type}{f.amount_grams ? ` · ${f.amount_grams}g` : ''} · {formatTime(f.logged_at)}
                       </p>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (
