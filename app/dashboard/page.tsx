@@ -268,6 +268,24 @@ export default async function DashboardPage() {
           </div>
         </div>
 
+        {/* ── QUICK ACTIONS ── */}
+        <div className="grid grid-cols-2 gap-3">
+          <Link href="/feeding/new" className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-2xl p-4 flex items-center gap-3 transition-colors shadow-sm">
+            <span className="text-2xl">🍽️</span>
+            <div>
+              <div className="font-semibold text-sm">Futter</div>
+              <div className="text-amber-100 text-xs">eintragen</div>
+            </div>
+          </Link>
+          <Link href="/health/new" className="bg-white hover:bg-gray-50 active:bg-gray-100 text-gray-700 rounded-2xl p-4 flex items-center gap-3 transition-colors border border-gray-100 shadow-sm">
+            <span className="text-2xl">💊</span>
+            <div>
+              <div className="font-semibold text-sm">Befinden</div>
+              <div className="text-gray-400 text-xs">eintragen</div>
+            </div>
+          </Link>
+        </div>
+
         {/* ── FUTTER-EMPFEHLUNG ── */}
         {recommendation && (
           <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100 overflow-hidden shadow-sm">
@@ -505,23 +523,6 @@ export default async function DashboardPage() {
         {/* ── KI-AUSWERTUNG ── */}
         <AiInsights feedings={aiFeedings} health={aiHealth} pantry={aiPantry} />
 
-        {/* ── QUICK ACTIONS ── */}
-        <div className="grid grid-cols-2 gap-3 pb-4">
-          <Link href="/feeding/new" className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-2xl p-4 flex items-center gap-3 transition-colors shadow-sm">
-            <span className="text-2xl">🍽️</span>
-            <div>
-              <div className="font-semibold text-sm">Futter</div>
-              <div className="text-amber-100 text-xs">eintragen</div>
-            </div>
-          </Link>
-          <Link href="/health/new" className="bg-white hover:bg-gray-50 active:bg-gray-100 text-gray-700 rounded-2xl p-4 flex items-center gap-3 transition-colors border border-gray-100 shadow-sm">
-            <span className="text-2xl">💊</span>
-            <div>
-              <div className="font-semibold text-sm">Befinden</div>
-              <div className="text-gray-400 text-xs">eintragen</div>
-            </div>
-          </Link>
-        </div>
 
       </main>
     </div>
