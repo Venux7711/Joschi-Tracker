@@ -13,7 +13,7 @@ import {
 import type { FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@/lib/types'
 import AiInsights from '@/components/AiInsights'
 import JoschiPhoto from '@/components/JoschiPhoto'
-import { getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
+import { ANIFIT_FOODS, getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
 
 function getPastNDays(n: number): Date[] {
   return Array.from({ length: n }, (_, i) => {
@@ -159,59 +159,122 @@ export default async function DashboardPage() {
     .sort((a, b) => (b.diarrhea / b.total) - (a.diarrhea / a.total))
     .slice(0, 6)
 
-  // === Futter-Empfehlung aus Vorrat ===
-  // Proteine der letzten 7 Tage ermitteln
+  // === Futter-Empfehlung (Vorrat oder alle Anifit-Sorten) ===
   const recentFeedings7 = feedings30.filter(f => new Date(f.logged_at) >= sevenDaysAgo)
-  const recentProteins = new Set(
+  const recentFeedings3 = feedings30.filter(f => new Date(f.logged_at) >= threeDaysAgo)
+  const todayFoodKeys = new Set(feedings.map(f => `${f.food_brand}||${f.food_type}`))
+
+  const recentProteins7 = new Set(
     recentFeedings7.flatMap(f => getFoodInfo(f.food_brand, f.food_type)?.proteins ?? [])
   )
-  // Diarrhoe letzte 3 Tage?
+  const recentFamilies3 = new Set(
+    recentFeedings3.flatMap(f => getFoodInfo(f.food_brand, f.food_type)?.proteinFamily ?? [])
+  )
   const recentDiarrhea = health30.some(h =>
     new Date(h.logged_at) >= threeDaysAgo && h.stool_consistency === 'diarrhea'
   )
+  const softOrDiarrhea7 = health30.some(h =>
+    new Date(h.logged_at) >= sevenDaysAgo &&
+    (h.stool_consistency === 'diarrhea' || h.stool_consistency === 'soft')
+  )
 
-  type FoodRec = {
-    item: PantryItem
-    info: ReturnType<typeof getFoodInfo>
-    score: number
-    reasons: string[]
+  type FoodRecCandidate = {
+    brand: string; type: string; inPantry: boolean; quantity?: number
+    info: ReturnType<typeof getFoodInfo>; score: number; reasons: string[]; warnings: string[]
   }
 
-  const scored: FoodRec[] = pantry.map(item => {
-    const info = getFoodInfo(item.brand, item.type)
+  // Kandidaten: Vorrat zuerst, dann alle Anifit-Sorten als Ergänzung
+  const pantryKeys = new Set(pantry.map(p => `${p.brand}||${p.type}`))
+  const candidates: Array<{ brand: string; type: string; inPantry: boolean; quantity?: number }> = [
+    ...pantry.map(p => ({ brand: p.brand, type: p.type, inPantry: true, quantity: p.quantity })),
+    ...ANIFIT_FOODS.filter(f => !pantryKeys.has(`${f.brand}||${f.type}`))
+      .map(f => ({ brand: f.brand, type: f.type, inPantry: false })),
+  ]
+
+  const recommendations: FoodRecCandidate[] = candidates.map(c => {
+    const info = getFoodInfo(c.brand, c.type)
     const proteins = info?.proteins ?? []
-    const newProteins = proteins.filter(p => !recentProteins.has(p))
-    const corrKey = `${item.brand}||${item.type}`
+    const families = info?.proteinFamily ?? []
+    const corrKey = `${c.brand}||${c.type}`
     const corr = foodMap.get(corrKey)
-    const diarrheaRate = corr ? corr.diarrhea / corr.total : 0
+    const diarrheaRate = corr ? corr.diarrhea / corr.total : null
+    const givenToday = todayFoodKeys.has(corrKey)
 
     const reasons: string[] = []
+    const warnings: string[] = []
     let score = 0
 
-    if (newProteins.length > 0) {
-      score += 10
-      reasons.push(`Neue Proteinquelle: ${newProteins.join(', ')}`)
-    } else {
-      reasons.push(`Protein zuletzt gegeben: ${proteins.join(', ')}`)
+    // Vorrat bevorzugen
+    if (c.inPantry) score += 15
+
+    // Neue Proteinquelle (nicht in letzten 7 Tagen)
+    const newProteins = proteins.filter(p => !recentProteins7.has(p))
+    if (newProteins.length === proteins.length) {
+      score += 12
+      reasons.push(`Frische Proteinquelle: ${proteins.join(' + ')}`)
+    } else if (newProteins.length > 0) {
+      score += 6
+      reasons.push(`Teilweise neue Proteine: ${newProteins.join(', ')}`)
     }
 
-    if (info?.proteinType === 'mono') {
-      score += recentDiarrhea ? 8 : 3
-      if (recentDiarrhea) reasons.push('Mono-Protein bevorzugt (kürzlicher Durchfall)')
-    }
-
-    if (diarrheaRate === 0 && corr && corr.total >= 2) {
+    // Neue Proteinfamilie (nicht in letzten 3 Tagen)
+    const newFamilies = families.filter(f => !recentFamilies3.has(f))
+    if (newFamilies.length > 0) {
       score += 5
-      reasons.push('Bisher kein Durchfall nach diesem Futter')
-    } else if (diarrheaRate > 0.5) {
-      score -= 8
-      reasons.push(`Hohe Durchfall-Korrelation (${Math.round(diarrheaRate * 100)}%)`)
+      reasons.push(`Andere Proteinfamilie: ${newFamilies.join('/')}`)
     }
 
-    return { item, info, score, reasons }
+    // Mono-Protein bei Verdauungsproblemen
+    if (info?.proteinType === 'mono') {
+      if (recentDiarrhea) {
+        score += 10
+        reasons.push('Mono-Protein → leichter verdaulich bei Durchfall')
+      } else if (softOrDiarrhea7) {
+        score += 5
+        reasons.push('Mono-Protein → empfehlenswert bei weichem Stuhl')
+      } else {
+        score += 2
+        reasons.push('Mono-Protein → gut für Diagnostik')
+      }
+    } else if (info?.proteinType === 'multi') {
+      if (recentDiarrhea) {
+        score -= 4
+        warnings.push('Multi-Protein bei Durchfall weniger geeignet')
+      }
+    }
+
+    // Verträglichkeits-Historie
+    if (diarrheaRate !== null && corr) {
+      if (diarrheaRate === 0 && corr.total >= 3) {
+        score += 8
+        reasons.push(`Sehr gute Verträglichkeit (${corr.total}× gegeben, 0% Durchfall)`)
+      } else if (diarrheaRate === 0 && corr.total >= 1) {
+        score += 3
+        reasons.push(`Bisher verträglich (${corr.total}× gegeben)`)
+      } else if (diarrheaRate > 0.6) {
+        score -= 12
+        warnings.push(`Schlechte Verträglichkeit: ${Math.round(diarrheaRate * 100)}% Durchfall-Rate`)
+      } else if (diarrheaRate > 0.3) {
+        score -= 5
+        warnings.push(`Mäßige Verträglichkeit: ${Math.round(diarrheaRate * 100)}% Durchfall-Rate`)
+      }
+    } else {
+      // Noch nie gegeben → interessant ausprobieren
+      score += 3
+      reasons.push('Noch nicht getestet → wertvolle Datenpunkt')
+    }
+
+    // Heute schon gegeben → abwerten
+    if (givenToday) {
+      score -= 8
+      warnings.push('Heute bereits gegeben')
+    }
+
+    return { ...c, info, score, reasons, warnings }
   }).sort((a, b) => b.score - a.score)
 
-  const recommendation = scored[0] ?? null
+  const topRecs = recommendations.slice(0, 3)
+  const bestRec = topRecs[0] ?? null
 
   // KI-Daten – jetzt mit Vorrat und Proteininfo
   const aiPantry = pantry.map(p => {
@@ -299,39 +362,78 @@ export default async function DashboardPage() {
         </div>
 
         {/* ── FUTTER-EMPFEHLUNG ── */}
-        {recommendation && (
+        {bestRec && (
           <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100 overflow-hidden shadow-sm">
-            <div className="px-4 py-3 border-b border-amber-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800">🎯 Empfehlung für heute</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Basierend auf Vorrat, Protein-Rotation & Verträglichkeit</p>
-              </div>
+            <div className="px-4 py-3 border-b border-amber-100">
+              <h3 className="text-sm font-semibold text-gray-800">🎯 Empfehlung für heute</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Protein-Rotation · Verträglichkeit · {pantry.length > 0 ? 'Vorrat' : 'Alle Anifit-Sorten'}</p>
             </div>
-            <div className="px-4 py-3">
+
+            {/* Beste Empfehlung */}
+            <div className="px-4 pt-3 pb-2">
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-base font-bold text-gray-800 leading-tight">
-                    {recommendation.item.type || recommendation.item.brand}
-                  </p>
-                  {recommendation.info && (
-                    <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 ${getProteinBadgeColor(recommendation.info)}`}>
-                      {getProteinLabel(recommendation.info)}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-base font-bold text-gray-800">{bestRec.type}</p>
+                    {bestRec.inPantry && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">im Vorrat</span>
+                    )}
+                  </div>
+                  {bestRec.info && (
+                    <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 ${getProteinBadgeColor(bestRec.info)}`}>
+                      {getProteinLabel(bestRec.info)}
                     </span>
                   )}
-                  <div className="mt-2 space-y-0.5">
-                    {recommendation.reasons.slice(0, 2).map((r, i) => (
-                      <p key={i} className="text-xs text-gray-500 flex items-start gap-1">
-                        <span className="text-amber-400 mt-px">›</span>{r}
+                  <div className="mt-2 space-y-1">
+                    {bestRec.reasons.map((r, i) => (
+                      <p key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
+                        <span className="text-green-500 mt-px font-bold">✓</span>{r}
+                      </p>
+                    ))}
+                    {bestRec.warnings.map((w, i) => (
+                      <p key={i} className="text-xs text-amber-600 flex items-start gap-1.5">
+                        <span className="mt-px">⚠</span>{w}
                       </p>
                     ))}
                   </div>
                 </div>
-                <div className="flex-shrink-0 text-right">
-                  <span className="text-2xl font-bold text-amber-600">{recommendation.item.quantity}</span>
-                  <p className="text-[10px] text-gray-400">im Vorrat</p>
-                </div>
+                {bestRec.inPantry && bestRec.quantity !== undefined && (
+                  <div className="flex-shrink-0 text-right">
+                    <span className="text-2xl font-bold text-amber-600">{bestRec.quantity}</span>
+                    <p className="text-[10px] text-gray-400">Dosen</p>
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Alternativen */}
+            {topRecs.length > 1 && (
+              <div className="mx-4 mb-3 pt-2 border-t border-amber-100">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Alternativen</p>
+                <div className="space-y-1.5">
+                  {topRecs.slice(1).map((rec, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-gray-700 truncate">{rec.type}</span>
+                          {rec.inPantry && <span className="text-[9px] text-amber-600 font-medium flex-shrink-0">●</span>}
+                          {rec.info && (
+                            <span className={`text-[9px] font-semibold px-1.5 py-px rounded-full flex-shrink-0 ${getProteinBadgeColor(rec.info)}`}>
+                              {rec.info.proteinType === 'mono' ? 'Mono' : 'Multi'}
+                            </span>
+                          )}
+                        </div>
+                        {rec.reasons[0] && (
+                          <p className="text-[10px] text-gray-400 truncate">{rec.reasons[0]}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="px-4 pb-2 text-[10px] text-gray-300">● = im Vorrat</p>
           </div>
         )}
 
