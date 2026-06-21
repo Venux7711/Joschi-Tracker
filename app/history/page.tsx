@@ -113,9 +113,9 @@ export default async function HistoryPage() {
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className=”text-xl font-bold text-gray-800”>Verlauf – letzte 30 Tage</h1>
+          <h1 className="text-xl font-bold text-gray-800">Verlauf – letzte 30 Tage</h1>
           {diarrheaDays > 0 && (
-            <span className=”text-xs bg-red-100 text-red-700 font-medium px-3 py-1.5 rounded-full”>
+            <span className="text-xs bg-red-100 text-red-700 font-medium px-3 py-1.5 rounded-full">
               {diarrheaDays}× Durchfall
             </span>
           )}
@@ -192,7 +192,7 @@ export default async function HistoryPage() {
                             <Link
                               href={`/health/${h.id}/edit`}
                               className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-base"
-                            >✏️</Link>
+                            >✏ï¸</Link>
                           </div>
                         ))}
                       </div>
@@ -204,7 +204,7 @@ export default async function HistoryPage() {
                         {feedingLogs.map((f) => (
                           <div key={f.id} className="flex items-center gap-3 px-4 py-3">
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-gray-700 truncate">{f.food_brand} "“ {f.food_type}</p>
+                              <p className="text-sm text-gray-700 truncate">{f.food_brand} – {f.food_type}</p>
                               <p className="text-xs text-gray-400">
                                 {f.amount_grams ? `${f.amount_grams}g · ` : ''}
                                 {new Date(f.logged_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
@@ -213,7 +213,7 @@ export default async function HistoryPage() {
                             <Link
                               href={`/feeding/${f.id}/edit`}
                               className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-base"
-                            >✏️</Link>
+                            >✏ï¸</Link>
                           </div>
                         ))}
                       </div>
