@@ -113,7 +113,7 @@ export default function FotosPage() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
-            <h1 className="text-xl font-bold text-gray-800">📸 Joscis Fotoalbum</h1>
+            <h1 className="text-xl font-bold text-gray-800">📸 Joschis Fotoalbum</h1>
           </div>
           <div className="flex gap-2">
             <label className="cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold pressable">

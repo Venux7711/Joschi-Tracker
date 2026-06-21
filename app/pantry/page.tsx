@@ -151,7 +151,7 @@ export default function PantryPage() {
                               className="text-xs border border-gray-200 rounded-lg px-2 py-1"
                             />
                             <button onClick={() => saveRestock(item.id)} className="text-xs text-amber-600 font-medium">OK</button>
-                            <button onClick={() => setEditRestockId(null)} className="text-xs text-gray-400">âœ•</button>
+                            <button onClick={() => setEditRestockId(null)} className="text-xs text-gray-400">✕</button>
                           </div>
                         ) : (
                           <button
@@ -173,7 +173,7 @@ export default function PantryPage() {
                         onClick={() => updateQty(item.id, -1)}
                         className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 text-lg font-medium flex items-center justify-center leading-none"
                       >
-                        âˆ’
+                        −
                       </button>
                       <span className="text-sm font-bold text-gray-800 w-5 text-center">{item.quantity}</span>
                       <button
@@ -213,7 +213,7 @@ export default function PantryPage() {
                         onClick={() => deleteItem(item.id)}
                         className="text-xs text-gray-300 hover:text-red-400 transition-colors px-1"
                       >
-                        âœ•
+                        ✕
                       </button>
                     </div>
                   </div>
@@ -266,7 +266,7 @@ export default function PantryPage() {
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">Anzahl Dosen</label>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setAddQty(q => Math.max(1, q - 1))} className="w-10 h-10 rounded-full bg-gray-100 text-gray-600 text-xl font-medium flex items-center justify-center">âˆ’</button>
+                  <button onClick={() => setAddQty(q => Math.max(1, q - 1))} className="w-10 h-10 rounded-full bg-gray-100 text-gray-600 text-xl font-medium flex items-center justify-center">−</button>
                   <span className="text-2xl font-bold text-gray-800 w-8 text-center">{addQty}</span>
                   <button onClick={() => setAddQty(q => q + 1)} className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 text-xl font-medium flex items-center justify-center">+</button>
                 </div>

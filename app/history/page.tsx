@@ -192,7 +192,7 @@ export default async function HistoryPage() {
                             <Link
                               href={`/health/${h.id}/edit`}
                               className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-base"
-                            >✏ï¸</Link>
+                            >✏️</Link>
                           </div>
                         ))}
                       </div>
@@ -213,7 +213,7 @@ export default async function HistoryPage() {
                             <Link
                               href={`/feeding/${f.id}/edit`}
                               className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-base"
-                            >✏ï¸</Link>
+                            >✏️</Link>
                           </div>
                         ))}
                       </div>

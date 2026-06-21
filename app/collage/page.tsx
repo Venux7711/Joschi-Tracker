@@ -128,7 +128,7 @@ export default function CollagePage() {
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center gap-3 mb-6">
           <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
-          <h1 className="text-xl font-bold text-gray-800">ðŸ—“ï¸ Wochenrückblick</h1>
+          <h1 className="text-xl font-bold text-gray-800">ðŸ—“️ Wochenrückblick</h1>
         </div>
 
         {/* Stats */}
@@ -170,7 +170,7 @@ export default function CollagePage() {
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
                     <p className="text-white text-[10px] font-bold leading-tight">{day.label}</p>
                     <div className="flex items-center gap-1">
-                      <span className="text-[9px]" style={{ color: stoolInfo.color }}>â—</span>
+                      <span className="text-[9px]" style={{ color: stoolInfo.color }}>●</span>
                       {day.feedings > 0 && <span className="text-white/60 text-[9px]">{day.feedings}×</span>}
                     </div>
                   </div>

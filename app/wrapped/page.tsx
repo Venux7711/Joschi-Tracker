@@ -68,7 +68,7 @@ export default function WrappedPage() {
     {
       bg: 'from-amber-400 via-orange-500 to-red-500',
       emoji: '🐾',
-      title: `Joscis Jahr ${s.year}`,
+      title: `Joschis Jahr ${s.year}`,
       subtitle: 'Deine persönliche Jahresrückschau',
       isIntro: true,
     },

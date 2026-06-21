@@ -207,6 +207,7 @@ function NewFeedingForm() {
       }
     }
 
+    router.refresh()
     router.push('/dashboard')
   }
 
@@ -235,7 +236,7 @@ function NewFeedingForm() {
           <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">
             ← Zurück
           </Link>
-          <h1 className="text-xl font-bold text-gray-800">ðŸ½ï¸ Futter eintragen</h1>
+          <h1 className="text-xl font-bold text-gray-800">ðŸ½️ Futter eintragen</h1>
         </div>
 
         {/* Dosenscan */}

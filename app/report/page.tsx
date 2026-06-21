@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 interface HealthLog { logged_at: string; stool_consistency: string; appetite: string; activity: string; vomiting: boolean; fur_issue: boolean; notes: string | null }
 interface FeedingLog { logged_at: string; food_brand: string; food_type: string; amount_grams: number | null }
 
-const STOOL: Record<string, string> = { normal: 'Normal', soft: 'Weich', diarrhea: 'Durchfall ⚠ï¸', not_observed: '—' }
+const STOOL: Record<string, string> = { normal: 'Normal', soft: 'Weich', diarrhea: 'Durchfall ⚠️', not_observed: '—' }
 const APPETITE: Record<string, string> = { good: 'Gut', reduced: 'Wenig', none: 'Gar nicht' }
 
 export default function ReportPage() {
@@ -131,7 +131,7 @@ export default function ReportPage() {
               </div>
               {furCount > 0 && (
                 <div className="mt-3 bg-orange-50 rounded-xl p-3 text-center">
-                  <span className="text-sm text-orange-700 font-medium">⚠ï¸ Kot im Fell: {furCount}× aufgetreten</span>
+                  <span className="text-sm text-orange-700 font-medium">⚠️ Kot im Fell: {furCount}× aufgetreten</span>
                 </div>
               )}
             </div>

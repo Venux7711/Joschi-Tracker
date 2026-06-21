@@ -157,6 +157,7 @@ function NewHealthForm() {
       }
     }
 
+    router.refresh()
     router.push('/dashboard')
   }
 
