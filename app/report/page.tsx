@@ -76,7 +76,7 @@ export default function ReportPage() {
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† Zurück</Link>
+            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
             <h1 className="text-xl font-bold text-gray-800">ðŸ¥ Tierarzt-Report</h1>
           </div>
           <button onClick={handlePrint} className="btn-primary text-sm">Drucken / PDF</button>

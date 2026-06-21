@@ -26,7 +26,8 @@ const MOOD_LABELS: Record<string, { label: string; color: string }> = {
 
 export default function FotosPage() {
   const supabase = createClient()
-  const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
 
   const [photos, setPhotos] = useState<Photo[]>([])
   const [loading, setLoading] = useState(true)
@@ -79,7 +80,7 @@ export default function FotosPage() {
 
     await loadPhotos()
     setUploading(false)
-    e.target.value = ''
+    if (e.target) e.target.value = ''
   }
 
   const handleDelete = async (photo: Photo) => {
@@ -111,13 +112,19 @@ export default function FotosPage() {
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† Zurück</Link>
-            <h1 className="text-xl font-bold text-gray-800">ðŸ“¸ Joscis Fotoalbum</h1>
+            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
+            <h1 className="text-xl font-bold text-gray-800">📸 Joscis Fotoalbum</h1>
           </div>
-          <label className="btn-primary cursor-pointer text-sm">
-            {uploading ? 'Lädt…' : '+ Foto'}
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleUpload} disabled={uploading} />
-          </label>
+          <div className="flex gap-2">
+            <label className="cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold pressable">
+              📷
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleUpload} disabled={uploading} />
+            </label>
+            <label className="cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold pressable">
+              🖼️
+              <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+            </label>
+          </div>
         </div>
 
         {/* Filter */}
@@ -143,7 +150,7 @@ export default function FotosPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="card p-12 text-center">
-            <div className="text-5xl mb-4">ðŸ“¸</div>
+            <div className="text-5xl mb-4">📸</div>
             <p className="text-gray-500 mb-2">Noch keine Fotos</p>
             <p className="text-sm text-gray-400">Tippe auf "+ Foto" um Joschis erstes Bild hinzuzufügen</p>
           </div>

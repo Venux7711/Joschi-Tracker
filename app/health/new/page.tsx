@@ -174,7 +174,7 @@ function NewHealthForm() {
   ]
 
   const activityOptions: { value: Activity; label: string }[] = [
-    { value: 'normal', label: 'ðŸ¾ Normal' },
+    { value: 'normal', label: '🐾 Normal' },
     { value: 'tired', label: 'ðŸ˜´ Müde' },
     { value: 'very_active', label: 'ðŸƒ Sehr aktiv' },
   ]
@@ -189,9 +189,9 @@ function NewHealthForm() {
             href="/dashboard"
             className="text-gray-400 hover:text-gray-600 transition-colors"
           >
-            â† Zurück
+            ← Zurück
           </Link>
-          <h1 className="text-xl font-bold text-gray-800">ðŸ’Š Befinden eintragen</h1>
+          <h1 className="text-xl font-bold text-gray-800">💊 Befinden eintragen</h1>
         </div>
 
         <div className="card p-5">

@@ -127,7 +127,7 @@ export default function CollagePage() {
       <Header />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center gap-3 mb-6">
-          <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† Zurück</Link>
+          <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
           <h1 className="text-xl font-bold text-gray-800">ðŸ—“ï¸ Wochenrückblick</h1>
         </div>
 
@@ -204,7 +204,7 @@ export default function CollagePage() {
             <p className="font-semibold text-gray-800">ðŸŽ¬ Foto-Diashow</p>
             <p className="text-xs text-gray-500">Alle Fotos als animierte Präsentation</p>
           </div>
-          <span className="text-gray-400">â†’</span>
+          <span className="text-gray-400">→</span>
         </Link>
       </main>
     </div>

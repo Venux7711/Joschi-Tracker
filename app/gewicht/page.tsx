@@ -53,7 +53,7 @@ export default function GewichtPage() {
   const trend = weights.length >= 2
     ? weights[0].weight_grams - weights[Math.min(weights.length - 1, 4)].weight_grams
     : 0
-  const trendLabel = trend > 50 ? `â–² +${(trend / 1000).toFixed(2)} kg` : trend < -50 ? `â–¼ ${(trend / 1000).toFixed(2)} kg` : 'â†’ Stabil'
+  const trendLabel = trend > 50 ? `â–² +${(trend / 1000).toFixed(2)} kg` : trend < -50 ? `â–¼ ${(trend / 1000).toFixed(2)} kg` : '→ Stabil'
   const trendColor = trend > 100 ? 'text-red-500' : trend < -100 ? 'text-orange-500' : 'text-green-600'
 
   const latest = weights[0]
@@ -64,8 +64,8 @@ export default function GewichtPage() {
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† Zurück</Link>
-            <h1 className="text-xl font-bold text-gray-800">âš–ï¸ Gewichtsverlauf</h1>
+            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
+            <h1 className="text-xl font-bold text-gray-800">⚖ï¸ Gewichtsverlauf</h1>
           </div>
           <button onClick={() => setShowForm(s => !s)} className="btn-primary text-sm">+ Wiegen</button>
         </div>

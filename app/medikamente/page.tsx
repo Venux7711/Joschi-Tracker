@@ -97,8 +97,8 @@ export default function MedikamentePage() {
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† Zurück</Link>
-            <h1 className="text-xl font-bold text-gray-800">ðŸ’Š Medikamente</h1>
+            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
+            <h1 className="text-xl font-bold text-gray-800">💊 Medikamente</h1>
           </div>
           <button onClick={() => setShowForm(s => !s)} className="btn-primary text-sm">+ Neu</button>
         </div>
@@ -153,7 +153,7 @@ export default function MedikamentePage() {
           <>
             {active.length === 0 && inactive.length === 0 && (
               <div className="card p-10 text-center">
-                <div className="text-5xl mb-3">ðŸ’Š</div>
+                <div className="text-5xl mb-3">💊</div>
                 <p className="text-gray-500 mb-1">Keine Medikamente eingetragen</p>
                 <p className="text-sm text-gray-400">Tippe auf ž+ Neu" um ein Medikament hinzuzufügen</p>
               </div>

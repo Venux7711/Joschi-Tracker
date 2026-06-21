@@ -192,7 +192,7 @@ function NewFeedingForm() {
       const newType = foodType.trim()
       const prevType = prev.food_type
 
-      // Sorte hat gewechselt â†’ alte Dose ist leer
+      // Sorte hat gewechselt → alte Dose ist leer
       if (prevBrand === newBrand && prevType && prevType !== newType) {
         const prevPantryItem = pantry.find(
           p => p.brand.toLowerCase() === prevBrand && p.type === prevType && p.quantity > 0
@@ -233,7 +233,7 @@ function NewFeedingForm() {
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center gap-3 mb-6">
           <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">
-            â† Zurück
+            ← Zurück
           </Link>
           <h1 className="text-xl font-bold text-gray-800">ðŸ½ï¸ Futter eintragen</h1>
         </div>
@@ -252,13 +252,13 @@ function NewFeedingForm() {
             <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-colors ${
               scanning ? 'bg-amber-100' : scanSuccess ? 'bg-green-100' : 'bg-amber-50 hover:bg-amber-100'
             }`}>
-              {scanning ? '⏳' : scanSuccess ? 'âœ…' : 'ðŸ“·'}
+              {scanning ? '⏳' : scanSuccess ? '✅' : 'ðŸ“·'}
             </div>
             <span className="text-sm font-medium text-gray-700">
               {scanning ? 'Dose wird analysiert…' : scanSuccess ? 'Felder ausgefüllt!' : 'Dose fotografieren'}
             </span>
             <span className="text-xs text-gray-400">
-              Kamera öffnen â†’ Formular wird automatisch ausgefüllt
+              Kamera öffnen → Formular wird automatisch ausgefüllt
             </span>
           </label>
         </div>
