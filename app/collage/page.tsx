@@ -6,10 +6,12 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 
+interface Photo { id: string; public_url: string; mood_tag: string; taken_at: string }
+
 interface DayData {
   date: string
   label: string
-  photo: { public_url: string; mood_tag: string } | null
+  photo: Photo | null
   stool: string | null
   feedings: number
 }
@@ -37,30 +39,55 @@ export default function CollagePage() {
       if (!catId) { setLoading(false); return }
 
       const today = new Date()
-      const last7: DayData[] = []
+      const since = new Date(today)
+      since.setDate(today.getDate() - 6)
+      const sinceStr = since.toISOString().slice(0, 10)
+      const todayStr = today.toISOString().slice(0, 10)
 
+      // 3 parallel batch queries instead of 21 sequential
+      const [healthRes, feedRes, photoRes] = await Promise.all([
+        supabase.from('health_logs').select('stool_consistency, logged_at')
+          .eq('cat_id', catId)
+          .gte('logged_at', `${sinceStr}T00:00:00`)
+          .lte('logged_at', `${todayStr}T23:59:59`),
+        supabase.from('feeding_logs').select('logged_at')
+          .eq('cat_id', catId)
+          .gte('logged_at', `${sinceStr}T00:00:00`)
+          .lte('logged_at', `${todayStr}T23:59:59`),
+        fetch(`/api/photos?startDate=${sinceStr}&endDate=${todayStr}&limit=7`).then(r => r.json()),
+      ])
+
+      // Group by date
+      const stoolByDate: Record<string, string> = {}
+      healthRes.data?.forEach(h => { stoolByDate[h.logged_at.slice(0, 10)] = h.stool_consistency })
+
+      const feedsByDate: Record<string, number> = {}
+      feedRes.data?.forEach(f => {
+        const d = f.logged_at.slice(0, 10)
+        feedsByDate[d] = (feedsByDate[d] ?? 0) + 1
+      })
+
+      const photoByDate: Record<string, Photo> = {}
+      ;(photoRes.photos ?? []).forEach((p: Photo) => {
+        const d = p.taken_at.slice(0, 10)
+        if (!photoByDate[d]) photoByDate[d] = p
+      })
+
+      const result: DayData[] = []
       for (let i = 6; i >= 0; i--) {
         const d = new Date(today)
         d.setDate(today.getDate() - i)
         const dateStr = d.toISOString().slice(0, 10)
-        const label = `${WEEKDAYS[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`
-
-        const [healthRes, feedRes, photoRes] = await Promise.all([
-          supabase.from('health_logs').select('stool_consistency').eq('cat_id', catId).gte('logged_at', `${dateStr}T00:00:00`).lte('logged_at', `${dateStr}T23:59:59`).limit(1),
-          supabase.from('feeding_logs').select('id').eq('cat_id', catId).gte('logged_at', `${dateStr}T00:00:00`).lte('logged_at', `${dateStr}T23:59:59`),
-          fetch(`/api/photos?date=${dateStr}&limit=1`).then(r => r.json()),
-        ])
-
-        last7.push({
+        result.push({
           date: dateStr,
-          label,
-          stool: healthRes.data?.[0]?.stool_consistency ?? null,
-          feedings: feedRes.data?.length ?? 0,
-          photo: photoRes.photos?.[0] ?? null,
+          label: `${WEEKDAYS[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`,
+          stool: stoolByDate[dateStr] ?? null,
+          feedings: feedsByDate[dateStr] ?? 0,
+          photo: photoByDate[dateStr] ?? null,
         })
       }
 
-      setDays(last7)
+      setDays(result)
       setLoading(false)
     }
     load()
@@ -68,34 +95,30 @@ export default function CollagePage() {
 
   const generateSummary = async () => {
     setSummaryLoading(true)
-    const good = days.filter(d => d.stool === 'normal' || d.stool === null).length
+    const good = days.filter(d => !d.stool || d.stool === 'normal').length
     const bad = days.filter(d => d.stool === 'diarrhea').length
     const totalFeedings = days.reduce((s, d) => s + d.feedings, 0)
-
-    const prompt = `Joschi ist eine Perserkatze mit wiederkehrendem Durchfall. Schreibe eine kurze, warmherzige Wochenzusammenfassung (max. 60 Wörter, auf Deutsch):
-Gute Tage: ${good}/7, Durchfall-Tage: ${bad}/7, Fütterungen: ${totalFeedings}.
-${bad === 0 ? 'Es gab keinen Durchfall diese Woche!' : ''}`
-
     try {
       const r = await fetch('/api/analyze-health', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           feedings: [],
-          health: days.filter(d => d.stool).map(d => ({ date: d.label, stool: d.stool, appetite: 'good', activity: 'normal', vomiting: false, furIssue: false })),
+          health: days.filter(d => d.stool).map(d => ({
+            date: d.label, stool: d.stool, appetite: 'good', activity: 'normal', vomiting: false, furIssue: false,
+          })),
         }),
       })
       const data = await r.json()
-      const text = data.analysis ?? ''
-      // Take just first paragraph
-      setAiSummary(text.split('\n\n')[0].replace(/\*\*/g, '').slice(0, 200))
+      const text = (data.analysis ?? '').replace(/\*\*/g, '')
+      setAiSummary(text.split('\n\n')[0].slice(0, 250))
     } catch {
-      setAiSummary('Eine Woche voller Fürsorge für Joschi!')
+      setAiSummary(`${good} gute Tage, ${bad} Durchfall-Tage, ${totalFeedings} Fütterungen diese Woche.`)
     }
     setSummaryLoading(false)
   }
 
-  const goodDays = days.filter(d => d.stool === 'normal' || d.stool === null).length
+  const goodDays = days.filter(d => !d.stool || d.stool === 'normal').length
   const diarrheaDays = days.filter(d => d.stool === 'diarrhea').length
   const totalFeedings = days.reduce((s, d) => s + d.feedings, 0)
 
@@ -108,48 +131,47 @@ ${bad === 0 ? 'Es gab keinen Durchfall diese Woche!' : ''}`
           <h1 className="text-xl font-bold text-gray-800">🗓️ Wochenrückblick</h1>
         </div>
 
-        {/* Stats bar */}
-        <div className="flex gap-3 mb-5">
-          <div className="flex-1 card p-3 text-center">
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="card p-3 text-center">
             <div className="text-2xl font-black text-green-600">{goodDays}</div>
             <div className="text-xs text-gray-500">Gute Tage</div>
           </div>
-          <div className="flex-1 card p-3 text-center">
+          <div className="card p-3 text-center">
             <div className="text-2xl font-black text-red-500">{diarrheaDays}</div>
             <div className="text-xs text-gray-500">Durchfall</div>
           </div>
-          <div className="flex-1 card p-3 text-center">
+          <div className="card p-3 text-center">
             <div className="text-2xl font-black text-amber-600">{totalFeedings}</div>
             <div className="text-xs text-gray-500">Fütterungen</div>
           </div>
         </div>
 
-        {/* Photo grid */}
+        {/* Grid */}
         {loading ? (
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {Array.from({ length: 7 }).map((_, i) => (
               <div key={i} className="aspect-square bg-gray-200 rounded-2xl animate-pulse" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-5">
+          <div className="grid grid-cols-4 gap-2 mb-5">
             {days.map(day => {
-              const stoolInfo = day.stool ? STOOL_INFO[day.stool] : STOOL_INFO.not_observed
+              const stoolInfo = STOOL_INFO[day.stool ?? 'not_observed']
               return (
                 <div key={day.date} className="aspect-square relative rounded-2xl overflow-hidden">
                   {day.photo ? (
                     <Image src={day.photo.public_url} alt={day.label} fill className="object-cover" sizes="25vw" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center" style={{ background: `${stoolInfo.color}22` }}>
-                      <span className="text-3xl" style={{ color: stoolInfo.color }}>{stoolInfo.emoji}</span>
+                    <div className="w-full h-full flex items-center justify-center" style={{ background: `${stoolInfo.color}20` }}>
+                      <span className="text-2xl" style={{ color: stoolInfo.color }}>{stoolInfo.emoji}</span>
                     </div>
                   )}
-                  {/* Overlay */}
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
-                    <p className="text-white text-xs font-bold">{day.label}</p>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <span className="text-xs" style={{ color: stoolInfo.color }}>●</span>
-                      {day.feedings > 0 && <span className="text-white/70 text-xs">{day.feedings}×</span>}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
+                    <p className="text-white text-[10px] font-bold leading-tight">{day.label}</p>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px]" style={{ color: stoolInfo.color }}>●</span>
+                      {day.feedings > 0 && <span className="text-white/60 text-[9px]">{day.feedings}×</span>}
                     </div>
                   </div>
                 </div>
@@ -159,9 +181,9 @@ ${bad === 0 ? 'Es gab keinen Durchfall diese Woche!' : ''}`
         )}
 
         {/* AI Summary */}
-        <div className="card p-4">
+        <div className="card p-4 mb-3">
           <div className="flex items-center justify-between mb-3">
-            <p className="font-semibold text-gray-800">KI-Wochenzusammenfassung</p>
+            <p className="font-semibold text-gray-800">KI-Zusammenfassung</p>
             <button
               onClick={generateSummary}
               disabled={summaryLoading || loading}
@@ -177,8 +199,7 @@ ${bad === 0 ? 'Es gab keinen Durchfall diese Woche!' : ''}`
           )}
         </div>
 
-        {/* Link to slideshow */}
-        <Link href="/slideshow" className="card p-4 mt-3 flex items-center justify-between hover:shadow-md transition-shadow">
+        <Link href="/slideshow" className="card p-4 flex items-center justify-between hover:shadow-md transition-shadow">
           <div>
             <p className="font-semibold text-gray-800">🎬 Foto-Diashow</p>
             <p className="text-xs text-gray-500">Alle Fotos als animierte Präsentation</p>

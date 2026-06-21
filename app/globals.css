@@ -5,10 +5,13 @@
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-amber-50 text-gray-800;
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 }
 

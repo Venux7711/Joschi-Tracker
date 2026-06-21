@@ -58,8 +58,9 @@ export async function PATCH(req: NextRequest) {
   const supabase = makeSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { id, ...updates } = await req.json()
+  // Remove sensitive fields that shouldn't be updated
+  delete updates.user_id; delete updates.cat_id; delete updates.created_at
   const { error } = await supabase.from('medications').update(updates).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

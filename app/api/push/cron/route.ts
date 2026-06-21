@@ -10,9 +10,10 @@ webpush.setVapidDetails(
 )
 
 export async function GET(req: NextRequest) {
-  // Vercel Cron or manual trigger
-  const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}` && process.env.NODE_ENV === 'production') {
+  // Vercel Cron sets this header automatically
+  const isVercelCron = req.headers.get('x-vercel-cron') === '1'
+  const isLocalDev = process.env.NODE_ENV !== 'production'
+  if (!isVercelCron && !isLocalDev) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

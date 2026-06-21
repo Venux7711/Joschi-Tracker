@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
 
   const limit = parseInt(req.nextUrl.searchParams.get('limit') ?? '100')
   const mood = req.nextUrl.searchParams.get('mood')
-  const date = req.nextUrl.searchParams.get('date') // YYYY-MM-DD for memory of the day
+  const date = req.nextUrl.searchParams.get('date')         // YYYY-MM-DD exact day
+  const startDate = req.nextUrl.searchParams.get('startDate') // YYYY-MM-DD range start
+  const endDate = req.nextUrl.searchParams.get('endDate')     // YYYY-MM-DD range end
 
   let query = supabase
     .from('photos')
@@ -33,9 +35,10 @@ export async function GET(req: NextRequest) {
 
   if (mood) query = query.eq('mood_tag', mood)
   if (date) {
-    query = query
-      .gte('taken_at', `${date}T00:00:00`)
-      .lte('taken_at', `${date}T23:59:59`)
+    query = query.gte('taken_at', `${date}T00:00:00`).lte('taken_at', `${date}T23:59:59`)
+  } else if (startDate || endDate) {
+    if (startDate) query = query.gte('taken_at', `${startDate}T00:00:00`)
+    if (endDate) query = query.lte('taken_at', `${endDate}T23:59:59`)
   }
 
   const { data: photos, error } = await query
