@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+const inter = Inter({ subsets: ['latin', 'latin-ext'] })
 
 export const metadata: Metadata = {
   title: 'Joschi',
@@ -31,7 +31,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="de">
-      <body className={inter.variable}>
+      <body className={inter.className}>
         {children}
         <BottomNav />
         <script dangerouslySetInnerHTML={{ __html: `
