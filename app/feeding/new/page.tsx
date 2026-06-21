@@ -74,7 +74,7 @@ function NewFeedingForm() {
   const [error, setError] = useState<string | null>(null)
   const [prevBrands, setPrevBrands] = useState<string[]>([])
   const [prevTypes, setPrevTypes] = useState<string[]>([])
-  const [pantry, setPantry] = useState<{ brand: string; type: string; quantity: number }[]>([])
+  const [pantry, setPantry] = useState<{ id: string; brand: string; type: string; quantity: number }[]>([])
 
   const isAnifit = foodBrand.trim().toLowerCase() === 'anifit'
 
@@ -173,9 +173,41 @@ function NewFeedingForm() {
     if (insertError) {
       setError('Fehler beim Speichern. Bitte erneut versuchen.')
       setLoading(false)
-    } else {
-      router.push('/dashboard')
+      return
     }
+
+    // Vorrat automatisch reduzieren wenn Sorte wechselt
+    const { data: lastLogs } = await supabase
+      .from('feeding_logs')
+      .select('food_brand, food_type')
+      .eq('cat_id', catId)
+      .order('logged_at', { ascending: false })
+      .limit(10)
+
+    if (lastLogs && lastLogs.length >= 2) {
+      // Letzter Eintrag vor dem gerade gespeicherten
+      const prev = lastLogs[1]
+      const newBrand = foodBrand.trim().toLowerCase()
+      const prevBrand = prev.food_brand?.toLowerCase()
+      const newType = foodType.trim()
+      const prevType = prev.food_type
+
+      // Sorte hat gewechselt → alte Dose ist leer
+      if (prevBrand === newBrand && prevType && prevType !== newType) {
+        const prevPantryItem = pantry.find(
+          p => p.brand.toLowerCase() === prevBrand && p.type === prevType && p.quantity > 0
+        )
+        if (prevPantryItem) {
+          await fetch('/api/pantry', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: prevPantryItem.id, quantity: prevPantryItem.quantity - 1 }),
+          })
+        }
+      }
+    }
+
+    router.push('/dashboard')
   }
 
   // Marken-Liste: Anifit immer zuerst, dann andere
