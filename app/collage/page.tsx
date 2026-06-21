@@ -77,12 +77,6 @@ Gute Tage: ${good}/7, Durchfall-Tage: ${bad}/7, Fütterungen: ${totalFeedings}.
 ${bad === 0 ? 'Es gab keinen Durchfall diese Woche!' : ''}`
 
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 150 } }),
-      })
-      // Use backend instead
       const r = await fetch('/api/analyze-health', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
