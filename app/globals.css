@@ -6,7 +6,7 @@
   html {
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+    font-family: var(--font-inter), -apple-system, BlinkMacSystemFont,
       'Helvetica Neue', Arial, sans-serif;
   }
 
@@ -17,6 +17,7 @@
     max-width: 100vw;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'kern' 1, 'liga' 1;
   }
 
   @media (max-width: 639px) {
@@ -184,6 +185,43 @@
     height: 1px;
     background: rgba(60, 60, 67, 0.1);
     margin: 0 -20px;
+  }
+}
+
+  /* ── Interactive press feedback ── */
+  .pressable {
+    transition: transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.14s ease;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .pressable:active {
+    transform: scale(0.96);
+    opacity: 0.85;
+  }
+
+  /* ── List rows ── */
+  .list-row {
+    transition: background 0.15s ease;
+  }
+
+  .list-row:active {
+    background: rgba(120, 120, 128, 0.06);
+  }
+
+  /* ── Card hover (desktop) ── */
+  .card-lift {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .card-lift:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06), 0 20px 48px rgba(0,0,0,0.08);
+    transform: translateY(-1px);
+  }
+
+  /* ── Smooth color transitions ── */
+  .smooth-color {
+    transition: color 0.2s ease, background 0.2s ease;
   }
 }
 

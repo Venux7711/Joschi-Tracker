@@ -332,37 +332,48 @@ export default async function DashboardPage() {
 
         {/* ── HERO ── */}
         <div
-          className="rounded-3xl p-6 flex items-center gap-5 relative overflow-hidden"
+          className="rounded-3xl relative overflow-hidden"
           style={{
-            background: 'linear-gradient(135deg, #1C1C1E 0%, #3A200A 60%, #78350F 100%)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.20)',
+            background: 'linear-gradient(140deg, #1C1C1E 0%, #2D1500 55%, #78350F 100%)',
+            boxShadow: '0 8px 36px rgba(0,0,0,0.22)',
+            padding: '20px 20px 20px 20px',
           }}
         >
-          <div
-            className="absolute inset-0 opacity-[0.04]"
-            style={{ backgroundImage: 'radial-gradient(circle at 80% 20%, #FBBF24 0%, transparent 60%)' }}
-          />
-          <JoschiPhoto size={76} />
-          <div className="flex-1 min-w-0 relative">
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 500, letterSpacing: '0.02em', textTransform: 'uppercase', marginBottom: 2 }}>
-              {greeting}
-            </p>
-            <h1 style={{ color: 'white', fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1 }}>
-              Joschi
-            </h1>
-            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, marginTop: 4, letterSpacing: '-0.01em' }}>
-              {today.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </p>
-          </div>
-          <div className="text-right flex-shrink-0 relative">
-            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, letterSpacing: '0.04em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 2 }}>
-              Heute
+          {/* warm glow */}
+          <div className="absolute" style={{ inset: 0, backgroundImage: 'radial-gradient(ellipse at 70% 0%, rgba(251,191,36,0.12) 0%, transparent 60%)', pointerEvents: 'none' }} />
+
+          <div className="flex items-center gap-4 relative">
+            {/* Photo with warm ring */}
+            <div style={{ flexShrink: 0, padding: 3, borderRadius: '50%', background: 'linear-gradient(135deg, #FBBF24, #92400E)' }}>
+              <div style={{ borderRadius: '50%', overflow: 'hidden', width: 72, height: 72, border: '2px solid #1C1C1E' }}>
+                <JoschiPhoto size={72} />
+              </div>
             </div>
-            <div style={{ color: '#FBBF24', fontSize: 36, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1 }}>
-              {feedings.length}
+
+            <div className="flex-1 min-w-0">
+              <p style={{ color: 'rgba(251,191,36,0.7)', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>
+                {greeting} 🐾
+              </p>
+              <h1 style={{ color: 'white', fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1 }}>
+                Joschi
+              </h1>
+              <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: 12, marginTop: 4, letterSpacing: '-0.01em' }}>
+                {today.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
             </div>
-            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, letterSpacing: '0.02em', fontWeight: 500 }}>
-              Mahlzeiten
+
+            <div className="text-right flex-shrink-0 relative">
+              <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 3 }}>
+                Mahlzeiten
+              </div>
+              <div style={{ color: feedings.length > 0 ? '#FBBF24' : 'rgba(255,255,255,0.3)', fontSize: 40, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1 }}>
+                {feedings.length}
+              </div>
+              {streak > 0 && (
+                <div style={{ color: streak >= 7 ? '#FDE68A' : 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 4, fontWeight: 500 }}>
+                  {streak >= 7 ? `🌟 ${streak}d` : `${streak}d gut`}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -371,23 +382,29 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-2 gap-3">
           <Link
             href="/feeding/new"
-            className="rounded-2xl flex items-center gap-3.5 transition-all active:scale-95"
+            className="pressable rounded-2xl flex items-center gap-3.5"
             style={{
               padding: '18px 20px',
               background: 'linear-gradient(145deg, #FBBF24 0%, #D97706 100%)',
-              boxShadow: '0 4px 20px rgba(217,119,6,0.30)',
+              boxShadow: '0 4px 20px rgba(217,119,6,0.28), 0 1px 4px rgba(217,119,6,0.15)',
             }}
           >
-            <span style={{ fontSize: 28, lineHeight: 1 }}>🍽️</span>
-            <span style={{ color: 'white', fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em' }}>Futter</span>
+            <span style={{ fontSize: 26, lineHeight: 1 }}>🍽️</span>
+            <div>
+              <div style={{ color: 'white', fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1 }}>Futter</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 3, fontWeight: 500 }}>für Joschi erfassen</div>
+            </div>
           </Link>
           <Link
             href="/health/new"
-            className="card rounded-2xl flex items-center gap-3.5 transition-all active:scale-95"
+            className="card pressable rounded-2xl flex items-center gap-3.5"
             style={{ padding: '18px 20px' }}
           >
-            <span style={{ fontSize: 28, lineHeight: 1 }}>🩺</span>
-            <span style={{ color: '#1C1C1E', fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em' }}>Befinden</span>
+            <span style={{ fontSize: 26, lineHeight: 1 }}>🩺</span>
+            <div>
+              <div style={{ color: '#1C1C1E', fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1 }}>Befinden</div>
+              <div style={{ color: 'rgba(60,60,67,0.4)', fontSize: 11, marginTop: 3, fontWeight: 500 }}>wie geht es Joschi?</div>
+            </div>
           </Link>
         </div>
 
@@ -544,20 +561,25 @@ export default async function DashboardPage() {
           </div>
 
           {feedings.length === 0 ? (
-            <div style={{ padding: '32px 20px', textAlign: 'center' }}>
-              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.35)' }}>Noch nichts eingetragen</p>
-              <Link href="/feeding/new" style={{ display: 'inline-block', marginTop: 8, fontSize: 14, color: '#D97706', fontWeight: 600 }}>
-                Jetzt eintragen →
+            <div style={{ padding: '28px 20px', textAlign: 'center' }}>
+              <p style={{ fontSize: 22, marginBottom: 8 }}>🐾</p>
+              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)', fontWeight: 500 }}>Joschi wartet auf sein Futter</p>
+              <Link href="/feeding/new" style={{ display: 'inline-block', marginTop: 10, fontSize: 14, color: '#D97706', fontWeight: 700, letterSpacing: '-0.01em' }}>
+                Jetzt füttern →
               </Link>
             </div>
           ) : (
             <div>
               {feedings.map((f, i) => (
-                <div
+                <Link
                   key={f.id}
-                  className="flex items-center gap-3"
-                  style={{ padding: '14px 20px', ...(i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}) }}
+                  href={`/feeding/${f.id}/edit`}
+                  className="list-row flex items-center gap-3"
+                  style={{ padding: '14px 20px', textDecoration: 'none', display: 'flex', ...(i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}) }}
                 >
+                  <div style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 10, background: 'rgba(251,191,36,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>
+                    🍽️
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1C1E', letterSpacing: '-0.015em' }} className="truncate">
                       {f.food_type || f.food_brand}
@@ -566,13 +588,10 @@ export default async function DashboardPage() {
                       {f.food_brand}{f.amount_grams ? ` · ${f.amount_grams}g` : ''} · {formatTime(f.logged_at)}
                     </p>
                   </div>
-                  <Link
-                    href={`/feeding/${f.id}/edit`}
-                    style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 9, background: 'rgba(120,120,128,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}
-                  >
-                    ✏️
-                  </Link>
-                </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(60,60,67,0.2)" strokeWidth={2.5} style={{ flexShrink: 0 }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
               ))}
             </div>
           )}
@@ -591,20 +610,24 @@ export default async function DashboardPage() {
           </div>
 
           {healthLogs.length === 0 ? (
-            <div style={{ padding: '32px 20px', textAlign: 'center' }}>
-              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.35)' }}>Noch nichts eingetragen</p>
-              <Link href="/health/new" style={{ display: 'inline-block', marginTop: 8, fontSize: 14, color: '#D97706', fontWeight: 600 }}>
-                Jetzt eintragen →
+            <div style={{ padding: '28px 20px', textAlign: 'center' }}>
+              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)', fontWeight: 500 }}>Noch kein Befinden für heute</p>
+              <Link href="/health/new" style={{ display: 'inline-block', marginTop: 10, fontSize: 14, color: '#D97706', fontWeight: 700, letterSpacing: '-0.01em' }}>
+                Wie geht es Joschi? →
               </Link>
             </div>
           ) : (
             <div>
               {healthLogs.map((h, i) => (
-                <div
+                <Link
                   key={h.id}
-                  className="flex items-center gap-3"
-                  style={{ padding: '14px 20px', ...(i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}) }}
+                  href={`/health/${h.id}/edit`}
+                  className="list-row flex items-center gap-3"
+                  style={{ padding: '14px 20px', textDecoration: 'none', display: 'flex', ...(i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}) }}
                 >
+                  <div style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 10, background: 'rgba(120,120,128,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>
+                    🩺
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getStoolColor(h.stool_consistency)}`}>
@@ -618,13 +641,10 @@ export default async function DashboardPage() {
                     </p>
                     {h.notes && <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.35)', fontStyle: 'italic', marginTop: 2 }} className="truncate">{h.notes}</p>}
                   </div>
-                  <Link
-                    href={`/health/${h.id}/edit`}
-                    style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 9, background: 'rgba(120,120,128,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}
-                  >
-                    ✏️
-                  </Link>
-                </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(60,60,67,0.2)" strokeWidth={2.5} style={{ flexShrink: 0 }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
               ))}
             </div>
           )}
