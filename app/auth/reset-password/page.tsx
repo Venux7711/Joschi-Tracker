@@ -1,4 +1,4 @@
-﻿'use client'
+﻿﻿'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -15,7 +15,7 @@ export default function ResetPasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (password !== confirm) {
-      setError('Die PasswÃ¶rter stimmen nicht Ã¼berein.')
+      setError('Die Passwörter stimmen nicht überein.')
       return
     }
     if (password.length < 8) {
@@ -42,7 +42,7 @@ export default function ResetPasswordPage() {
         <div className="text-center mb-6">
           <div className="text-5xl mb-3">ðŸ”’</div>
           <h1 className="text-xl font-bold text-gray-800">Neues Passwort</h1>
-          <p className="text-gray-500 text-sm mt-1">Bitte wÃ¤hle ein sicheres Passwort.</p>
+          <p className="text-gray-500 text-sm mt-1">Bitte wähle ein sicheres Passwort.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -61,7 +61,7 @@ export default function ResetPasswordPage() {
           </div>
 
           <div>
-            <label htmlFor="confirm" className="label">Passwort bestÃ¤tigen</label>
+            <label htmlFor="confirm" className="label">Passwort bestätigen</label>
             <input
               id="confirm"
               type="password"
