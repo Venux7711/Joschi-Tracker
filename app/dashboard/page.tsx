@@ -533,16 +533,70 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* ── 14-TAGE STUHLGANG-TREND ── */}
-        <div className="card" style={{ padding: '20px 20px 16px' }}>
-          <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E', marginBottom: 16 }}>
-            14-Tage Trend
-          </h3>
-          <div className="flex gap-1.5 justify-between">
-            {trend14.map(({ day, stool }, i) => (
-              <div key={i} className="flex flex-col items-center gap-2 flex-1">
-                <div className={`w-full rounded-md ${stoolDotBg(stool)}`} style={{ aspectRatio: '1', minWidth: 14 }} />
-                <span style={{ fontSize: 9, color: 'rgba(60,60,67,0.4)', lineHeight: 1 }}>{dayLabel(day)}</span>
+        {/* ── STUHLGANG TREND ── */}
+        <div className="card" style={{ padding: '20px 20px 18px' }}>
+          {/* Header + dynamic summary */}
+          <div className="flex items-start justify-between" style={{ marginBottom: 18 }}>
+            <div>
+              <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Stuhlgang</h3>
+              <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', marginTop: 2 }}>letzte 14 Tage</p>
+            </div>
+            {(() => {
+              const dDays = trend14.filter(d => d.stool === 'diarrhea').length
+              const nDays = trend14.filter(d => d.stool === 'normal').length
+              if (dDays === 0) return (
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#16A34A', background: 'rgba(22,163,74,0.09)', padding: '5px 11px', borderRadius: 999 }}>
+                  {nDays}× normal ✓
+                </span>
+              )
+              return (
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#DC2626', background: 'rgba(220,38,38,0.08)', padding: '5px 11px', borderRadius: 999 }}>
+                  {dDays}× Durchfall
+                </span>
+              )
+            })()}
+          </div>
+
+          {/* Dot timeline */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+            {trend14.map(({ day, stool }, i) => {
+              const bg = stool === 'normal' ? '#4ADE80'
+                : stool === 'soft' ? '#FCD34D'
+                : stool === 'diarrhea' ? '#F87171'
+                : undefined
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                  <div style={{
+                    width: '100%',
+                    aspectRatio: '1',
+                    minWidth: 12,
+                    borderRadius: 5,
+                    background: bg ?? 'rgba(120,120,128,0.1)',
+                    border: !bg ? '1.5px dashed rgba(120,120,128,0.22)' : 'none',
+                  }} />
+                  <span style={{ fontSize: 9, color: 'rgba(60,60,67,0.35)', lineHeight: 1, letterSpacing: '0.01em' }}>
+                    {i % 2 === 0 ? dayLabel(day) : ''}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Inline legend */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', paddingTop: 4, borderTop: '0.5px solid rgba(60,60,67,0.07)' }}>
+            {([
+              { color: '#4ADE80', label: 'Normal' },
+              { color: '#FCD34D', label: 'Weich' },
+              { color: '#F87171', label: 'Durchfall = rot' },
+              { border: true, label: 'Kein Eintrag' },
+            ] as { color?: string; border?: boolean; label: string }[]).map(({ color, border, label }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{
+                  width: 9, height: 9, borderRadius: 3, flexShrink: 0,
+                  background: color ?? 'rgba(120,120,128,0.1)',
+                  border: border ? '1.5px dashed rgba(120,120,128,0.3)' : 'none',
+                }} />
+                <span style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', fontWeight: 500 }}>{label}</span>
               </div>
             ))}
           </div>
