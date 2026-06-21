@@ -14,19 +14,23 @@ type HealthEntry = {
 function renderAnalysis(text: string) {
   return text.split('\n').map((line, i) => {
     if (line.startsWith('**') && line.endsWith('**')) {
-      return <p key={i} className="font-semibold text-gray-800 mt-3 first:mt-0">{line.replace(/\*\*/g, '')}</p>
+      return (
+        <p key={i} style={{ fontWeight: 700, fontSize: 14, color: '#1C1C1E', marginTop: i === 0 ? 0 : 16, letterSpacing: '-0.01em' }}>
+          {line.replace(/\*\*/g, '')}
+        </p>
+      )
     }
     if (line.startsWith('**')) {
       const parts = line.split('**')
       return (
-        <p key={i} className="mt-3">
-          <span className="font-semibold text-gray-800">{parts[1]}</span>
-          <span className="text-gray-600">{parts[2]}</span>
+        <p key={i} style={{ marginTop: i === 0 ? 0 : 14 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: '#1C1C1E' }}>{parts[1]}</span>
+          <span style={{ fontSize: 14, color: 'rgba(60,60,67,0.65)', lineHeight: 1.6 }}>{parts[2]}</span>
         </p>
       )
     }
-    if (!line.trim()) return <div key={i} className="h-1" />
-    return <p key={i} className="text-gray-600 text-sm leading-relaxed">{line}</p>
+    if (!line.trim()) return <div key={i} style={{ height: 4 }} />
+    return <p key={i} style={{ fontSize: 14, color: 'rgba(60,60,67,0.65)', lineHeight: 1.6 }}>{line}</p>
   })
 }
 
@@ -62,47 +66,51 @@ export default function AiInsights({
   }
 
   return (
-    <div className="bg-gradient-to-br from-violet-50 to-indigo-50 rounded-2xl border border-violet-100 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-violet-100">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-800">🤖 KI-Auswertung</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Gemini analysiert Muster der letzten 30 Tage</p>
-        </div>
+    <div className="card overflow-hidden">
+      <div className="flex items-center justify-between" style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
+        <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>KI-Auswertung</h3>
         <button
           onClick={analyze}
           disabled={loading}
-          className="text-xs font-medium text-violet-700 bg-white px-3 py-1.5 rounded-full border border-violet-200 hover:bg-violet-50 transition-colors disabled:opacity-50 flex-shrink-0"
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: loading ? 'rgba(60,60,67,0.35)' : '#7C3AED',
+            background: 'rgba(124,58,237,0.08)',
+            padding: '6px 14px',
+            borderRadius: 999,
+            border: 'none',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            flexShrink: 0,
+          }}
         >
-          {loading ? '⏳ Analysiert…' : analysis ? '↻ Neu' : '✦ Analysieren'}
+          {loading ? 'Analysiert…' : analysis ? 'Neu analysieren' : 'Analysieren'}
         </button>
       </div>
 
       {!analysis && !loading && !error && (
-        <div className="px-4 py-5 text-center">
-          <p className="text-sm text-gray-400">
-            Tippt auf "Analysieren" und Gemini sucht nach Zusammenhängen zwischen Futter, Leckerli und Joschis Befinden.
+        <div style={{ padding: '24px 20px', textAlign: 'center' }}>
+          <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)', lineHeight: 1.5, maxWidth: 280, margin: '0 auto' }}>
+            Gemini analysiert Muster zwischen Futter und Joschis Befinden der letzten 30 Tage.
           </p>
         </div>
       )}
 
       {loading && (
-        <div className="px-4 py-5 text-center">
-          <div className="inline-flex items-center gap-2 text-sm text-violet-600">
-            <span className="animate-spin">⟳</span>
-            Analysiere {feedings.length} Futter-Einträge, {health.length} Befinden-Einträge{pantry.length > 0 ? ` und ${pantry.length} Vorrats-Positionen` : ''}…
-          </div>
+        <div style={{ padding: '24px 20px', textAlign: 'center' }}>
+          <p style={{ fontSize: 14, color: '#7C3AED' }}>Analysiere {feedings.length} Einträge…</p>
         </div>
       )}
 
       {error && (
-        <div className="px-4 py-3 text-xs text-red-500 text-center space-y-1">
-          <p className="font-medium">Analyse fehlgeschlagen</p>
-          <p className="text-red-400 break-all">{error}</p>
+        <div style={{ padding: '16px 20px' }}>
+          <p style={{ fontSize: 13, color: '#DC2626', fontWeight: 500 }}>Analyse fehlgeschlagen</p>
+          <p style={{ fontSize: 12, color: 'rgba(220,38,38,0.6)', marginTop: 4, wordBreak: 'break-all' }}>{error}</p>
         </div>
       )}
 
       {analysis && !loading && (
-        <div className="px-4 py-4">
+        <div style={{ padding: '16px 20px' }}>
           {renderAnalysis(analysis)}
         </div>
       )}

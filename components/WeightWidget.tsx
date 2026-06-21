@@ -22,43 +22,56 @@ export default function WeightWidget() {
   const prev = weights[4] ?? weights[weights.length - 1]
   const diff = latest.weight_grams - prev.weight_grams
   const diffKg = (Math.abs(diff) / 1000).toFixed(3)
-  const trendIcon = diff > 50 ? '▲' : diff < -50 ? '▼' : '→'
-  const trendColor = diff > 100 ? 'text-red-500' : diff < -100 ? 'text-orange-500' : 'text-green-600'
+  const trending = diff > 50 ? 'up' : diff < -50 ? 'down' : 'stable'
+  const trendColor = diff > 100 ? '#DC2626' : diff < -100 ? '#D97706' : '#16A34A'
+  const trendLabel = weights.length > 1
+    ? (diff === 0 ? 'Stabil' : `${diff > 0 ? '+' : '−'}${diffKg} kg`)
+    : 'Erste Messung'
 
-  // Mini sparkline: last 6 weights reversed
   const spark = [...weights].reverse().slice(-6)
   const max = Math.max(...spark.map(w => w.weight_grams))
   const min = Math.min(...spark.map(w => w.weight_grams))
   const range = max - min || 50
 
   return (
-    <Link href="/gewicht" className="card p-4 mb-4 flex items-center gap-4 hover:shadow-md transition-shadow">
-      <div className="flex-1">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Gewicht</p>
-        <p className="text-2xl font-black text-gray-800">
-          {(latest.weight_grams / 1000).toFixed(2)} <span className="text-base font-normal text-gray-500">kg</span>
+    <Link
+      href="/gewicht"
+      className="card flex items-center gap-5 transition-all active:scale-[0.98]"
+      style={{ padding: '18px 20px' }}
+    >
+      <div className="flex-1 min-w-0">
+        <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(60,60,67,0.45)', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>
+          Gewicht
         </p>
-        <p className={`text-sm font-medium mt-0.5 ${trendColor}`}>
-          {trendIcon} {weights.length > 1 ? (diff === 0 ? 'Stabil' : `${diff > 0 ? '+' : '-'}${diffKg} kg`) : 'Erste Messung'}
+        <p style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, color: '#1C1C1E' }}>
+          {(latest.weight_grams / 1000).toFixed(2)}{' '}
+          <span style={{ fontSize: 15, fontWeight: 500, color: 'rgba(60,60,67,0.45)' }}>kg</span>
+        </p>
+        <p style={{ fontSize: 13, fontWeight: 500, color: trendColor, marginTop: 4 }}>
+          {trending === 'up' ? '↑' : trending === 'down' ? '↓' : '→'} {trendLabel}
         </p>
       </div>
 
-      {/* Sparkline */}
-      <div className="flex items-end gap-1 h-10">
+      <div className="flex items-end gap-1" style={{ height: 40 }}>
         {spark.map((w, i) => {
-          const h = Math.max(4, ((w.weight_grams - min) / range) * 36 + 4)
-          const isLast = i === spark.length - 1
+          const h = Math.max(4, ((w.weight_grams - min) / range) * 34 + 4)
           return (
             <div
               key={w.id}
-              className={`w-2 rounded-sm ${isLast ? 'bg-amber-500' : 'bg-amber-200'}`}
-              style={{ height: h }}
+              style={{
+                width: 6,
+                height: h,
+                borderRadius: 3,
+                background: i === spark.length - 1 ? '#FBBF24' : 'rgba(251,191,36,0.25)',
+              }}
             />
           )
         })}
       </div>
 
-      <span className="text-gray-300 text-lg">→</span>
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="rgba(60,60,67,0.25)" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
     </Link>
   )
 }

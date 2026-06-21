@@ -328,11 +328,11 @@ export default async function DashboardPage() {
     <div className="min-h-screen">
       <Header />
 
-      <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+      <main className="max-w-2xl mx-auto px-4 py-6 space-y-5">
 
         {/* ── HERO ── */}
         <div
-          className="rounded-3xl p-5 flex items-center gap-4 relative overflow-hidden"
+          className="rounded-3xl p-6 flex items-center gap-5 relative overflow-hidden"
           style={{
             background: 'linear-gradient(135deg, #1C1C1E 0%, #3A200A 60%, #78350F 100%)',
             boxShadow: '0 8px 32px rgba(0,0,0,0.20)',
@@ -371,43 +371,35 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-2 gap-3">
           <Link
             href="/feeding/new"
-            className="rounded-2xl p-4 flex items-center gap-3 transition-all active:scale-95"
+            className="rounded-2xl flex items-center gap-3.5 transition-all active:scale-95"
             style={{
+              padding: '18px 20px',
               background: 'linear-gradient(145deg, #FBBF24 0%, #D97706 100%)',
-              boxShadow: '0 4px 16px rgba(217,119,6,0.28)',
+              boxShadow: '0 4px 20px rgba(217,119,6,0.30)',
             }}
           >
-            <span style={{ fontSize: 26 }}>🍽️</span>
-            <div>
-              <div style={{ color: 'white', fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em' }}>Futter</div>
-              <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>eintragen</div>
-            </div>
+            <span style={{ fontSize: 28, lineHeight: 1 }}>🍽️</span>
+            <span style={{ color: 'white', fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em' }}>Futter</span>
           </Link>
           <Link
             href="/health/new"
-            className="card rounded-2xl p-4 flex items-center gap-3 transition-all active:scale-95"
+            className="card rounded-2xl flex items-center gap-3.5 transition-all active:scale-95"
+            style={{ padding: '18px 20px' }}
           >
-            <span style={{ fontSize: 26 }}>🩺</span>
-            <div>
-              <div style={{ color: '#1C1C1E', fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em' }}>Befinden</div>
-              <div style={{ color: 'rgba(60,60,67,0.45)', fontSize: 12 }}>eintragen</div>
-            </div>
+            <span style={{ fontSize: 28, lineHeight: 1 }}>🩺</span>
+            <span style={{ color: '#1C1C1E', fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em' }}>Befinden</span>
           </Link>
         </div>
 
         {/* ── FUTTER-EMPFEHLUNG ── */}
         {bestRec && (
           <div className="card overflow-hidden">
-            <div className="px-4 pt-4 pb-3" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.1)' }}>
-              <div className="flex items-center gap-2">
-                <span style={{ fontSize: 16 }}>🎯</span>
-                <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>Empfehlung heute</h3>
-              </div>
-              <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2, letterSpacing: '0.01em' }}>Protein-Rotation · Verträglichkeit · {pantry.length > 0 ? 'Vorrat' : 'Alle Anifit-Sorten'}</p>
+            <div className="px-5 pt-5 pb-4" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Empfehlung</h3>
             </div>
 
             {/* Beste Empfehlung */}
-            <div className="px-4 pt-3 pb-2">
+            <div className="px-5 pt-4 pb-3">
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -445,32 +437,26 @@ export default async function DashboardPage() {
 
             {/* Alternativen */}
             {topRecs.length > 1 && (
-              <div className="mx-4 mb-3 pt-2" style={{ borderTop: '0.5px solid rgba(60,60,67,0.08)' }}>
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Alternativen</p>
-                <div className="space-y-1.5">
+              <div className="px-5 pb-4 pt-3" style={{ borderTop: '0.5px solid rgba(60,60,67,0.07)' }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(60,60,67,0.4)', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 8 }}>
+                  Alternativen
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {topRecs.slice(1).map((rec, i) => (
                     <div key={i} className="flex items-center gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-gray-700 truncate">{rec.type}</span>
-                          {rec.inPantry && <span className="text-[9px] text-amber-600 font-medium flex-shrink-0">●</span>}
-                          {rec.info && (
-                            <span className={`text-[9px] font-semibold px-1.5 py-px rounded-full flex-shrink-0 ${getProteinBadgeColor(rec.info)}`}>
-                              {rec.info.proteinType === 'mono' ? 'Mono' : 'Multi'}
-                            </span>
-                          )}
-                        </div>
-                        {rec.reasons[0] && (
-                          <p className="text-[10px] text-gray-400 truncate">{rec.reasons[0]}</p>
-                        )}
-                      </div>
+                      <span style={{ fontSize: 13, color: '#3C3C43', letterSpacing: '-0.01em' }} className="truncate">
+                        {rec.type}
+                      </span>
+                      {rec.inPantry && (
+                        <span style={{ fontSize: 10, fontWeight: 600, color: '#D97706', background: 'rgba(217,119,6,0.08)', padding: '2px 7px', borderRadius: 999, flexShrink: 0 }}>
+                          Vorrat
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
             )}
-
-            <p className="px-4 pb-2 text-[10px] text-gray-300">● = im Vorrat</p>
           </div>
         )}
 
@@ -478,138 +464,89 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-2 gap-3">
 
           {/* Streak */}
-          <div className="card p-4">
-            <div
-              style={{
-                fontSize: 34,
-                fontWeight: 800,
-                letterSpacing: '-0.04em',
-                lineHeight: 1,
-                color: streak >= 3 ? '#16A34A' : streak > 0 ? '#D97706' : '#DC2626',
-              }}
-            >
+          <div className="card" style={{ padding: '20px 20px 18px' }}>
+            <div style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1, color: streak >= 3 ? '#16A34A' : streak > 0 ? '#D97706' : '#DC2626' }}>
               {streak}
             </div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1E', marginTop: 4, letterSpacing: '-0.01em' }}>
-              Tage kein Durchfall
-            </div>
-            <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>
-              {streak === 0 ? 'Zuletzt Durchfall' : streak === 1 ? 'Heute gut ✓' : `${streak} Tage in Folge ✓`}
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(60,60,67,0.55)', marginTop: 6, letterSpacing: '-0.01em', lineHeight: 1.3 }}>
+              Tage kein<br />Durchfall
             </div>
           </div>
 
           {/* 30-Tage Durchfall */}
-          <div className="card p-4">
-            <div
-              style={{
-                fontSize: 34,
-                fontWeight: 800,
-                letterSpacing: '-0.04em',
-                lineHeight: 1,
-                color: diarrhea30Days === 0 ? '#16A34A' : diarrhea30Days <= 5 ? '#D97706' : '#DC2626',
-              }}
-            >
+          <div className="card" style={{ padding: '20px 20px 18px' }}>
+            <div style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1, color: diarrhea30Days === 0 ? '#16A34A' : diarrhea30Days <= 5 ? '#D97706' : '#DC2626' }}>
               {diarrhea30Days}
             </div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1E', marginTop: 4, letterSpacing: '-0.01em' }}>
-              Durchfall-Tage
-            </div>
-            <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>
-              letzte 30 Tage · {30 - diarrhea30Days} gut
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(60,60,67,0.55)', marginTop: 6, letterSpacing: '-0.01em', lineHeight: 1.3 }}>
+              Durchfall-Tage<br />letzte 30 Tage
             </div>
           </div>
 
           {/* Aktueller Stuhl */}
-          <div className="card p-4">
+          <div className="card" style={{ padding: '20px 20px 18px' }}>
             {latestStool ? (
               <>
-                <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full mb-2 ${getStoolColor(latestStool)}`}>
+                <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${getStoolColor(latestStool)}`}>
                   {getStoolLabel(latestStool)}
                 </span>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1E', letterSpacing: '-0.01em' }}>Letzter Stuhlgang</div>
-                <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(60,60,67,0.55)', marginTop: 10, letterSpacing: '-0.01em', lineHeight: 1.3 }}>
+                  Letzter Stuhlgang<br />
                   {new Date(health30[0]?.logged_at ?? '').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
                 </div>
               </>
             ) : (
               <>
-                <div style={{ fontSize: 30, fontWeight: 700, color: 'rgba(60,60,67,0.2)' }}>–</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1E', marginTop: 4 }}>Kein Befund</div>
-                <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>noch nichts eingetragen</div>
+                <div style={{ fontSize: 36, fontWeight: 700, color: 'rgba(60,60,67,0.15)', lineHeight: 1 }}>–</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(60,60,67,0.55)', marginTop: 6, lineHeight: 1.3 }}>
+                  Stuhlgang<br />noch nichts heute
+                </div>
               </>
             )}
           </div>
 
           {/* Erbrechen 7 Tage */}
-          <div className="card p-4">
-            <div
-              style={{
-                fontSize: 34,
-                fontWeight: 800,
-                letterSpacing: '-0.04em',
-                lineHeight: 1,
-                color: vomiting7Days === 0 ? '#16A34A' : '#DC2626',
-              }}
-            >
-              {vomiting7Days}×
+          <div className="card" style={{ padding: '20px 20px 18px' }}>
+            <div style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1, color: vomiting7Days === 0 ? '#16A34A' : '#DC2626' }}>
+              {vomiting7Days}
             </div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1E', marginTop: 4, letterSpacing: '-0.01em' }}>
-              Erbrochen
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(60,60,67,0.55)', marginTop: 6, letterSpacing: '-0.01em', lineHeight: 1.3 }}>
+              Mal erbrochen<br />letzte 7 Tage
             </div>
-            <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>letzte 7 Tage</div>
           </div>
         </div>
 
         {/* ── 14-TAGE STUHLGANG-TREND ── */}
-        <div className="card p-4">
-          <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E', marginBottom: 12 }}>14-Tage Stuhlgang-Trend</h3>
-          <div className="flex gap-1 justify-between">
+        <div className="card" style={{ padding: '20px 20px 16px' }}>
+          <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E', marginBottom: 16 }}>
+            14-Tage Trend
+          </h3>
+          <div className="flex gap-1.5 justify-between">
             {trend14.map(({ day, stool }, i) => (
-              <div key={i} className="flex flex-col items-center gap-1.5 flex-1">
-                <div className={`w-full aspect-square rounded-full ${stoolDotBg(stool)} min-w-[14px]`} />
-                <span className="text-[9px] text-gray-400 leading-none">{dayLabel(day)}</span>
+              <div key={i} className="flex flex-col items-center gap-2 flex-1">
+                <div className={`w-full rounded-md ${stoolDotBg(stool)}`} style={{ aspectRatio: '1', minWidth: 14 }} />
+                <span style={{ fontSize: 9, color: 'rgba(60,60,67,0.4)', lineHeight: 1 }}>{dayLabel(day)}</span>
               </div>
-            ))}
-          </div>
-          <div className="flex gap-3 mt-3 flex-wrap">
-            {[
-              { label: 'Normal', cls: 'bg-green-400' },
-              { label: 'Weich', cls: 'bg-yellow-400' },
-              { label: 'Durchfall', cls: 'bg-red-500' },
-              { label: 'Nicht gesehen', cls: 'bg-gray-300' },
-            ].map(({ label, cls }) => (
-              <span key={label} className="flex items-center gap-1 text-[10px] text-gray-500">
-                <span className={`w-2.5 h-2.5 rounded-full ${cls} inline-block`} />
-                {label}
-              </span>
             ))}
           </div>
         </div>
 
         {/* ── HEUTE: FUTTER ── */}
         <div className="card overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.1)' }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>🍽️ Futter heute</h3>
+          <div className="flex items-center justify-between" style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
+            <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Futter heute</h3>
             <Link
               href="/feeding/new"
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#D97706',
-                background: 'rgba(217,119,6,0.08)',
-                padding: '5px 12px',
-                borderRadius: 999,
-                letterSpacing: '-0.01em',
-              }}
+              style={{ fontSize: 13, fontWeight: 600, color: '#D97706', background: 'rgba(217,119,6,0.08)', padding: '6px 14px', borderRadius: 999 }}
             >
               + Eintrag
             </Link>
           </div>
 
           {feedings.length === 0 ? (
-            <div className="px-4 py-6 text-center">
-              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)' }}>Noch kein Futter eingetragen</p>
-              <Link href="/feeding/new" style={{ display: 'inline-block', marginTop: 6, fontSize: 14, color: '#D97706', fontWeight: 600 }}>
+            <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.35)' }}>Noch nichts eingetragen</p>
+              <Link href="/feeding/new" style={{ display: 'inline-block', marginTop: 8, fontSize: 14, color: '#D97706', fontWeight: 600 }}>
                 Jetzt eintragen →
               </Link>
             </div>
@@ -618,27 +555,20 @@ export default async function DashboardPage() {
               {feedings.map((f, i) => (
                 <div
                   key={f.id}
-                  className="flex items-center px-4 py-3 gap-3"
-                  style={i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}}
+                  className="flex items-center gap-3"
+                  style={{ padding: '14px 20px', ...(i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}) }}
                 >
                   <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: 14, fontWeight: 600, color: '#1C1C1E', letterSpacing: '-0.01em' }} className="truncate">
-                      {f.food_brand}
+                    <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1C1E', letterSpacing: '-0.015em' }} className="truncate">
+                      {f.food_type || f.food_brand}
                     </p>
-                    <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.45)', marginTop: 1 }} className="truncate">
-                      {f.food_type}{f.amount_grams ? ` · ${f.amount_grams}g` : ''} · {formatTime(f.logged_at)}
+                    <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', marginTop: 2 }} className="truncate">
+                      {f.food_brand}{f.amount_grams ? ` · ${f.amount_grams}g` : ''} · {formatTime(f.logged_at)}
                     </p>
                   </div>
                   <Link
                     href={`/feeding/${f.id}/edit`}
-                    className="flex-shrink-0 flex items-center justify-center transition-colors"
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 10,
-                      background: 'rgba(120,120,128,0.08)',
-                      fontSize: 14,
-                    }}
+                    style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 9, background: 'rgba(120,120,128,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}
                   >
                     ✏️
                   </Link>
@@ -650,28 +580,20 @@ export default async function DashboardPage() {
 
         {/* ── HEUTE: BEFINDEN ── */}
         <div className="card overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.1)' }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>🩺 Befinden heute</h3>
+          <div className="flex items-center justify-between" style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
+            <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Befinden heute</h3>
             <Link
               href="/health/new"
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#D97706',
-                background: 'rgba(217,119,6,0.08)',
-                padding: '5px 12px',
-                borderRadius: 999,
-                letterSpacing: '-0.01em',
-              }}
+              style={{ fontSize: 13, fontWeight: 600, color: '#D97706', background: 'rgba(217,119,6,0.08)', padding: '6px 14px', borderRadius: 999 }}
             >
               + Eintrag
             </Link>
           </div>
 
           {healthLogs.length === 0 ? (
-            <div className="px-4 py-6 text-center">
-              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)' }}>Noch kein Befinden eingetragen</p>
-              <Link href="/health/new" style={{ display: 'inline-block', marginTop: 6, fontSize: 14, color: '#D97706', fontWeight: 600 }}>
+            <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.35)' }}>Noch nichts eingetragen</p>
+              <Link href="/health/new" style={{ display: 'inline-block', marginTop: 8, fontSize: 14, color: '#D97706', fontWeight: 600 }}>
                 Jetzt eintragen →
               </Link>
             </div>
@@ -680,32 +602,25 @@ export default async function DashboardPage() {
               {healthLogs.map((h, i) => (
                 <div
                   key={h.id}
-                  className="flex items-center px-4 py-3 gap-3"
-                  style={i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}}
+                  className="flex items-center gap-3"
+                  style={{ padding: '14px 20px', ...(i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}) }}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getStoolColor(h.stool_consistency)}`}>
                         {getStoolLabel(h.stool_consistency)}
                       </span>
-                      {h.vomiting && <span style={{ fontSize: 12, color: '#DC2626', fontWeight: 600 }}>⚠ Erbrochen</span>}
-                      {h.fur_issue && <span style={{ fontSize: 12, color: '#EA580C', fontWeight: 600 }}>⚠ Fell</span>}
+                      {h.vomiting && <span style={{ fontSize: 12, color: '#DC2626', fontWeight: 600 }}>Erbrochen</span>}
+                      {h.fur_issue && <span style={{ fontSize: 12, color: '#EA580C', fontWeight: 600 }}>Fell</span>}
                     </div>
-                    <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.45)', marginTop: 3 }}>
-                      Appetit: {getAppetiteLabel(h.appetite)} · {getActivityLabel(h.activity)} · {formatTime(h.logged_at)}
+                    <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', marginTop: 4 }}>
+                      {getAppetiteLabel(h.appetite)} · {getActivityLabel(h.activity)} · {formatTime(h.logged_at)}
                     </p>
-                    {h.notes && <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', fontStyle: 'italic', marginTop: 2 }} className="truncate">{h.notes}</p>}
+                    {h.notes && <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.35)', fontStyle: 'italic', marginTop: 2 }} className="truncate">{h.notes}</p>}
                   </div>
                   <Link
                     href={`/health/${h.id}/edit`}
-                    className="flex-shrink-0 flex items-center justify-center transition-colors"
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 10,
-                      background: 'rgba(120,120,128,0.08)',
-                      fontSize: 14,
-                    }}
+                    style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 9, background: 'rgba(120,120,128,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}
                   >
                     ✏️
                   </Link>
@@ -718,36 +633,40 @@ export default async function DashboardPage() {
         {/* ── FÜTTERUNGS-STATISTIK ── */}
         {foodFrequency.length > 0 && (
           <div className="card overflow-hidden">
-            <div className="px-4 py-3.5" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.1)' }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>Futter-Übersicht</h3>
-              <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>Letzte 30 Tage · Häufigkeit und Aktualität</p>
+            <div style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Futter · 30 Tage</h3>
             </div>
-            <div className="divide-y divide-gray-50">
-              {foodFrequency.map((f) => {
+            <div>
+              {foodFrequency.map((f, i) => {
                 const info = getFoodInfo(f.brand, f.type)
                 const maxCount = Math.max(...foodFrequency.map(x => x.count))
                 const barWidth = Math.round((f.count / maxCount) * 100)
                 const daysSince = Math.floor((today.getTime() - f.lastDate.getTime()) / (1000 * 60 * 60 * 24))
                 return (
-                  <div key={`${f.brand}||${f.type}`} className="px-4 py-2.5">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-xs font-medium text-gray-800 truncate">{f.type || f.brand}</span>
+                  <div
+                    key={`${f.brand}||${f.type}`}
+                    style={{ padding: '12px 20px 14px', ...(i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}) }}
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1C1C1E', letterSpacing: '-0.01em' }} className="truncate">
+                          {f.type || f.brand}
+                        </span>
                         {info && (
                           <span className={`text-[9px] font-semibold px-1.5 py-px rounded-full flex-shrink-0 ${getProteinBadgeColor(info)}`}>
                             {info.proteinType === 'mono' ? 'Mono' : 'Multi'}
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 text-right">
-                        <span className="text-xs font-bold text-gray-700">{f.count}×</span>
-                        <span className="text-[10px] text-gray-400">
+                      <div className="flex items-center gap-2.5 flex-shrink-0">
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#1C1C1E' }}>{f.count}×</span>
+                        <span style={{ fontSize: 11, color: 'rgba(60,60,67,0.35)' }}>
                           {daysSince === 0 ? 'heute' : daysSince === 1 ? 'gestern' : `vor ${daysSince}d`}
                         </span>
                       </div>
                     </div>
-                    <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${barWidth}%` }} />
+                    <div style={{ height: 3, background: 'rgba(120,120,128,0.1)', borderRadius: 999, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', background: '#FBBF24', borderRadius: 999, width: `${barWidth}%` }} />
                     </div>
                   </div>
                 )
@@ -759,38 +678,31 @@ export default async function DashboardPage() {
         {/* ── FUTTER-KORRELATION ── */}
         {foodCorrelation.length >= 2 && (
           <div className="card overflow-hidden">
-            <div className="px-4 py-3.5" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.1)' }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>📊 Futter & Durchfall</h3>
-              <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>Wie oft trat Durchfall am selben oder nächsten Tag auf?</p>
+            <div style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Futter & Durchfall</h3>
             </div>
-            <div className="px-4 py-3 space-y-2.5">
-              {foodCorrelation.map((s) => {
+            <div style={{ padding: '4px 20px 16px' }}>
+              {foodCorrelation.map((s, i) => {
                 const pct = Math.round((s.diarrhea / s.total) * 100)
-                const barColor = pct >= 60 ? 'bg-red-400' : pct >= 30 ? 'bg-yellow-400' : 'bg-green-400'
-                const info = getFoodInfo(s.brand, s.type)
+                const barBg = pct >= 60 ? '#F87171' : pct >= 30 ? '#FCD34D' : '#4ADE80'
+                const pctColor = pct >= 60 ? '#DC2626' : pct >= 30 ? '#D97706' : '#16A34A'
                 return (
-                  <div key={`${s.brand}||${s.type}`}>
-                    <div className="flex items-center justify-between mb-1 gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-xs text-gray-700 truncate">{s.type || s.brand}</span>
-                        {info && (
-                          <span className={`text-[9px] font-semibold px-1.5 py-px rounded-full flex-shrink-0 ${getProteinBadgeColor(info)}`}>
-                            {info.proteinType === 'mono' ? 'Mono' : 'Multi'}
-                          </span>
-                        )}
-                      </div>
-                      <span className={`text-xs font-semibold flex-shrink-0 ${pct >= 60 ? 'text-red-500' : pct >= 30 ? 'text-yellow-600' : 'text-green-600'}`}>
-                        {pct}% <span className="text-gray-400 font-normal">({s.diarrhea}/{s.total}×)</span>
+                  <div key={`${s.brand}||${s.type}`} style={{ paddingTop: i === 0 ? 12 : 14, paddingBottom: 4 }}>
+                    <div className="flex items-center justify-between gap-3 mb-1.5">
+                      <span style={{ fontSize: 13, fontWeight: 500, color: '#1C1C1E', letterSpacing: '-0.01em' }} className="truncate min-w-0">
+                        {s.type || s.brand}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: pctColor, flexShrink: 0 }}>
+                        {pct}%
                       </span>
                     </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />
+                    <div style={{ height: 3, background: 'rgba(120,120,128,0.1)', borderRadius: 999, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', background: barBg, borderRadius: 999, width: `${pct}%`, transition: 'width 0.3s' }} />
                     </div>
                   </div>
                 )
               })}
             </div>
-            <p className="px-4 pb-3 text-[10px] text-gray-300">Nur Sorten mit ≥2 Einträgen · Korrelation ≠ Kausalität</p>
           </div>
         )}
 
