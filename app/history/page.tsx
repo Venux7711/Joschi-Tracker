@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/Header'
@@ -54,11 +54,11 @@ export default async function HistoryPage() {
 
   if (!cat) {
     return (
-      <div className="min-h-screen bg-amber-50">
+      <div className="min-h-screen">
         <Header />
         <main className="max-w-2xl mx-auto px-4 py-6">
           <p className="text-gray-500 text-center mt-12">
-            Bitte zuerst das Dashboard öffnen, um Joschi anzulegen.
+            Bitte zuerst das Dashboard Ã¶ffnen, um Joschi anzulegen.
           </p>
         </main>
       </div>
@@ -108,15 +108,15 @@ export default async function HistoryPage() {
   const diarrheaDays = dayEntries.filter((d) => d.hasDiarrhea).length
 
   return (
-    <div className="min-h-screen bg-amber-50">
+    <div className="min-h-screen">
       <Header />
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-800">Verlauf – letzte 30 Tage</h1>
+          <h1 className="text-xl font-bold text-gray-800">Verlauf â€“ letzte 30 Tage</h1>
           {diarrheaDays > 0 && (
             <span className="text-xs bg-red-100 text-red-700 font-medium px-3 py-1.5 rounded-full">
-              {diarrheaDays}× Durchfall
+              {diarrheaDays}Ã— Durchfall
             </span>
           )}
         </div>
@@ -158,7 +158,7 @@ export default async function HistoryPage() {
                 {/* Tages-Header */}
                 <div className={`flex items-center justify-between px-4 py-2.5 border-b ${hasDiarrhea ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
                   <span className={`font-medium text-sm ${hasDiarrhea ? 'text-red-700' : 'text-gray-700'}`}>
-                    {formatDayFull(date)}{hasDiarrhea && ' ⚠'}
+                    {formatDayFull(date)}{hasDiarrhea && ' âš '}
                   </span>
                   <div className="flex items-center gap-2">
                     <Link href={`/feeding/new?date=${dateStr}`} className="text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full hover:bg-amber-100 transition-colors font-medium">
@@ -186,13 +186,13 @@ export default async function HistoryPage() {
                                 {h.fur_issue && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Fell</span>}
                               </div>
                               <p className="text-xs text-gray-400 mt-0.5">
-                                Appetit: {getAppetiteLabel(h.appetite)} · {getActivityLabel(h.activity)} · {new Date(h.logged_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                                Appetit: {getAppetiteLabel(h.appetite)} Â· {getActivityLabel(h.activity)} Â· {new Date(h.logged_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
                               </p>
                             </div>
                             <Link
                               href={`/health/${h.id}/edit`}
                               className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-base"
-                            >✏️</Link>
+                            >âœï¸</Link>
                           </div>
                         ))}
                       </div>
@@ -204,16 +204,16 @@ export default async function HistoryPage() {
                         {feedingLogs.map((f) => (
                           <div key={f.id} className="flex items-center gap-3 px-4 py-3">
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-gray-700 truncate">{f.food_brand} – {f.food_type}</p>
+                              <p className="text-sm text-gray-700 truncate">{f.food_brand} â€“ {f.food_type}</p>
                               <p className="text-xs text-gray-400">
-                                {f.amount_grams ? `${f.amount_grams}g · ` : ''}
+                                {f.amount_grams ? `${f.amount_grams}g Â· ` : ''}
                                 {new Date(f.logged_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
                               </p>
                             </div>
                             <Link
                               href={`/feeding/${f.id}/edit`}
                               className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-base"
-                            >✏️</Link>
+                            >âœï¸</Link>
                           </div>
                         ))}
                       </div>

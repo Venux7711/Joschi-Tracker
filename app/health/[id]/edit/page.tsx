@@ -138,7 +138,7 @@ export default function EditHealthPage() {
   ]
 
   if (notFound) return (
-    <div className="min-h-screen bg-amber-50"><Header />
+    <div className="min-h-screen"><Header />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <p className="text-gray-500 text-center mt-12">Eintrag nicht gefunden.</p>
       </main>
@@ -146,7 +146,7 @@ export default function EditHealthPage() {
   )
 
   return (
-    <div className="min-h-screen bg-amber-50">
+    <div className="min-h-screen">
       <Header />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
@@ -17,10 +17,10 @@ interface DayData {
 }
 
 const STOOL_INFO: Record<string, { emoji: string; color: string; label: string }> = {
-  normal: { emoji: '✓', color: '#22c55e', label: 'Normal' },
+  normal: { emoji: 'âœ“', color: '#22c55e', label: 'Normal' },
   soft: { emoji: '~', color: '#eab308', label: 'Weich' },
-  diarrhea: { emoji: '⚠', color: '#ef4444', label: 'Durchfall' },
-  not_observed: { emoji: '—', color: '#9ca3af', label: 'N/A' },
+  diarrhea: { emoji: 'âš ', color: '#ef4444', label: 'Durchfall' },
+  not_observed: { emoji: 'â€”', color: '#9ca3af', label: 'N/A' },
 }
 
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
@@ -113,7 +113,7 @@ export default function CollagePage() {
       const text = (data.analysis ?? '').replace(/\*\*/g, '')
       setAiSummary(text.split('\n\n')[0].slice(0, 250))
     } catch {
-      setAiSummary(`${good} gute Tage, ${bad} Durchfall-Tage, ${totalFeedings} Fütterungen diese Woche.`)
+      setAiSummary(`${good} gute Tage, ${bad} Durchfall-Tage, ${totalFeedings} FÃ¼tterungen diese Woche.`)
     }
     setSummaryLoading(false)
   }
@@ -123,12 +123,12 @@ export default function CollagePage() {
   const totalFeedings = days.reduce((s, d) => s + d.feedings, 0)
 
   return (
-    <div className="min-h-screen bg-amber-50">
+    <div className="min-h-screen">
       <Header />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center gap-3 mb-6">
-          <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
-          <h1 className="text-xl font-bold text-gray-800">🗓️ Wochenrückblick</h1>
+          <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† ZurÃ¼ck</Link>
+          <h1 className="text-xl font-bold text-gray-800">ðŸ—“ï¸ WochenrÃ¼ckblick</h1>
         </div>
 
         {/* Stats */}
@@ -143,7 +143,7 @@ export default function CollagePage() {
           </div>
           <div className="card p-3 text-center">
             <div className="text-2xl font-black text-amber-600">{totalFeedings}</div>
-            <div className="text-xs text-gray-500">Fütterungen</div>
+            <div className="text-xs text-gray-500">FÃ¼tterungen</div>
           </div>
         </div>
 
@@ -170,8 +170,8 @@ export default function CollagePage() {
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
                     <p className="text-white text-[10px] font-bold leading-tight">{day.label}</p>
                     <div className="flex items-center gap-1">
-                      <span className="text-[9px]" style={{ color: stoolInfo.color }}>●</span>
-                      {day.feedings > 0 && <span className="text-white/60 text-[9px]">{day.feedings}×</span>}
+                      <span className="text-[9px]" style={{ color: stoolInfo.color }}>â—</span>
+                      {day.feedings > 0 && <span className="text-white/60 text-[9px]">{day.feedings}Ã—</span>}
                     </div>
                   </div>
                 </div>
@@ -189,22 +189,22 @@ export default function CollagePage() {
               disabled={summaryLoading || loading}
               className="px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors disabled:opacity-50"
             >
-              {summaryLoading ? '⏳ …' : '✨ Erstellen'}
+              {summaryLoading ? 'â³ â€¦' : 'âœ¨ Erstellen'}
             </button>
           </div>
           {aiSummary ? (
             <p className="text-gray-600 text-sm leading-relaxed">{aiSummary}</p>
           ) : (
-            <p className="text-gray-400 text-sm">Tippe auf „Erstellen" für eine KI-Zusammenfassung der Woche.</p>
+            <p className="text-gray-400 text-sm">Tippe auf â€žErstellen" fÃ¼r eine KI-Zusammenfassung der Woche.</p>
           )}
         </div>
 
         <Link href="/slideshow" className="card p-4 flex items-center justify-between hover:shadow-md transition-shadow">
           <div>
-            <p className="font-semibold text-gray-800">🎬 Foto-Diashow</p>
-            <p className="text-xs text-gray-500">Alle Fotos als animierte Präsentation</p>
+            <p className="font-semibold text-gray-800">ðŸŽ¬ Foto-Diashow</p>
+            <p className="text-xs text-gray-500">Alle Fotos als animierte PrÃ¤sentation</p>
           </div>
-          <span className="text-gray-400">→</span>
+          <span className="text-gray-400">â†’</span>
         </Link>
       </main>
     </div>

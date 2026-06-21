@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -9,11 +9,11 @@ import { toLocalISOString } from '@/lib/utils'
 
 const ANIFIT_SORTEN = [
   'Puterichs Delight (Truthahn)',
-  'Powertöpfchen (Lamm/Huhn)',
-  'Délice de Coeur (Huhn)',
-  'Fisch à la Mode (Lachs/Huhn/Rentier)',
+  'PowertÃ¶pfchen (Lamm/Huhn)',
+  'DÃ©lice de Coeur (Huhn)',
+  'Fisch Ã  la Mode (Lachs/Huhn/Rentier)',
   'Nautilus Ragout (Hering/Lachs)',
-  'Eismeer Terrine (Hering/Weißfisch/Lachs)',
+  'Eismeer Terrine (Hering/WeiÃŸfisch/Lachs)',
   'Bio Enten-Energie (Ente)',
   'Bio Steak Sensation (Rind)',
 ]
@@ -114,7 +114,7 @@ function NewFeedingForm() {
     init()
   }, [])
 
-  // Sorte zurücksetzen wenn Marke wechselt
+  // Sorte zurÃ¼cksetzen wenn Marke wechselt
   useEffect(() => {
     setFoodType('')
   }, [foodBrand])
@@ -148,7 +148,7 @@ function NewFeedingForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!catId) {
-      setError('Katze nicht gefunden. Bitte zuerst das Dashboard öffnen.')
+      setError('Katze nicht gefunden. Bitte zuerst das Dashboard Ã¶ffnen.')
       return
     }
     setLoading(true)
@@ -192,7 +192,7 @@ function NewFeedingForm() {
       const newType = foodType.trim()
       const prevType = prev.food_type
 
-      // Sorte hat gewechselt → alte Dose ist leer
+      // Sorte hat gewechselt â†’ alte Dose ist leer
       if (prevBrand === newBrand && prevType && prevType !== newType) {
         const prevPantryItem = pantry.find(
           p => p.brand.toLowerCase() === prevBrand && p.type === prevType && p.quantity > 0
@@ -216,7 +216,7 @@ function NewFeedingForm() {
     ...prevBrands.filter((b) => b.toLowerCase() !== 'anifit'),
   ]
 
-  // Sorten-Liste: Vorrats-Sorten der jeweiligen Marke, sonst frühere Eingaben
+  // Sorten-Liste: Vorrats-Sorten der jeweiligen Marke, sonst frÃ¼here Eingaben
   const pantryForBrand = pantry.filter(
     (p) => p.brand.toLowerCase() === foodBrand.trim().toLowerCase() && p.quantity > 0
   )
@@ -227,15 +227,15 @@ function NewFeedingForm() {
       : prevTypes
 
   return (
-    <div className="min-h-screen bg-amber-50">
+    <div className="min-h-screen">
       <Header />
 
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center gap-3 mb-6">
           <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">
-            ← Zurück
+            â† ZurÃ¼ck
           </Link>
-          <h1 className="text-xl font-bold text-gray-800">🍽️ Futter eintragen</h1>
+          <h1 className="text-xl font-bold text-gray-800">ðŸ½ï¸ Futter eintragen</h1>
         </div>
 
         {/* Dosenscan */}
@@ -252,13 +252,13 @@ function NewFeedingForm() {
             <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-colors ${
               scanning ? 'bg-amber-100' : scanSuccess ? 'bg-green-100' : 'bg-amber-50 hover:bg-amber-100'
             }`}>
-              {scanning ? '⏳' : scanSuccess ? '✅' : '📷'}
+              {scanning ? 'â³' : scanSuccess ? 'âœ…' : 'ðŸ“·'}
             </div>
             <span className="text-sm font-medium text-gray-700">
-              {scanning ? 'Dose wird analysiert…' : scanSuccess ? 'Felder ausgefüllt!' : 'Dose fotografieren'}
+              {scanning ? 'Dose wird analysiertâ€¦' : scanSuccess ? 'Felder ausgefÃ¼llt!' : 'Dose fotografieren'}
             </span>
             <span className="text-xs text-gray-400">
-              Kamera öffnen → Formular wird automatisch ausgefüllt
+              Kamera Ã¶ffnen â†’ Formular wird automatisch ausgefÃ¼llt
             </span>
           </label>
         </div>
@@ -296,7 +296,7 @@ function NewFeedingForm() {
                   className="input-field"
                   required
                 >
-                  <option value="">Sorte wählen …</option>
+                  <option value="">Sorte wÃ¤hlen â€¦</option>
                   {typeOptions.map((t) => {
                     const stock = pantry.find(p => p.type === t)
                     return (
@@ -353,14 +353,14 @@ function NewFeedingForm() {
 
             {/* Leckerli */}
             <MengeSlider
-              label="🍖 Leckerli"
+              label="ðŸ– Leckerli"
               value={treatAmount}
               onChange={setTreatAmount}
             />
 
             {/* Trockenfutter */}
             <MengeSlider
-              label="🥣 Trockenfutter"
+              label="ðŸ¥£ Trockenfutter"
               value={dryFoodAmount}
               onChange={setDryFoodAmount}
             />
@@ -376,7 +376,7 @@ function NewFeedingForm() {
                 value={extras}
                 onChange={(e) => setExtras(e.target.value)}
                 className="input-field"
-                placeholder="z.B. Thunfisch, Hühnchen gekocht …"
+                placeholder="z.B. Thunfisch, HÃ¼hnchen gekocht â€¦"
               />
             </div>
 

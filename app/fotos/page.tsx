@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
@@ -83,7 +83,7 @@ export default function FotosPage() {
   }
 
   const handleDelete = async (photo: Photo) => {
-    if (!confirm('Foto löschen?')) return
+    if (!confirm('Foto lÃ¶schen?')) return
     await fetch('/api/photos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: photo.id, storage_path: photo.storage_path }) })
     setSelected(null)
     await loadPhotos()
@@ -100,22 +100,22 @@ export default function FotosPage() {
 
   const monthLabel = (m: string) => {
     const [y, mo] = m.split('-')
-    const months = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
+    const months = ['Jan','Feb','MÃ¤r','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
     return `${months[parseInt(mo) - 1]} ${y}`
   }
 
   return (
-    <div className="min-h-screen bg-amber-50">
+    <div className="min-h-screen">
       <Header />
 
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
-            <h1 className="text-xl font-bold text-gray-800">📸 Joscis Fotoalbum</h1>
+            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† ZurÃ¼ck</Link>
+            <h1 className="text-xl font-bold text-gray-800">ðŸ“¸ Joscis Fotoalbum</h1>
           </div>
           <label className="btn-primary cursor-pointer text-sm">
-            {uploading ? 'Lädt…' : '+ Foto'}
+            {uploading ? 'LÃ¤dtâ€¦' : '+ Foto'}
             <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleUpload} disabled={uploading} />
           </label>
         </div>
@@ -143,9 +143,9 @@ export default function FotosPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="card p-12 text-center">
-            <div className="text-5xl mb-4">📸</div>
+            <div className="text-5xl mb-4">ðŸ“¸</div>
             <p className="text-gray-500 mb-2">Noch keine Fotos</p>
-            <p className="text-sm text-gray-400">Tippe auf "+ Foto" um Joschis erstes Bild hinzuzufügen</p>
+            <p className="text-sm text-gray-400">Tippe auf "+ Foto" um Joschis erstes Bild hinzuzufÃ¼gen</p>
           </div>
         ) : (
           <div className="space-y-6">
@@ -197,14 +197,14 @@ export default function FotosPage() {
                 onClick={() => handleDelete(selected)}
                 className="text-red-400 hover:text-red-300 text-sm px-3 py-1.5 rounded-lg border border-red-400/30 hover:border-red-400"
               >
-                Löschen
+                LÃ¶schen
               </button>
             </div>
             <button
               onClick={() => setSelected(null)}
               className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-8 h-8 flex items-center justify-center text-lg"
             >
-              ×
+              Ã—
             </button>
           </div>
         </div>

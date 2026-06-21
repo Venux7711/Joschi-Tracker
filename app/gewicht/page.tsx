@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
@@ -38,7 +38,7 @@ export default function GewichtPage() {
   }
 
   const del = async (id: string) => {
-    if (!confirm('Eintrag löschen?')) return
+    if (!confirm('Eintrag lÃ¶schen?')) return
     await fetch('/api/weight', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     await load()
   }
@@ -53,19 +53,19 @@ export default function GewichtPage() {
   const trend = weights.length >= 2
     ? weights[0].weight_grams - weights[Math.min(weights.length - 1, 4)].weight_grams
     : 0
-  const trendLabel = trend > 50 ? `▲ +${(trend / 1000).toFixed(2)} kg` : trend < -50 ? `▼ ${(trend / 1000).toFixed(2)} kg` : '→ Stabil'
+  const trendLabel = trend > 50 ? `â–² +${(trend / 1000).toFixed(2)} kg` : trend < -50 ? `â–¼ ${(trend / 1000).toFixed(2)} kg` : 'â†’ Stabil'
   const trendColor = trend > 100 ? 'text-red-500' : trend < -100 ? 'text-orange-500' : 'text-green-600'
 
   const latest = weights[0]
 
   return (
-    <div className="min-h-screen bg-amber-50">
+    <div className="min-h-screen">
       <Header />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
-            <h1 className="text-xl font-bold text-gray-800">⚖️ Gewichtsverlauf</h1>
+            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† ZurÃ¼ck</Link>
+            <h1 className="text-xl font-bold text-gray-800">âš–ï¸ Gewichtsverlauf</h1>
           </div>
           <button onClick={() => setShowForm(s => !s)} className="btn-primary text-sm">+ Wiegen</button>
         </div>
@@ -93,7 +93,7 @@ export default function GewichtPage() {
             </div>
             <div className="flex gap-2">
               <button onClick={() => setShowForm(false)} className="btn-secondary">Abbrechen</button>
-              <button onClick={save} disabled={!grams || saving} className="btn-primary">{saving ? 'Speichern…' : 'Speichern'}</button>
+              <button onClick={save} disabled={!grams || saving} className="btn-primary">{saving ? 'Speichernâ€¦' : 'Speichern'}</button>
             </div>
           </div>
         )}
@@ -146,11 +146,11 @@ export default function GewichtPage() {
 
         {/* List */}
         <div className="card p-4">
-          <p className="font-semibold text-gray-800 mb-3">Alle Einträge</p>
+          <p className="font-semibold text-gray-800 mb-3">Alle EintrÃ¤ge</p>
           {loading ? (
             <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />)}</div>
           ) : weights.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-6">Noch kein Gewicht eingetragen. Wiege Joschi und tippe auf „+ Wiegen".</p>
+            <p className="text-gray-400 text-sm text-center py-6">Noch kein Gewicht eingetragen. Wiege Joschi und tippe auf â€ž+ Wiegen".</p>
           ) : (
             <div className="space-y-2">
               {weights.map((w, i) => (
@@ -161,7 +161,7 @@ export default function GewichtPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-400">{new Date(w.measured_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
-                    <button onClick={() => del(w.id)} className="text-gray-300 hover:text-red-400 text-sm transition-colors">✕</button>
+                    <button onClick={() => del(w.id)} className="text-gray-300 hover:text-red-400 text-sm transition-colors">âœ•</button>
                   </div>
                 </div>
               ))}

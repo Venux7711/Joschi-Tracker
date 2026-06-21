@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 interface HealthLog { logged_at: string; stool_consistency: string; appetite: string; activity: string; vomiting: boolean; fur_issue: boolean; notes: string | null }
 interface FeedingLog { logged_at: string; food_brand: string; food_type: string; amount_grams: number | null }
 
-const STOOL: Record<string, string> = { normal: 'Normal', soft: 'Weich', diarrhea: 'Durchfall ⚠️', not_observed: '—' }
+const STOOL: Record<string, string> = { normal: 'Normal', soft: 'Weich', diarrhea: 'Durchfall âš ï¸', not_observed: 'â€”' }
 const APPETITE: Record<string, string> = { good: 'Gut', reduced: 'Wenig', none: 'Gar nicht' }
 
 export default function ReportPage() {
@@ -71,13 +71,13 @@ export default function ReportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-amber-50">
+    <div className="min-h-screen">
       <Header />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
-            <h1 className="text-xl font-bold text-gray-800">🏥 Tierarzt-Report</h1>
+            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† ZurÃ¼ck</Link>
+            <h1 className="text-xl font-bold text-gray-800">ðŸ¥ Tierarzt-Report</h1>
           </div>
           <button onClick={handlePrint} className="btn-primary text-sm">Drucken / PDF</button>
         </div>
@@ -92,7 +92,7 @@ export default function ReportPage() {
         </div>
 
         {loading ? (
-          <div className="card p-8 text-center text-gray-400">Lade Daten…</div>
+          <div className="card p-8 text-center text-gray-400">Lade Datenâ€¦</div>
         ) : (
           <div ref={reportRef} className="space-y-4 print:space-y-6">
 
@@ -100,11 +100,11 @@ export default function ReportPage() {
             <div className="card p-5 print:border print:border-gray-300">
               <div className="flex items-start justify-between">
                 <div>
-                  <h2 className="text-2xl font-black text-gray-800">{catName} – Gesundheitsbericht</h2>
-                  <p className="text-gray-500 text-sm mt-1">Zeitraum: {sinceStr} – {today}</p>
-                  <p className="text-gray-400 text-xs mt-0.5">Rasse: Goldene Langhaar-Perser · Erkrankung: Rezidivierender Durchfall</p>
+                  <h2 className="text-2xl font-black text-gray-800">{catName} â€“ Gesundheitsbericht</h2>
+                  <p className="text-gray-500 text-sm mt-1">Zeitraum: {sinceStr} â€“ {today}</p>
+                  <p className="text-gray-400 text-xs mt-0.5">Rasse: Goldene Langhaar-Perser Â· Erkrankung: Rezidivierender Durchfall</p>
                 </div>
-                <div className="text-4xl">🐱</div>
+                <div className="text-4xl">ðŸ±</div>
               </div>
             </div>
 
@@ -126,12 +126,12 @@ export default function ReportPage() {
                 </div>
                 <div className="bg-amber-50 rounded-xl p-3 text-center">
                   <div className="text-3xl font-black text-amber-600">{feedings.length}</div>
-                  <div className="text-xs text-amber-700 font-medium">Fütterungen</div>
+                  <div className="text-xs text-amber-700 font-medium">FÃ¼tterungen</div>
                 </div>
               </div>
               {furCount > 0 && (
                 <div className="mt-3 bg-orange-50 rounded-xl p-3 text-center">
-                  <span className="text-sm text-orange-700 font-medium">⚠️ Kot im Fell: {furCount}× aufgetreten</span>
+                  <span className="text-sm text-orange-700 font-medium">âš ï¸ Kot im Fell: {furCount}Ã— aufgetreten</span>
                 </div>
               )}
             </div>
@@ -177,7 +177,7 @@ export default function ReportPage() {
                         <div className="w-16 bg-gray-100 rounded-full h-2">
                           <div className="bg-amber-400 h-2 rounded-full" style={{ width: `${(count / (topFoods[0]?.[1] ?? 1)) * 100}%` }} />
                         </div>
-                        <span className="text-sm text-gray-500 w-8 text-right">{count}×</span>
+                        <span className="text-sm text-gray-500 w-8 text-right">{count}Ã—</span>
                       </div>
                     </div>
                   ))}
@@ -185,11 +185,11 @@ export default function ReportPage() {
               </div>
             )}
 
-            {/* Tabellarische Übersicht */}
+            {/* Tabellarische Ãœbersicht */}
             <div className="card p-5">
-              <h3 className="font-bold text-gray-800 mb-3">Tagesübersicht (Befinden)</h3>
+              <h3 className="font-bold text-gray-800 mb-3">TagesÃ¼bersicht (Befinden)</h3>
               {health.length === 0 ? (
-                <p className="text-gray-400 text-sm">Keine Befinden-Einträge im Zeitraum.</p>
+                <p className="text-gray-400 text-sm">Keine Befinden-EintrÃ¤ge im Zeitraum.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -216,7 +216,7 @@ export default function ReportPage() {
               )}
             </div>
 
-            <p className="text-xs text-gray-400 text-center pb-4">Erstellt mit Joschi Tracker · {today}</p>
+            <p className="text-xs text-gray-400 text-center pb-4">Erstellt mit Joschi Tracker Â· {today}</p>
           </div>
         )}
       </main>

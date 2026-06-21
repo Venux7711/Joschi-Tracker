@@ -29,26 +29,47 @@ export default function Header() {
   ]
 
   return (
-    <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
-      <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-        <Link href="/dashboard" className="flex items-center gap-2 flex-shrink-0">
-          <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-amber-300">
+    <header
+      className="sticky top-0 z-10"
+      style={{
+        background: 'rgba(242, 242, 247, 0.82)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        borderBottom: '0.5px solid rgba(60, 60, 67, 0.12)',
+      }}
+    >
+      <div className="max-w-2xl mx-auto px-4 flex items-center justify-between" style={{ height: 52 }}>
+        <Link href="/dashboard" className="flex items-center gap-2.5">
+          <div
+            className="relative flex-shrink-0 overflow-hidden"
+            style={{ width: 32, height: 32, borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+          >
             <Image src="/joschi.jpg" alt="Joschi" fill className="object-cover object-top" />
           </div>
-          <span className="font-semibold text-gray-800 text-lg">Joschi</span>
+          <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>
+            Joschi
+          </span>
         </Link>
 
-        {/* Desktop nav – hidden on mobile, bottom nav takes over */}
-        <nav className="hidden sm:flex items-center gap-1 overflow-x-auto">
+        {/* Desktop nav */}
+        <nav className="hidden sm:flex items-center gap-0.5">
           {navItems.map(item => {
             const active = (item.match ?? [item.href]).some(p => pathname === p)
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                  active ? 'bg-amber-100 text-amber-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                }`}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: active ? 600 : 500,
+                  color: active ? '#D97706' : 'rgba(60,60,67,0.6)',
+                  background: active ? 'rgba(217,119,6,0.08)' : 'transparent',
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap',
+                  letterSpacing: '-0.01em',
+                }}
               >
                 {item.label}
               </Link>
@@ -56,19 +77,38 @@ export default function Header() {
           })}
           <button
             onClick={handleSignOut}
-            className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors whitespace-nowrap"
+            style={{
+              marginLeft: 4,
+              padding: '6px 12px',
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 500,
+              color: 'rgba(60,60,67,0.4)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'color 0.15s',
+            }}
           >
             Abmelden
           </button>
         </nav>
 
-        {/* Mobile: just logout icon */}
+        {/* Mobile logout */}
         <button
           onClick={handleSignOut}
-          className="sm:hidden text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          className="sm:hidden"
+          style={{
+            padding: 8,
+            borderRadius: 10,
+            background: 'transparent',
+            border: 'none',
+            color: 'rgba(60,60,67,0.4)',
+            cursor: 'pointer',
+          }}
           aria-label="Abmelden"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1" />
           </svg>
         </button>

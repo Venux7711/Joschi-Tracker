@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -116,7 +116,7 @@ function NewHealthForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!catId) {
-      setError('Katze nicht gefunden. Bitte zuerst das Dashboard öffnen.')
+      setError('Katze nicht gefunden. Bitte zuerst das Dashboard Ã¶ffnen.')
       return
     }
     setLoading(true)
@@ -145,7 +145,7 @@ function NewHealthForm() {
       return
     }
 
-    // Foto hochladen falls ausgewählt
+    // Foto hochladen falls ausgewÃ¤hlt
     if (photoFile && catId && insertData?.id) {
       const ext = photoFile.name.split('.').pop() ?? 'jpg'
       const path = `${catId}/${Date.now()}.${ext}`
@@ -161,26 +161,26 @@ function NewHealthForm() {
   }
 
   const stoolOptions: { value: StoolConsistency; label: string; color?: string }[] = [
-    { value: 'normal', label: '✓ Normal', color: 'bg-green-500 border-green-500 text-white' },
+    { value: 'normal', label: 'âœ“ Normal', color: 'bg-green-500 border-green-500 text-white' },
     { value: 'soft', label: '~ Weich', color: 'bg-yellow-400 border-yellow-400 text-white' },
-    { value: 'diarrhea', label: '⚠ Durchfall', color: 'bg-red-500 border-red-500 text-white' },
-    { value: 'not_observed', label: '— Nicht gesehen', color: 'bg-gray-400 border-gray-400 text-white' },
+    { value: 'diarrhea', label: 'âš  Durchfall', color: 'bg-red-500 border-red-500 text-white' },
+    { value: 'not_observed', label: 'â€” Nicht gesehen', color: 'bg-gray-400 border-gray-400 text-white' },
   ]
 
   const appetiteOptions: { value: Appetite; label: string }[] = [
-    { value: 'good', label: '😋 Gut' },
-    { value: 'reduced', label: '😐 Wenig' },
-    { value: 'none', label: '😞 Gar nicht' },
+    { value: 'good', label: 'ðŸ˜‹ Gut' },
+    { value: 'reduced', label: 'ðŸ˜ Wenig' },
+    { value: 'none', label: 'ðŸ˜ž Gar nicht' },
   ]
 
   const activityOptions: { value: Activity; label: string }[] = [
-    { value: 'normal', label: '🐾 Normal' },
-    { value: 'tired', label: '😴 Müde' },
-    { value: 'very_active', label: '🏃 Sehr aktiv' },
+    { value: 'normal', label: 'ðŸ¾ Normal' },
+    { value: 'tired', label: 'ðŸ˜´ MÃ¼de' },
+    { value: 'very_active', label: 'ðŸƒ Sehr aktiv' },
   ]
 
   return (
-    <div className="min-h-screen bg-amber-50">
+    <div className="min-h-screen">
       <Header />
 
       <main className="max-w-2xl mx-auto px-4 py-6">
@@ -189,9 +189,9 @@ function NewHealthForm() {
             href="/dashboard"
             className="text-gray-400 hover:text-gray-600 transition-colors"
           >
-            ← Zurück
+            â† ZurÃ¼ck
           </Link>
-          <h1 className="text-xl font-bold text-gray-800">💊 Befinden eintragen</h1>
+          <h1 className="text-xl font-bold text-gray-800">ðŸ’Š Befinden eintragen</h1>
         </div>
 
         <div className="card p-5">
@@ -237,9 +237,9 @@ function NewHealthForm() {
               />
             </div>
 
-            {/* Aktivität */}
+            {/* AktivitÃ¤t */}
             <div>
-              <label className="label">Aktivität</label>
+              <label className="label">AktivitÃ¤t</label>
               <ToggleGroup
                 value={activity}
                 onChange={setActivity}
@@ -285,7 +285,7 @@ function NewHealthForm() {
                   <div className="relative h-40 rounded-xl overflow-hidden">
                     <Image src={photoPreview} alt="Vorschau" fill className="object-cover" sizes="100vw" />
                   </div>
-                  <button type="button" onClick={() => { setPhotoFile(null); setPhotoPreview(null) }} className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center">×</button>
+                  <button type="button" onClick={() => { setPhotoFile(null); setPhotoPreview(null) }} className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center">Ã—</button>
                 </div>
               ) : (
                 <label className="flex items-center gap-3 p-4 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-amber-300 transition-colors">
@@ -293,8 +293,8 @@ function NewHealthForm() {
                     const f = e.target.files?.[0]
                     if (f) { setPhotoFile(f); setPhotoPreview(URL.createObjectURL(f)) }
                   }} />
-                  <span className="text-2xl">📷</span>
-                  <span className="text-sm text-gray-500">Foto aufnehmen oder auswählen</span>
+                  <span className="text-2xl">ðŸ“·</span>
+                  <span className="text-sm text-gray-500">Foto aufnehmen oder auswÃ¤hlen</span>
                 </label>
               )}
             </div>

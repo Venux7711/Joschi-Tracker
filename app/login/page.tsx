@@ -27,7 +27,6 @@ export default function LoginPage() {
       return
     }
 
-    // Einmalpasswort gesetzt → Passwort ändern erzwingen
     if (data.user?.user_metadata?.must_change_password) {
       router.refresh()
       router.push('/auth/change-password')
@@ -38,21 +37,47 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-amber-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-amber-300 shadow-md mx-auto mb-3">
-            <Image src="/joschi.jpg" alt="Joschi" fill className="object-cover object-top" priority />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800">Joschi Tracker</h1>
-          <p className="text-gray-500 text-sm mt-1">Gesundheitstracker für Joschi</p>
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-6"
+      style={{ background: 'linear-gradient(160deg, #F2F2F7 0%, #FEF3C7 100%)' }}
+    >
+      {/* Logo block */}
+      <div className="text-center mb-10">
+        <div
+          className="relative mx-auto mb-5 overflow-hidden"
+          style={{
+            width: 96,
+            height: 96,
+            borderRadius: 28,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
+            border: '3px solid rgba(255,255,255,0.8)',
+          }}
+        >
+          <Image src="/joschi.jpg" alt="Joschi" fill className="object-cover object-top" priority />
         </div>
+        <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em', color: '#1C1C1E' }}>
+          Joschi
+        </h1>
+        <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.5)', marginTop: 4, letterSpacing: '-0.01em' }}>
+          Gesundheitstracker
+        </p>
+      </div>
 
+      {/* Card */}
+      <div
+        className="w-full"
+        style={{
+          maxWidth: 360,
+          background: 'rgba(255,255,255,0.92)',
+          borderRadius: 24,
+          padding: '28px 24px 24px',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)',
+          backdropFilter: 'blur(12px)',
+        }}
+      >
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label htmlFor="email" className="label">
-              E-Mail
-            </label>
+            <label htmlFor="email" className="label">E-Mail</label>
             <input
               id="email"
               type="email"
@@ -66,9 +91,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label htmlFor="password" className="label">
-              Passwort
-            </label>
+            <label htmlFor="password" className="label">Passwort</label>
             <input
               id="password"
               type="password"
@@ -82,24 +105,29 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+            <div
+              style={{
+                background: 'rgba(220,38,38,0.08)',
+                borderRadius: 12,
+                padding: '12px 14px',
+                fontSize: 13,
+                color: '#DC2626',
+                fontWeight: 500,
+              }}
+            >
               {error}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary mt-2"
-          >
-            {loading ? 'Anmelden...' : 'Anmelden'}
+          <button type="submit" disabled={loading} className="btn-primary" style={{ marginTop: 8 }}>
+            {loading ? 'Anmelden…' : 'Anmelden'}
           </button>
         </form>
 
-        <div className="text-center mt-4">
+        <div className="text-center mt-5">
           <Link
             href="/auth/forgot-password"
-            className="text-sm text-amber-600 hover:text-amber-700 underline"
+            style={{ fontSize: 13, color: '#D97706', fontWeight: 500 }}
           >
             Passwort vergessen?
           </Link>

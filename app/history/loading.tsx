@@ -1,6 +1,6 @@
-export default function HistoryLoading() {
+﻿export default function HistoryLoading() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <div className="h-14 bg-white border-b border-gray-100" />
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-3 animate-pulse">
         <div className="h-7 w-48 bg-gray-200 rounded-xl" />

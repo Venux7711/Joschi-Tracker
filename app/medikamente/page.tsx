@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
@@ -9,7 +9,7 @@ interface Medication {
   start_date: string | null; end_date: string | null; notes: string | null; active: boolean
 }
 
-const FREQUENCIES = ['1× täglich', '2× täglich', '3× täglich', 'Jeden 2. Tag', '1× wöchentlich', 'Nach Bedarf']
+const FREQUENCIES = ['1Ã— tÃ¤glich', '2Ã— tÃ¤glich', '3Ã— tÃ¤glich', 'Jeden 2. Tag', '1Ã— wÃ¶chentlich', 'Nach Bedarf']
 
 export default function MedikamentePage() {
   const [meds, setMeds] = useState<Medication[]>([])
@@ -52,7 +52,7 @@ export default function MedikamentePage() {
   }
 
   const del = async (id: string) => {
-    if (!confirm('Medikament löschen?')) return
+    if (!confirm('Medikament lÃ¶schen?')) return
     await fetch('/api/medications', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     await load()
   }
@@ -85,20 +85,20 @@ export default function MedikamentePage() {
           >
             {med.active ? 'Beenden' : 'Reaktivieren'}
           </button>
-          <button onClick={() => del(med.id)} className="text-xs px-3 py-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">Löschen</button>
+          <button onClick={() => del(med.id)} className="text-xs px-3 py-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">LÃ¶schen</button>
         </div>
       </div>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-amber-50">
+    <div className="min-h-screen">
       <Header />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
-            <h1 className="text-xl font-bold text-gray-800">💊 Medikamente</h1>
+            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† ZurÃ¼ck</Link>
+            <h1 className="text-xl font-bold text-gray-800">ðŸ’Š Medikamente</h1>
           </div>
           <button onClick={() => setShowForm(s => !s)} className="btn-primary text-sm">+ Neu</button>
         </div>
@@ -118,9 +118,9 @@ export default function MedikamentePage() {
                   <input type="text" value={form.dosage} onChange={e => setForm(f => ({ ...f, dosage: e.target.value }))} placeholder="z.B. 0,5 ml" className="input-field" />
                 </div>
                 <div>
-                  <label className="label">Häufigkeit</label>
+                  <label className="label">HÃ¤ufigkeit</label>
                   <select value={form.frequency} onChange={e => setForm(f => ({ ...f, frequency: e.target.value }))} className="input-field">
-                    <option value="">— Wählen —</option>
+                    <option value="">â€” WÃ¤hlen â€”</option>
                     {FREQUENCIES.map(f => <option key={f} value={f}>{f}</option>)}
                   </select>
                 </div>
@@ -141,7 +141,7 @@ export default function MedikamentePage() {
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setShowForm(false)} className="btn-secondary">Abbrechen</button>
-                <button onClick={save} disabled={!form.name || saving} className="btn-primary">{saving ? 'Speichern…' : 'Speichern'}</button>
+                <button onClick={save} disabled={!form.name || saving} className="btn-primary">{saving ? 'Speichernâ€¦' : 'Speichern'}</button>
               </div>
             </div>
           </div>
@@ -153,9 +153,9 @@ export default function MedikamentePage() {
           <>
             {active.length === 0 && inactive.length === 0 && (
               <div className="card p-10 text-center">
-                <div className="text-5xl mb-3">💊</div>
+                <div className="text-5xl mb-3">ðŸ’Š</div>
                 <p className="text-gray-500 mb-1">Keine Medikamente eingetragen</p>
-                <p className="text-sm text-gray-400">Tippe auf „+ Neu" um ein Medikament hinzuzufügen</p>
+                <p className="text-sm text-gray-400">Tippe auf â€ž+ Neu" um ein Medikament hinzuzufÃ¼gen</p>
               </div>
             )}
 

@@ -325,52 +325,85 @@ export default async function DashboardPage() {
   const greeting = today.getHours() < 12 ? 'Guten Morgen' : today.getHours() < 17 ? 'Guten Tag' : 'Guten Abend'
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <Header />
 
-      <main className="max-w-2xl mx-auto px-4 py-5 space-y-5">
+      <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
 
         {/* ── HERO ── */}
-        <div className="bg-gradient-to-br from-amber-400 to-amber-500 rounded-3xl p-5 flex items-center gap-4 shadow-md">
-          <JoschiPhoto size={80} />
-          <div className="flex-1 min-w-0">
-            <p className="text-amber-100 text-sm">{greeting} 👋</p>
-            <h1 className="text-white text-2xl font-bold">Joschi</h1>
-            <p className="text-amber-100 text-sm">
+        <div
+          className="rounded-3xl p-5 flex items-center gap-4 relative overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, #1C1C1E 0%, #3A200A 60%, #78350F 100%)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.20)',
+          }}
+        >
+          <div
+            className="absolute inset-0 opacity-[0.04]"
+            style={{ backgroundImage: 'radial-gradient(circle at 80% 20%, #FBBF24 0%, transparent 60%)' }}
+          />
+          <JoschiPhoto size={76} />
+          <div className="flex-1 min-w-0 relative">
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 500, letterSpacing: '0.02em', textTransform: 'uppercase', marginBottom: 2 }}>
+              {greeting}
+            </p>
+            <h1 style={{ color: 'white', fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1 }}>
+              Joschi
+            </h1>
+            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, marginTop: 4, letterSpacing: '-0.01em' }}>
               {today.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
           </div>
-          <div className="text-right flex-shrink-0">
-            <div className="text-white/80 text-xs mb-0.5">Heute</div>
-            <div className="text-white text-2xl font-bold">{feedings.length}×</div>
-            <div className="text-amber-100 text-xs">Mahlzeiten</div>
+          <div className="text-right flex-shrink-0 relative">
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, letterSpacing: '0.04em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 2 }}>
+              Heute
+            </div>
+            <div style={{ color: '#FBBF24', fontSize: 36, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1 }}>
+              {feedings.length}
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, letterSpacing: '0.02em', fontWeight: 500 }}>
+              Mahlzeiten
+            </div>
           </div>
         </div>
 
         {/* ── QUICK ACTIONS ── */}
         <div className="grid grid-cols-2 gap-3">
-          <Link href="/feeding/new" className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-2xl p-4 flex items-center gap-3 transition-colors shadow-sm">
-            <span className="text-2xl">🍽️</span>
+          <Link
+            href="/feeding/new"
+            className="rounded-2xl p-4 flex items-center gap-3 transition-all active:scale-95"
+            style={{
+              background: 'linear-gradient(145deg, #FBBF24 0%, #D97706 100%)',
+              boxShadow: '0 4px 16px rgba(217,119,6,0.28)',
+            }}
+          >
+            <span style={{ fontSize: 26 }}>🍽️</span>
             <div>
-              <div className="font-semibold text-sm">Futter</div>
-              <div className="text-amber-100 text-xs">eintragen</div>
+              <div style={{ color: 'white', fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em' }}>Futter</div>
+              <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>eintragen</div>
             </div>
           </Link>
-          <Link href="/health/new" className="bg-white hover:bg-gray-50 active:bg-gray-100 text-gray-700 rounded-2xl p-4 flex items-center gap-3 transition-colors border border-gray-100 shadow-sm">
-            <span className="text-2xl">💊</span>
+          <Link
+            href="/health/new"
+            className="card rounded-2xl p-4 flex items-center gap-3 transition-all active:scale-95"
+          >
+            <span style={{ fontSize: 26 }}>🩺</span>
             <div>
-              <div className="font-semibold text-sm">Befinden</div>
-              <div className="text-gray-400 text-xs">eintragen</div>
+              <div style={{ color: '#1C1C1E', fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em' }}>Befinden</div>
+              <div style={{ color: 'rgba(60,60,67,0.45)', fontSize: 12 }}>eintragen</div>
             </div>
           </Link>
         </div>
 
         {/* ── FUTTER-EMPFEHLUNG ── */}
         {bestRec && (
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100 overflow-hidden shadow-sm">
-            <div className="px-4 py-3 border-b border-amber-100">
-              <h3 className="text-sm font-semibold text-gray-800">🎯 Empfehlung für heute</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Protein-Rotation · Verträglichkeit · {pantry.length > 0 ? 'Vorrat' : 'Alle Anifit-Sorten'}</p>
+          <div className="card overflow-hidden">
+            <div className="px-4 pt-4 pb-3" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.1)' }}>
+              <div className="flex items-center gap-2">
+                <span style={{ fontSize: 16 }}>🎯</span>
+                <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>Empfehlung heute</h3>
+              </div>
+              <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2, letterSpacing: '0.01em' }}>Protein-Rotation · Verträglichkeit · {pantry.length > 0 ? 'Vorrat' : 'Alle Anifit-Sorten'}</p>
             </div>
 
             {/* Beste Empfehlung */}
@@ -412,7 +445,7 @@ export default async function DashboardPage() {
 
             {/* Alternativen */}
             {topRecs.length > 1 && (
-              <div className="mx-4 mb-3 pt-2 border-t border-amber-100">
+              <div className="mx-4 mb-3 pt-2" style={{ borderTop: '0.5px solid rgba(60,60,67,0.08)' }}>
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Alternativen</p>
                 <div className="space-y-1.5">
                   {topRecs.slice(1).map((rec, i) => (
@@ -445,59 +478,91 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-2 gap-3">
 
           {/* Streak */}
-          <div className={`rounded-2xl p-4 ${streak >= 3 ? 'bg-green-50 border border-green-100' : streak > 0 ? 'bg-amber-50 border border-amber-100' : 'bg-red-50 border border-red-100'}`}>
-            <div className={`text-3xl font-bold ${streak >= 3 ? 'text-green-600' : streak > 0 ? 'text-amber-600' : 'text-red-500'}`}>
+          <div className="card p-4">
+            <div
+              style={{
+                fontSize: 34,
+                fontWeight: 800,
+                letterSpacing: '-0.04em',
+                lineHeight: 1,
+                color: streak >= 3 ? '#16A34A' : streak > 0 ? '#D97706' : '#DC2626',
+              }}
+            >
               {streak}
             </div>
-            <div className="text-sm font-medium text-gray-700 mt-0.5">Tage ohne Durchfall</div>
-            <div className="text-xs text-gray-400 mt-1">
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1E', marginTop: 4, letterSpacing: '-0.01em' }}>
+              Tage kein Durchfall
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>
               {streak === 0 ? 'Zuletzt Durchfall' : streak === 1 ? 'Heute gut ✓' : `${streak} Tage in Folge ✓`}
             </div>
           </div>
 
           {/* 30-Tage Durchfall */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <div className={`text-3xl font-bold ${diarrhea30Days === 0 ? 'text-green-600' : diarrhea30Days <= 5 ? 'text-amber-500' : 'text-red-500'}`}>
+          <div className="card p-4">
+            <div
+              style={{
+                fontSize: 34,
+                fontWeight: 800,
+                letterSpacing: '-0.04em',
+                lineHeight: 1,
+                color: diarrhea30Days === 0 ? '#16A34A' : diarrhea30Days <= 5 ? '#D97706' : '#DC2626',
+              }}
+            >
               {diarrhea30Days}
             </div>
-            <div className="text-sm font-medium text-gray-700 mt-0.5">Durchfall-Tage</div>
-            <div className="text-xs text-gray-400 mt-1">letzte 30 Tage · {30 - diarrhea30Days} gut</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1E', marginTop: 4, letterSpacing: '-0.01em' }}>
+              Durchfall-Tage
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>
+              letzte 30 Tage · {30 - diarrhea30Days} gut
+            </div>
           </div>
 
           {/* Aktueller Stuhl */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div className="card p-4">
             {latestStool ? (
               <>
-                <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full mb-1 ${getStoolColor(latestStool)}`}>
+                <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full mb-2 ${getStoolColor(latestStool)}`}>
                   {getStoolLabel(latestStool)}
                 </span>
-                <div className="text-sm font-medium text-gray-700">Letzter Stuhlgang</div>
-                <div className="text-xs text-gray-400 mt-0.5">
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1E', letterSpacing: '-0.01em' }}>Letzter Stuhlgang</div>
+                <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>
                   {new Date(health30[0]?.logged_at ?? '').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
                 </div>
               </>
             ) : (
               <>
-                <div className="text-2xl font-bold text-gray-300">–</div>
-                <div className="text-sm font-medium text-gray-700 mt-0.5">Kein Befund</div>
-                <div className="text-xs text-gray-400 mt-1">noch nichts eingetragen</div>
+                <div style={{ fontSize: 30, fontWeight: 700, color: 'rgba(60,60,67,0.2)' }}>–</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1E', marginTop: 4 }}>Kein Befund</div>
+                <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>noch nichts eingetragen</div>
               </>
             )}
           </div>
 
           {/* Erbrechen 7 Tage */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <div className={`text-3xl font-bold ${vomiting7Days === 0 ? 'text-green-600' : 'text-red-500'}`}>
+          <div className="card p-4">
+            <div
+              style={{
+                fontSize: 34,
+                fontWeight: 800,
+                letterSpacing: '-0.04em',
+                lineHeight: 1,
+                color: vomiting7Days === 0 ? '#16A34A' : '#DC2626',
+              }}
+            >
               {vomiting7Days}×
             </div>
-            <div className="text-sm font-medium text-gray-700 mt-0.5">Erbrochen</div>
-            <div className="text-xs text-gray-400 mt-1">letzte 7 Tage</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1E', marginTop: 4, letterSpacing: '-0.01em' }}>
+              Erbrochen
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>letzte 7 Tage</div>
           </div>
         </div>
 
         {/* ── 14-TAGE STUHLGANG-TREND ── */}
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">14-Tage Stuhlgang-Trend</h3>
+        <div className="card p-4">
+          <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E', marginBottom: 12 }}>14-Tage Stuhlgang-Trend</h3>
           <div className="flex gap-1 justify-between">
             {trend14.map(({ day, stool }, i) => (
               <div key={i} className="flex flex-col items-center gap-1.5 flex-1">
@@ -522,32 +587,58 @@ export default async function DashboardPage() {
         </div>
 
         {/* ── HEUTE: FUTTER ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
-            <h3 className="text-sm font-semibold text-gray-700">🍽️ Futter heute</h3>
-            <Link href="/feeding/new" className="text-xs font-medium text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full hover:bg-amber-100 transition-colors">
+        <div className="card overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.1)' }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>🍽️ Futter heute</h3>
+            <Link
+              href="/feeding/new"
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#D97706',
+                background: 'rgba(217,119,6,0.08)',
+                padding: '5px 12px',
+                borderRadius: 999,
+                letterSpacing: '-0.01em',
+              }}
+            >
               + Eintrag
             </Link>
           </div>
 
           {feedings.length === 0 ? (
-            <div className="px-4 py-5 text-center">
-              <p className="text-sm text-gray-400">Noch kein Futter eingetragen</p>
-              <Link href="/feeding/new" className="inline-block mt-2 text-sm text-amber-600 font-medium">Jetzt eintragen →</Link>
+            <div className="px-4 py-6 text-center">
+              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)' }}>Noch kein Futter eingetragen</p>
+              <Link href="/feeding/new" style={{ display: 'inline-block', marginTop: 6, fontSize: 14, color: '#D97706', fontWeight: 600 }}>
+                Jetzt eintragen →
+              </Link>
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
-              {feedings.map((f) => (
-                <div key={f.id} className="flex items-center px-4 py-3 gap-3">
+            <div>
+              {feedings.map((f, i) => (
+                <div
+                  key={f.id}
+                  className="flex items-center px-4 py-3 gap-3"
+                  style={i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}}
+                >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{f.food_brand}</p>
-                    <p className="text-xs text-gray-400 truncate">
+                    <p style={{ fontSize: 14, fontWeight: 600, color: '#1C1C1E', letterSpacing: '-0.01em' }} className="truncate">
+                      {f.food_brand}
+                    </p>
+                    <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.45)', marginTop: 1 }} className="truncate">
                       {f.food_type}{f.amount_grams ? ` · ${f.amount_grams}g` : ''} · {formatTime(f.logged_at)}
                     </p>
                   </div>
                   <Link
                     href={`/feeding/${f.id}/edit`}
-                    className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-gray-400 hover:text-amber-600 transition-colors text-base"
+                    className="flex-shrink-0 flex items-center justify-center transition-colors"
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      background: 'rgba(120,120,128,0.08)',
+                      fontSize: 14,
+                    }}
                   >
                     ✏️
                   </Link>
@@ -558,39 +649,63 @@ export default async function DashboardPage() {
         </div>
 
         {/* ── HEUTE: BEFINDEN ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
-            <h3 className="text-sm font-semibold text-gray-700">💊 Befinden heute</h3>
-            <Link href="/health/new" className="text-xs font-medium text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full hover:bg-amber-100 transition-colors">
+        <div className="card overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.1)' }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>🩺 Befinden heute</h3>
+            <Link
+              href="/health/new"
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#D97706',
+                background: 'rgba(217,119,6,0.08)',
+                padding: '5px 12px',
+                borderRadius: 999,
+                letterSpacing: '-0.01em',
+              }}
+            >
               + Eintrag
             </Link>
           </div>
 
           {healthLogs.length === 0 ? (
-            <div className="px-4 py-5 text-center">
-              <p className="text-sm text-gray-400">Noch kein Befinden eingetragen</p>
-              <Link href="/health/new" className="inline-block mt-2 text-sm text-amber-600 font-medium">Jetzt eintragen →</Link>
+            <div className="px-4 py-6 text-center">
+              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)' }}>Noch kein Befinden eingetragen</p>
+              <Link href="/health/new" style={{ display: 'inline-block', marginTop: 6, fontSize: 14, color: '#D97706', fontWeight: 600 }}>
+                Jetzt eintragen →
+              </Link>
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
-              {healthLogs.map((h) => (
-                <div key={h.id} className="flex items-center px-4 py-3 gap-3">
+            <div>
+              {healthLogs.map((h, i) => (
+                <div
+                  key={h.id}
+                  className="flex items-center px-4 py-3 gap-3"
+                  style={i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}}
+                >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getStoolColor(h.stool_consistency)}`}>
                         {getStoolLabel(h.stool_consistency)}
                       </span>
-                      {h.vomiting && <span className="text-xs text-red-500 font-medium">⚠ Erbrochen</span>}
-                      {h.fur_issue && <span className="text-xs text-orange-500 font-medium">⚠ Fell</span>}
+                      {h.vomiting && <span style={{ fontSize: 12, color: '#DC2626', fontWeight: 600 }}>⚠ Erbrochen</span>}
+                      {h.fur_issue && <span style={{ fontSize: 12, color: '#EA580C', fontWeight: 600 }}>⚠ Fell</span>}
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.45)', marginTop: 3 }}>
                       Appetit: {getAppetiteLabel(h.appetite)} · {getActivityLabel(h.activity)} · {formatTime(h.logged_at)}
                     </p>
-                    {h.notes && <p className="text-xs text-gray-400 italic mt-0.5 truncate">{h.notes}</p>}
+                    {h.notes && <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', fontStyle: 'italic', marginTop: 2 }} className="truncate">{h.notes}</p>}
                   </div>
                   <Link
                     href={`/health/${h.id}/edit`}
-                    className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-amber-50 text-gray-400 hover:text-amber-600 transition-colors text-base"
+                    className="flex-shrink-0 flex items-center justify-center transition-colors"
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      background: 'rgba(120,120,128,0.08)',
+                      fontSize: 14,
+                    }}
                   >
                     ✏️
                   </Link>
@@ -602,10 +717,10 @@ export default async function DashboardPage() {
 
         {/* ── FÜTTERUNGS-STATISTIK ── */}
         {foodFrequency.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-50">
-              <h3 className="text-sm font-semibold text-gray-700">🍽️ Futter-Übersicht (30 Tage)</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Welche Sorten wie oft gegeben wurden</p>
+          <div className="card overflow-hidden">
+            <div className="px-4 py-3.5" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.1)' }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>Futter-Übersicht</h3>
+              <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>Letzte 30 Tage · Häufigkeit und Aktualität</p>
             </div>
             <div className="divide-y divide-gray-50">
               {foodFrequency.map((f) => {
@@ -643,10 +758,10 @@ export default async function DashboardPage() {
 
         {/* ── FUTTER-KORRELATION ── */}
         {foodCorrelation.length >= 2 && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-50">
-              <h3 className="text-sm font-semibold text-gray-700">📊 Futter & Durchfall</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Wie oft trat Durchfall am selben oder nächsten Tag auf?</p>
+          <div className="card overflow-hidden">
+            <div className="px-4 py-3.5" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.1)' }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>📊 Futter & Durchfall</h3>
+              <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>Wie oft trat Durchfall am selben oder nächsten Tag auf?</p>
             </div>
             <div className="px-4 py-3 space-y-2.5">
               {foodCorrelation.map((s) => {
