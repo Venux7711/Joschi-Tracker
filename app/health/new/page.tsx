@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { toLocalISOString } from '@/lib/utils'
@@ -77,6 +78,7 @@ function NewHealthForm() {
   const searchParams = useSearchParams()
   const dateParam = searchParams.get('date')
   const supabase = createClient()
+  const photoRef = useRef<HTMLInputElement>(null)
 
   const [catId, setCatId] = useState<string | null>(null)
   const [loggedAt, setLoggedAt] = useState('')
@@ -88,6 +90,8 @@ function NewHealthForm() {
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
 
   useEffect(() => {
     setLoggedAt(dateParam ? `${dateParam}T12:00` : toLocalISOString())
@@ -123,7 +127,7 @@ function NewHealthForm() {
     } = await supabase.auth.getUser()
     if (!user) return
 
-    const { error: insertError } = await supabase.from('health_logs').insert({
+    const { data: insertData, error: insertError } = await supabase.from('health_logs').insert({
       cat_id: catId,
       user_id: user.id,
       logged_at: new Date(loggedAt).toISOString(),
@@ -133,14 +137,27 @@ function NewHealthForm() {
       activity,
       fur_issue: furIssue,
       notes: notes.trim() || null,
-    })
+    }).select('id').single()
 
     if (insertError) {
       setError('Fehler beim Speichern. Bitte erneut versuchen.')
       setLoading(false)
-    } else {
-      router.push('/dashboard')
+      return
     }
+
+    // Foto hochladen falls ausgewählt
+    if (photoFile && catId && insertData?.id) {
+      const ext = photoFile.name.split('.').pop() ?? 'jpg'
+      const path = `${catId}/${Date.now()}.${ext}`
+      const { data: uploadData } = await supabase.storage.from('joschi-photos').upload(path, photoFile, { contentType: photoFile.type })
+      if (uploadData) {
+        const { data: { publicUrl } } = supabase.storage.from('joschi-photos').getPublicUrl(uploadData.path)
+        const moodTag = stool === 'diarrhea' ? 'bad' : stool === 'normal' ? 'good' : 'normal'
+        await fetch('/api/photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storage_path: uploadData.path, public_url: publicUrl, mood_tag: moodTag, health_log_id: insertData.id, taken_at: new Date(loggedAt).toISOString() }) })
+      }
+    }
+
+    router.push('/dashboard')
   }
 
   const stoolOptions: { value: StoolConsistency; label: string; color?: string }[] = [
@@ -258,6 +275,28 @@ function NewHealthForm() {
                 rows={3}
                 placeholder="z.B. hat viel getrunken heute"
               />
+            </div>
+
+            {/* Foto */}
+            <div>
+              <label className="label">Foto von Joschi <span className="text-gray-400 font-normal">(optional)</span></label>
+              {photoPreview ? (
+                <div className="relative">
+                  <div className="relative h-40 rounded-xl overflow-hidden">
+                    <Image src={photoPreview} alt="Vorschau" fill className="object-cover" sizes="100vw" />
+                  </div>
+                  <button type="button" onClick={() => { setPhotoFile(null); setPhotoPreview(null) }} className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center">×</button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-3 p-4 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-amber-300 transition-colors">
+                  <input ref={photoRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => {
+                    const f = e.target.files?.[0]
+                    if (f) { setPhotoFile(f); setPhotoPreview(URL.createObjectURL(f)) }
+                  }} />
+                  <span className="text-2xl">📷</span>
+                  <span className="text-sm text-gray-500">Foto aufnehmen oder auswählen</span>
+                </label>
+              )}
             </div>
 
             {error && (
