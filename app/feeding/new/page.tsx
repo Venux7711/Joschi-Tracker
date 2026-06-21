@@ -74,6 +74,7 @@ function NewFeedingForm() {
   const [error, setError] = useState<string | null>(null)
   const [prevBrands, setPrevBrands] = useState<string[]>([])
   const [prevTypes, setPrevTypes] = useState<string[]>([])
+  const [pantry, setPantry] = useState<{ brand: string; type: string; quantity: number }[]>([])
 
   const isAnifit = foodBrand.trim().toLowerCase() === 'anifit'
 
@@ -104,6 +105,10 @@ function NewFeedingForm() {
         setPrevBrands(brands)
         setPrevTypes(types)
       }
+
+      const pantryRes = await fetch('/api/pantry')
+      const pantryData = await pantryRes.json()
+      if (pantryData.items) setPantry(pantryData.items)
     }
 
     init()
@@ -179,10 +184,15 @@ function NewFeedingForm() {
     ...prevBrands.filter((b) => b.toLowerCase() !== 'anifit'),
   ]
 
-  // Sorten-Liste: Anifit-Produkte oder frühere Eingaben
-  const typeOptions = isAnifit
-    ? ANIFIT_SORTEN
-    : prevTypes
+  // Sorten-Liste: Vorrats-Sorten der jeweiligen Marke, sonst frühere Eingaben
+  const pantryForBrand = pantry.filter(
+    (p) => p.brand.toLowerCase() === foodBrand.trim().toLowerCase() && p.quantity > 0
+  )
+  const typeOptions = pantryForBrand.length > 0
+    ? pantryForBrand.map((p) => p.type)
+    : isAnifit
+      ? ANIFIT_SORTEN
+      : prevTypes
 
   return (
     <div className="min-h-screen bg-amber-50">
@@ -255,9 +265,14 @@ function NewFeedingForm() {
                   required
                 >
                   <option value="">Sorte wählen …</option>
-                  {typeOptions.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
+                  {typeOptions.map((t) => {
+                    const stock = pantry.find(p => p.type === t)
+                    return (
+                      <option key={t} value={t}>
+                        {t}{stock ? ` (${stock.quantity} Dose${stock.quantity !== 1 ? 'n' : ''})` : ''}
+                      </option>
+                    )
+                  })}
                 </select>
               ) : (
                 <input
