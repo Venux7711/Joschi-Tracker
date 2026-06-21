@@ -1,7 +1,6 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextRequest, NextResponse } from 'next/server'
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_KEY!)
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent`
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,16 +12,7 @@ export async function POST(req: NextRequest) {
     const base64 = Buffer.from(bytes).toString('base64')
     const mimeType = file.type || 'image/jpeg'
 
-    const model = genAI.getGenerativeModel(
-      { model: 'gemini-1.5-flash-latest' },
-      { apiVersion: 'v1' }
-    )
-
-    const result = await model.generateContent([
-      {
-        inlineData: { data: base64, mimeType },
-      },
-      `Du analysierst ein Foto einer Katzenfutterdose.
+    const prompt = `Du analysierst ein Foto einer Katzenfutterdose.
 Extrahiere folgende Informationen und antworte NUR mit einem JSON-Objekt, ohne Erklärungen:
 {
   "brand": "Markenname (z.B. Anifit, Royal Canin, Whiskas)",
@@ -30,16 +20,37 @@ Extrahiere folgende Informationen und antworte NUR mit einem JSON-Objekt, ohne E
   "amount_grams": Gewicht als Zahl ohne Einheit oder null wenn nicht erkennbar
 }
 
-Falls du die Dose nicht erkennen kannst, gib zurück: {"brand": "", "type": "", "amount_grams": null}`,
-    ])
+Falls du die Dose nicht erkennen kannst, gib zurück: {"brand": "", "type": "", "amount_grams": null}`
 
-    const text = result.response.text().trim()
+    const res = await fetch(`${GEMINI_URL}?key=${process.env.GOOGLE_AI_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inlineData: { mimeType, data: base64 } },
+            { text: prompt },
+          ],
+        }],
+        generationConfig: { maxOutputTokens: 256, temperature: 0.1 },
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.text()
+      console.error('Gemini can error:', err)
+      return NextResponse.json({ error: 'Analyse fehlgeschlagen', detail: err }, { status: 500 })
+    }
+
+    const data = await res.json()
+    const text = (data.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim()
     const json = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const data = JSON.parse(json)
+    const result = JSON.parse(json)
 
-    return NextResponse.json(data)
+    return NextResponse.json(result)
   } catch (err) {
-    console.error('analyze-can error:', err)
-    return NextResponse.json({ error: 'Analyse fehlgeschlagen' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('analyze-can error:', msg)
+    return NextResponse.json({ error: 'Analyse fehlgeschlagen', detail: msg }, { status: 500 })
   }
 }

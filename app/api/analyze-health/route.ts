@@ -1,12 +1,11 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextRequest, NextResponse } from 'next/server'
-
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_KEY!)
 
 const MENGE = ['nichts', 'sehr wenig', 'wenig', 'mittel', 'viel']
 const STOOL: Record<string, string> = { normal: 'Normal', soft: 'Weich', diarrhea: 'DURCHFALL', not_observed: 'Nicht gesehen' }
 const APPETITE: Record<string, string> = { good: 'Gut', reduced: 'Wenig', none: 'Gar nicht' }
 const ACTIVITY: Record<string, string> = { normal: 'Normal', tired: 'Müde', very_active: 'Sehr aktiv' }
+
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent`
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,8 +41,8 @@ export async function POST(req: NextRequest) {
     const prompt = `Du bist ein erfahrener Tiergesundheits-Assistent. Analysiere folgende Daten für Joschi, eine goldene Langhaar-Perserkatze mit wiederkehrendem Durchfall.
 
 WICHTIG zu Proteinquellen:
-- Mono-Protein = nur eine Fleischquelle (z.B. nur Truthahn) → besser bei Unverträglichkeiten, leichter zu diagnostizieren
-- Multi-Protein = mehrere Fleischquellen (z.B. Lachs+Huhn+Rentier) → höheres Allergiepotenzial
+- Mono-Protein = nur eine Fleischquelle (z.B. nur Truthahn) → besser bei Unverträglichkeiten
+- Multi-Protein = mehrere Fleischquellen → höheres Allergiepotenzial
 - Protein-Rotation ist wichtig: nicht immer dieselbe Quelle
 - Geflügel (Huhn, Truthahn, Ente) und Fisch (Lachs, Hering) sind unterschiedliche Proteinfamilien
 
@@ -57,25 +56,36 @@ ${pantrySection}
 Bitte analysiere und antworte auf Deutsch mit folgender Struktur:
 
 **Muster & Korrelationen**
-[Zusammenhänge zwischen Futter (besonders Mono/Multi-Protein) und Durchfall-Episoden]
+[Zusammenhänge zwischen Futter und Durchfall-Episoden]
 
 **Protein-Analyse**
-[Welche Proteinquellen überwiegen? Gibt es Auffälligkeiten bei Mono vs. Multi-Protein und der Verträglichkeit?]
+[Mono vs. Multi-Protein, welche Quellen überwiegen, Auffälligkeiten]
 
 **Verträglichkeit**
-[Welche Sorten scheinen besser oder schlechter verträglich? Konkret mit Prozentzahlen wenn möglich]
+[Welche Sorten gut oder schlecht verträglich?]
 
 **Empfehlung nächste Mahlzeit**
-[Basierend auf Vorrat, Protein-Rotation und Verträglichkeit: Was sollte als nächstes gegeben werden und warum?]
+[Basierend auf Vorrat, Protein-Rotation und Verträglichkeit]
 
 Sei präzise. Maximal 280 Wörter. Falls zu wenig Daten: Sag das ehrlich.`
 
-    const model = genAI.getGenerativeModel(
-      { model: 'gemini-1.5-flash-latest' },
-      { apiVersion: 'v1' }
-    )
-    const result = await model.generateContent(prompt)
-    const analysis = result.response.text()
+    const res = await fetch(`${GEMINI_URL}?key=${process.env.GOOGLE_AI_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 1024, temperature: 0.4 },
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.text()
+      console.error('Gemini API error:', err)
+      return NextResponse.json({ error: 'Analyse fehlgeschlagen', detail: err }, { status: 500 })
+    }
+
+    const data = await res.json()
+    const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Keine Antwort erhalten.'
 
     return NextResponse.json({ analysis })
   } catch (err) {
