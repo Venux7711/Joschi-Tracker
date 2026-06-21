@@ -1,236 +1,236 @@
-﻿﻿﻿useclient
+﻿'use client'
 
-import{useState,useEffect,useRef}fromreact
-importLinkfromnext/link
-importHeaderfrom@/components/Header
-import{createClient}from@/lib/supabase/client
+import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
+import Header from '@/components/Header'
+import { createClient } from '@/lib/supabase/client'
 
-interfaceHealthLog{logged_at:string;stool_consistency:string;appetite:string;activity:string;vomiting:boolean;fur_issue:boolean;notes:string|null}
-interfaceFeedingLog{logged_at:string;food_brand:string;food_type:string;amount_grams:number|null}
+interface HealthLog { logged_at: string; stool_consistency: string; appetite: string; activity: string; vomiting: boolean; fur_issue: boolean; notes: string | null }
+interface FeedingLog { logged_at: string; food_brand: string; food_type: string; amount_grams: number | null }
 
-constSTOOL:Record<string,string>={normal:Normal,soft:Weich,diarrhea:Durchfallï¸,not_observed:}
-constAPPETITE:Record<string,string>={good:Gut,reduced:Wenig,none:Garnicht}
+const STOOL: Record<string, string> = { normal: 'Normal', soft: 'Weich', diarrhea: 'Durchfall ⚠ï¸', not_observed: '—' }
+const APPETITE: Record<string, string> = { good: 'Gut', reduced: 'Wenig', none: 'Gar nicht' }
 
-exportdefaultfunctionReportPage(){
-constsupabase=createClient()
-constreportRef=useRef<HTMLDivElement>(null)
+export default function ReportPage() {
+  const supabase = createClient()
+  const reportRef = useRef<HTMLDivElement>(null)
 
-const[days,setDays]=useState(30)
-const[health,setHealth]=useState<HealthLog[]>([])
-const[feedings,setFeedings]=useState<FeedingLog[]>([])
-const[loading,setLoading]=useState(true)
-const[catName,setCatName]=useState(Joschi)
+  const [days, setDays] = useState(30)
+  const [health, setHealth] = useState<HealthLog[]>([])
+  const [feedings, setFeedings] = useState<FeedingLog[]>([])
+  const [loading, setLoading] = useState(true)
+  const [catName, setCatName] = useState('Joschi')
 
-useEffect(()=>{load()},[days])
+  useEffect(() => { load() }, [days])
 
-constload=async()=>{
-setLoading(true)
-const{data:cats}=awaitsupabase.from(cats).select(id,name).limit(1)
-constcat=cats?.[0]
-if(!cat){setLoading(false);return}
-if(cat.name)setCatName(cat.name)
+  const load = async () => {
+    setLoading(true)
+    const { data: cats } = await supabase.from('cats').select('id, name').limit(1)
+    const cat = cats?.[0]
+    if (!cat) { setLoading(false); return }
+    if (cat.name) setCatName(cat.name)
 
-constsince=newDate()
-since.setDate(since.getDate()-days)
-constsinceStr=since.toISOString()
+    const since = new Date()
+    since.setDate(since.getDate() - days)
+    const sinceStr = since.toISOString()
 
-const[hRes,fRes]=awaitPromise.all([
-supabase.from(health_logs).select(*).eq(cat_id,cat.id).gte(logged_at,sinceStr).order(logged_at,{ascending:true}),
-supabase.from(feeding_logs).select(*).eq(cat_id,cat.id).gte(logged_at,sinceStr).order(logged_at,{ascending:true}),
-])
+    const [hRes, fRes] = await Promise.all([
+      supabase.from('health_logs').select('*').eq('cat_id', cat.id).gte('logged_at', sinceStr).order('logged_at', { ascending: true }),
+      supabase.from('feeding_logs').select('*').eq('cat_id', cat.id).gte('logged_at', sinceStr).order('logged_at', { ascending: true }),
+    ])
 
-setHealth(hRes.data??[])
-setFeedings(fRes.data??[])
-setLoading(false)
-}
+    setHealth(hRes.data ?? [])
+    setFeedings(fRes.data ?? [])
+    setLoading(false)
+  }
 
-consthandlePrint=()=>window.print()
+  const handlePrint = () => window.print()
 
-//Stats
-constdiarrheaDays=newSet(health.filter(h=>h.stool_consistency===diarrhea).map(h=>h.logged_at.slice(0,10))).size
-constgoodDays=days-diarrheaDays
-constvomitingCount=health.filter(h=>h.vomiting).length
-constfurCount=health.filter(h=>h.fur_issue).length
+  // Stats
+  const diarrheaDays = new Set(health.filter(h => h.stool_consistency === 'diarrhea').map(h => h.logged_at.slice(0, 10))).size
+  const goodDays = days - diarrheaDays
+  const vomitingCount = health.filter(h => h.vomiting).length
+  const furCount = health.filter(h => h.fur_issue).length
 
-constfoodCounts:Record<string,number>={}
-feedings.forEach(f=>{if(f.food_type)foodCounts[f.food_type]=(foodCounts[f.food_type]??0)+1})
-consttopFoods=Object.entries(foodCounts).sort((a,b)=>b[1]-a[1]).slice(0,5)
+  const foodCounts: Record<string, number> = {}
+  feedings.forEach(f => { if (f.food_type) foodCounts[f.food_type] = (foodCounts[f.food_type] ?? 0) + 1 })
+  const topFoods = Object.entries(foodCounts).sort((a, b) => b[1] - a[1]).slice(0, 5)
 
-consttoday=newDate().toLocaleDateString(de-DE,{day:numeric,month:long,year:numeric})
-constsince=newDate();since.setDate(since.getDate()-days)
-constsinceStr=since.toLocaleDateString(de-DE,{day:numeric,month:long,year:numeric})
+  const today = new Date().toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })
+  const since = new Date(); since.setDate(since.getDate() - days)
+  const sinceStr = since.toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })
 
-//Grouphealthbyweekforminichart
-constweekBars:{label:string;good:number;bad:number}[]=[]
-for(letw=Math.ceil(days/7)-1;w>=0;w--){
-constwStart=newDate();wStart.setDate(wStart.getDate()-(w+1)*7)
-constwEnd=newDate();wEnd.setDate(wEnd.getDate()-w*7)
-constwLogs=health.filter(h=>{constd=newDate(h.logged_at);returnd>=wStart&&d<wEnd})
-constbad=wLogs.filter(h=>h.stool_consistency===diarrhea).length
-weekBars.push({label:`KW${Math.ceil((wEnd.getTime()-newDate(wEnd.getFullYear(),0,1).getTime())/604800000)}`,good:7-bad,bad})
-}
+  // Group health by week for mini chart
+  const weekBars: { label: string; good: number; bad: number }[] = []
+  for (let w = Math.ceil(days / 7) - 1; w >= 0; w--) {
+    const wStart = new Date(); wStart.setDate(wStart.getDate() - (w + 1) * 7)
+    const wEnd = new Date(); wEnd.setDate(wEnd.getDate() - w * 7)
+    const wLogs = health.filter(h => { const d = new Date(h.logged_at); return d >= wStart && d < wEnd })
+    const bad = wLogs.filter(h => h.stool_consistency === 'diarrhea').length
+    weekBars.push({ label: `KW${Math.ceil((wEnd.getTime() - new Date(wEnd.getFullYear(), 0, 1).getTime()) / 604800000)}`, good: 7 - bad, bad })
+  }
 
-return(
-<divclassName="min-h-screen">
-<Header/>
-<mainclassName="max-w-2xlmx-autopx-4py-6">
-<divclassName="flexitems-centerjustify-betweenmb-6">
-<divclassName="flexitems-centergap-3">
-<Linkhref="/dashboard"className="text-gray-400hover:text-gray-600">†Zurück</Link>
-<h1className="text-xlfont-boldtext-gray-800">ðŸ¥Tierarzt-Report</h1>
-</div>
-<buttononClick={handlePrint}className="btn-primarytext-sm">Drucken/PDF</button>
-</div>
+  return (
+    <div className="min-h-screen">
+      <Header />
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† Zurück</Link>
+            <h1 className="text-xl font-bold text-gray-800">ðŸ¥ Tierarzt-Report</h1>
+          </div>
+          <button onClick={handlePrint} className="btn-primary text-sm">Drucken / PDF</button>
+        </div>
 
-{/*Zeitraum*/}
-<divclassName="flexgap-2mb-5">
-{[14,30,60,90].map(d=>(
-<buttonkey={d}onClick={()=>setDays(d)}className={`flex-1py-2rounded-xltext-smfont-mediumtransition-colorsborder${days===d?bg-amber-500text-whiteborder-amber-500:bg-whitetext-gray-600border-gray-200hover:border-amber-300}`}>
-{d}Tage
-</button>
-))}
-</div>
+        {/* Zeitraum */}
+        <div className="flex gap-2 mb-5">
+          {[14, 30, 60, 90].map(d => (
+            <button key={d} onClick={() => setDays(d)} className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors border ${days === d ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-600 border-gray-200 hover:border-amber-300'}`}>
+              {d} Tage
+            </button>
+          ))}
+        </div>
 
-{loading?(
-<divclassName="cardp-8text-centertext-gray-400">LadeDaten</div>
-):(
-<divref={reportRef}className="space-y-4print:space-y-6">
+        {loading ? (
+          <div className="card p-8 text-center text-gray-400">Lade Daten…</div>
+        ) : (
+          <div ref={reportRef} className="space-y-4 print:space-y-6">
 
-{/*Header*/}
-<divclassName="cardp-5print:borderprint:border-gray-300">
-<divclassName="flexitems-startjustify-between">
-<div>
-<h2className="text-2xlfont-blacktext-gray-800">{catName}Gesundheitsbericht</h2>
-<pclassName="text-gray-500text-smmt-1">Zeitraum:{sinceStr}{today}</p>
-<pclassName="text-gray-400text-xsmt-0.5">Rasse:GoldeneLanghaar-Perser·Erkrankung:RezidivierenderDurchfall</p>
-</div>
-<divclassName="text-4xl">ðŸ±</div>
-</div>
-</div>
+            {/* Header */}
+            <div className="card p-5 print:border print:border-gray-300">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-2xl font-black text-gray-800">{catName} – Gesundheitsbericht</h2>
+                  <p className="text-gray-500 text-sm mt-1">Zeitraum: {sinceStr} – {today}</p>
+                  <p className="text-gray-400 text-xs mt-0.5">Rasse: Goldene Langhaar-Perser · Erkrankung: Rezidivierender Durchfall</p>
+                </div>
+                <div className="text-4xl">ðŸ±</div>
+              </div>
+            </div>
 
-{/*Zusammenfassung*/}
-<divclassName="cardp-5">
-<h3className="font-boldtext-gray-800mb-4">Zusammenfassung({days}Tage)</h3>
-<divclassName="gridgrid-cols-2gap-3">
-<divclassName="bg-green-50rounded-xlp-3text-center">
-<divclassName="text-3xlfont-blacktext-green-600">{goodDays}</div>
-<divclassName="text-xstext-green-700font-medium">GuteTage</div>
-</div>
-<divclassName="bg-red-50rounded-xlp-3text-center">
-<divclassName="text-3xlfont-blacktext-red-500">{diarrheaDays}</div>
-<divclassName="text-xstext-red-700font-medium">Durchfall-Tage</div>
-</div>
-<divclassName="bg-orange-50rounded-xlp-3text-center">
-<divclassName="text-3xlfont-blacktext-orange-500">{vomitingCount}</div>
-<divclassName="text-xstext-orange-700font-medium">Malerbrochen</div>
-</div>
-<divclassName="bg-amber-50rounded-xlp-3text-center">
-<divclassName="text-3xlfont-blacktext-amber-600">{feedings.length}</div>
-<divclassName="text-xstext-amber-700font-medium">Fütterungen</div>
-</div>
-</div>
-{furCount>0&&(
-<divclassName="mt-3bg-orange-50rounded-xlp-3text-center">
-<spanclassName="text-smtext-orange-700font-medium">ï¸KotimFell:{furCount}aufgetreten</span>
-</div>
-)}
-</div>
+            {/* Zusammenfassung */}
+            <div className="card p-5">
+              <h3 className="font-bold text-gray-800 mb-4">Zusammenfassung ({days} Tage)</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-green-50 rounded-xl p-3 text-center">
+                  <div className="text-3xl font-black text-green-600">{goodDays}</div>
+                  <div className="text-xs text-green-700 font-medium">Gute Tage</div>
+                </div>
+                <div className="bg-red-50 rounded-xl p-3 text-center">
+                  <div className="text-3xl font-black text-red-500">{diarrheaDays}</div>
+                  <div className="text-xs text-red-700 font-medium">Durchfall-Tage</div>
+                </div>
+                <div className="bg-orange-50 rounded-xl p-3 text-center">
+                  <div className="text-3xl font-black text-orange-500">{vomitingCount}</div>
+                  <div className="text-xs text-orange-700 font-medium">Mal erbrochen</div>
+                </div>
+                <div className="bg-amber-50 rounded-xl p-3 text-center">
+                  <div className="text-3xl font-black text-amber-600">{feedings.length}</div>
+                  <div className="text-xs text-amber-700 font-medium">Fütterungen</div>
+                </div>
+              </div>
+              {furCount > 0 && (
+                <div className="mt-3 bg-orange-50 rounded-xl p-3 text-center">
+                  <span className="text-sm text-orange-700 font-medium">⚠ï¸ Kot im Fell: {furCount}× aufgetreten</span>
+                </div>
+              )}
+            </div>
 
-{/*Mini-Chart*/}
-{weekBars.length>0&&(
-<divclassName="cardp-5">
-<h3className="font-boldtext-gray-800mb-4">VerlaufnachWoche</h3>
-<divclassName="flexitems-endgap-2h-20">
-{weekBars.map((bar,i)=>{
-consttotal=bar.good+bar.bad||7
-constbadPct=(bar.bad/total)*100
-constgoodPct=(bar.good/total)*100
-return(
-<divkey={i}className="flex-1flexflex-colitems-centergap-1">
-<divclassName="w-fullflexflex-coljustify-end"style={{height:60}}>
-{bar.bad>0&&<divclassName="w-fullrounded-t"style={{height:`${badPct}%`,background:#ef4444}}/>}
-{bar.good>0&&<divclassName={`w-full${bar.bad===0?rounded:rounded-b}`}style={{height:`${goodPct}%`,background:#22c55e}}/>}
-</div>
-<spanclassName="text-[9px]text-gray-400">{bar.label}</span>
-</div>
-)
-})}
-</div>
-<divclassName="flexgap-4mt-2text-xs">
-<spanclassName="flexitems-centergap-1"><spanclassName="w-2h-2rounded-fullbg-green-500inline-block"/>Gut</span>
-<spanclassName="flexitems-centergap-1"><spanclassName="w-2h-2rounded-fullbg-red-500inline-block"/>Durchfall</span>
-</div>
-</div>
-)}
+            {/* Mini-Chart */}
+            {weekBars.length > 0 && (
+              <div className="card p-5">
+                <h3 className="font-bold text-gray-800 mb-4">Verlauf nach Woche</h3>
+                <div className="flex items-end gap-2 h-20">
+                  {weekBars.map((bar, i) => {
+                    const total = bar.good + bar.bad || 7
+                    const badPct = (bar.bad / total) * 100
+                    const goodPct = (bar.good / total) * 100
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                        <div className="w-full flex flex-col justify-end" style={{ height: 60 }}>
+                          {bar.bad > 0 && <div className="w-full rounded-t" style={{ height: `${badPct}%`, background: '#ef4444' }} />}
+                          {bar.good > 0 && <div className={`w-full ${bar.bad === 0 ? 'rounded' : 'rounded-b'}`} style={{ height: `${goodPct}%`, background: '#22c55e' }} />}
+                        </div>
+                        <span className="text-[9px] text-gray-400">{bar.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="flex gap-4 mt-2 text-xs">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Gut</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Durchfall</span>
+                </div>
+              </div>
+            )}
 
-{/*Futter*/}
-{topFoods.length>0&&(
-<divclassName="cardp-5">
-<h3className="font-boldtext-gray-800mb-3">VerabreichtesFutter(Top5)</h3>
-<divclassName="space-y-2">
-{topFoods.map(([food,count])=>(
-<divkey={food}className="flexitems-centergap-3">
-<divclassName="flex-1min-w-0">
-<pclassName="text-smfont-mediumtext-gray-700truncate">{food}</p>
-</div>
-<divclassName="flexitems-centergap-2">
-<divclassName="w-16bg-gray-100rounded-fullh-2">
-<divclassName="bg-amber-400h-2rounded-full"style={{width:`${(count/(topFoods[0]?.[1]??1))*100}%`}}/>
-</div>
-<spanclassName="text-smtext-gray-500w-8text-right">{count}</span>
-</div>
-</div>
-))}
-</div>
-</div>
-)}
+            {/* Futter */}
+            {topFoods.length > 0 && (
+              <div className="card p-5">
+                <h3 className="font-bold text-gray-800 mb-3">Verabreichtes Futter (Top 5)</h3>
+                <div className="space-y-2">
+                  {topFoods.map(([food, count]) => (
+                    <div key={food} className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-700 truncate">{food}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 bg-gray-100 rounded-full h-2">
+                          <div className="bg-amber-400 h-2 rounded-full" style={{ width: `${(count / (topFoods[0]?.[1] ?? 1)) * 100}%` }} />
+                        </div>
+                        <span className="text-sm text-gray-500 w-8 text-right">{count}×</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-{/*Tabellarischebersicht*/}
-<divclassName="cardp-5">
-<h3className="font-boldtext-gray-800mb-3">Tagesübersicht(Befinden)</h3>
-{health.length===0?(
-<pclassName="text-gray-400text-sm">KeineBefinden-EinträgeimZeitraum.</p>
-):(
-<divclassName="overflow-x-auto">
-<tableclassName="w-fulltext-sm">
-<thead>
-<trclassName="text-lefttext-xstext-gray-500border-bborder-gray-100">
-<thclassName="pb-2font-medium">Datum</th>
-<thclassName="pb-2font-medium">Stuhl</th>
-<thclassName="pb-2font-medium">Appetit</th>
-<thclassName="pb-2font-medium">Notiz</th>
-</tr>
-</thead>
-<tbody>
-{health.slice(-30).map(h=>(
-<trkey={h.logged_at}className={`border-bborder-gray-50${h.stool_consistency===diarrhea?bg-red-50:}`}>
-<tdclassName="py-1.5text-gray-600text-xs">{newDate(h.logged_at).toLocaleDateString(de-DE,{day:2-digit,month:2-digit})}</td>
-<tdclassName={`py-1.5font-mediumtext-xs${h.stool_consistency===diarrhea?text-red-600:text-gray-700}`}>{STOOL[h.stool_consistency]??h.stool_consistency}</td>
-<tdclassName="py-1.5text-gray-600text-xs">{APPETITE[h.appetite]??h.appetite}</td>
-<tdclassName="py-1.5text-gray-400text-xstruncatemax-w-[120px]">{h.notes??(h.vomiting?Erbrochen:)}</td>
-</tr>
-))}
-</tbody>
-</table>
-</div>
-)}
-</div>
+            {/* Tabellarische Übersicht */}
+            <div className="card p-5">
+              <h3 className="font-bold text-gray-800 mb-3">Tagesübersicht (Befinden)</h3>
+              {health.length === 0 ? (
+                <p className="text-gray-400 text-sm">Keine Befinden-Einträge im Zeitraum.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                        <th className="pb-2 font-medium">Datum</th>
+                        <th className="pb-2 font-medium">Stuhl</th>
+                        <th className="pb-2 font-medium">Appetit</th>
+                        <th className="pb-2 font-medium">Notiz</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {health.slice(-30).map(h => (
+                        <tr key={h.logged_at} className={`border-b border-gray-50 ${h.stool_consistency === 'diarrhea' ? 'bg-red-50' : ''}`}>
+                          <td className="py-1.5 text-gray-600 text-xs">{new Date(h.logged_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</td>
+                          <td className={`py-1.5 font-medium text-xs ${h.stool_consistency === 'diarrhea' ? 'text-red-600' : 'text-gray-700'}`}>{STOOL[h.stool_consistency] ?? h.stool_consistency}</td>
+                          <td className="py-1.5 text-gray-600 text-xs">{APPETITE[h.appetite] ?? h.appetite}</td>
+                          <td className="py-1.5 text-gray-400 text-xs truncate max-w-[120px]">{h.notes ?? (h.vomiting ? 'Erbrochen' : '')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
 
-<pclassName="text-xstext-gray-400text-centerpb-4">ErstelltmitJoschiTracker·{today}</p>
-</div>
-)}
-</main>
+            <p className="text-xs text-gray-400 text-center pb-4">Erstellt mit Joschi Tracker · {today}</p>
+          </div>
+        )}
+      </main>
 
-<style>{`
-@mediaprint{
-.sm\\:hidden{display:none!important;}
-header{display:none!important;}
-nav{display:none!important;}
-body{background:white!important;padding:0!important;}
-.card{box-shadow:none!important;border:1pxsolid#e5e7eb!important;}
-button{display:none!important;}
-}
-`}</style>
-</div>
-)
+      <style>{`
+        @media print {
+          .sm\\:hidden { display: none !important; }
+          header { display: none !important; }
+          nav { display: none !important; }
+          body { background: white !important; padding: 0 !important; }
+          .card { box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+          button { display: none !important; }
+        }
+      `}</style>
+    </div>
+  )
 }

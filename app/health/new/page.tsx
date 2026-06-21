@@ -1,329 +1,329 @@
-﻿﻿﻿useclient
+﻿'use client'
 
-import{useState,useEffect,useRef,Suspense}fromreact
-import{useRouter,useSearchParams}fromnext/navigation
-importLinkfromnext/link
-importImagefromnext/image
-importHeaderfrom@/components/Header
-import{createClient}from@/lib/supabase/client
-import{toLocalISOString}from@/lib/utils
-importtype{StoolConsistency,Appetite,Activity}from@/lib/types
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import Image from 'next/image'
+import Header from '@/components/Header'
+import { createClient } from '@/lib/supabase/client'
+import { toLocalISOString } from '@/lib/utils'
+import type { StoolConsistency, Appetite, Activity } from '@/lib/types'
 
-interfaceToggleGroupProps<Textendsstring>{
-value:T
-onChange:(v:T)=>void
-options:{value:T;label:string;color?:string}[]
+interface ToggleGroupProps<T extends string> {
+  value: T
+  onChange: (v: T) => void
+  options: { value: T; label: string; color?: string }[]
 }
 
-functionToggleGroup<Textendsstring>({value,onChange,options}:ToggleGroupProps<T>){
-return(
-<divclassName="flexgap-2flex-wrap">
-{options.map((opt)=>(
-<button
-key={opt.value}
-type="button"
-onClick={()=>onChange(opt.value)}
-className={`flex-1min-w-[70px]py-2.5px-2rounded-xltext-smfont-mediumtransition-allborder${
-value===opt.value
-?opt.color??bg-amber-500border-amber-500text-white
-:bg-whiteborder-gray-200text-gray-600hover:border-gray-300
-}`}
->
-{opt.label}
-</button>
-))}
-</div>
-)
+function ToggleGroup<T extends string>({ value, onChange, options }: ToggleGroupProps<T>) {
+  return (
+    <div className="flex gap-2 flex-wrap">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={`flex-1 min-w-[70px] py-2.5 px-2 rounded-xl text-sm font-medium transition-all border ${
+            value === opt.value
+              ? opt.color ?? 'bg-amber-500 border-amber-500 text-white'
+              : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
-functionYesNoToggle({
-value,
-onChange,
-yesLabel=Ja,
-noLabel=Nein,
-yesColor=bg-red-500border-red-500text-white,
-}:{
-value:boolean
-onChange:(v:boolean)=>void
-yesLabel?:string
-noLabel?:string
-yesColor?:string
-}){
-return(
-<divclassName="flexgap-2">
-<button
-type="button"
-onClick={()=>onChange(true)}
-className={`flex-1py-2.5rounded-xltext-smfont-mediumtransition-allborder${
-value?yesColor:bg-whiteborder-gray-200text-gray-600hover:border-gray-300
-}`}
->
-{yesLabel}
-</button>
-<button
-type="button"
-onClick={()=>onChange(false)}
-className={`flex-1py-2.5rounded-xltext-smfont-mediumtransition-allborder${
-!value?bg-green-500border-green-500text-white:bg-whiteborder-gray-200text-gray-600hover:border-gray-300
-}`}
->
-{noLabel}
-</button>
-</div>
-)
+function YesNoToggle({
+  value,
+  onChange,
+  yesLabel = 'Ja',
+  noLabel = 'Nein',
+  yesColor = 'bg-red-500 border-red-500 text-white',
+}: {
+  value: boolean
+  onChange: (v: boolean) => void
+  yesLabel?: string
+  noLabel?: string
+  yesColor?: string
+}) {
+  return (
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={() => onChange(true)}
+        className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+          value ? yesColor : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+        }`}
+      >
+        {yesLabel}
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(false)}
+        className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+          !value ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+        }`}
+      >
+        {noLabel}
+      </button>
+    </div>
+  )
 }
 
-functionNewHealthForm(){
-constrouter=useRouter()
-constsearchParams=useSearchParams()
-constdateParam=searchParams.get(date)
-constsupabase=createClient()
-constphotoRef=useRef<HTMLInputElement>(null)
+function NewHealthForm() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const dateParam = searchParams.get('date')
+  const supabase = createClient()
+  const photoRef = useRef<HTMLInputElement>(null)
 
-const[catId,setCatId]=useState<string|null>(null)
-const[loggedAt,setLoggedAt]=useState()
-const[stool,setStool]=useState<StoolConsistency>(not_observed)
-const[vomiting,setVomiting]=useState(false)
-const[appetite,setAppetite]=useState<Appetite>(good)
-const[activity,setActivity]=useState<Activity>(normal)
-const[furIssue,setFurIssue]=useState(false)
-const[notes,setNotes]=useState()
-const[loading,setLoading]=useState(false)
-const[error,setError]=useState<string|null>(null)
-const[photoFile,setPhotoFile]=useState<File|null>(null)
-const[photoPreview,setPhotoPreview]=useState<string|null>(null)
+  const [catId, setCatId] = useState<string | null>(null)
+  const [loggedAt, setLoggedAt] = useState('')
+  const [stool, setStool] = useState<StoolConsistency>('not_observed')
+  const [vomiting, setVomiting] = useState(false)
+  const [appetite, setAppetite] = useState<Appetite>('good')
+  const [activity, setActivity] = useState<Activity>('normal')
+  const [furIssue, setFurIssue] = useState(false)
+  const [notes, setNotes] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
 
-useEffect(()=>{
-setLoggedAt(dateParam?`${dateParam}T12:00`:toLocalISOString())
+  useEffect(() => {
+    setLoggedAt(dateParam ? `${dateParam}T12:00` : toLocalISOString())
 
-constinit=async()=>{
-const{
-data:{user},
-}=awaitsupabase.auth.getUser()
-if(!user)return
+    const init = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
 
-const{data:cats}=awaitsupabase
-.from(cats)
-.select(id)
-.limit(1)
+      const { data: cats } = await supabase
+        .from('cats')
+        .select('id')
+        .limit(1)
 
-if(cats&&cats.length>0)setCatId(cats[0].id)
+      if (cats && cats.length > 0) setCatId(cats[0].id)
+    }
+
+    init()
+  }, [])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!catId) {
+      setError('Katze nicht gefunden. Bitte zuerst das Dashboard öffnen.')
+      return
+    }
+    setLoading(true)
+    setError(null)
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: insertData, error: insertError } = await supabase.from('health_logs').insert({
+      cat_id: catId,
+      user_id: user.id,
+      logged_at: new Date(loggedAt).toISOString(),
+      stool_consistency: stool,
+      vomiting,
+      appetite,
+      activity,
+      fur_issue: furIssue,
+      notes: notes.trim() || null,
+    }).select('id').single()
+
+    if (insertError) {
+      setError('Fehler beim Speichern. Bitte erneut versuchen.')
+      setLoading(false)
+      return
+    }
+
+    // Foto hochladen falls ausgewählt
+    if (photoFile && catId && insertData?.id) {
+      const ext = photoFile.name.split('.').pop() ?? 'jpg'
+      const path = `${catId}/${Date.now()}.${ext}`
+      const { data: uploadData } = await supabase.storage.from('joschi-photos').upload(path, photoFile, { contentType: photoFile.type })
+      if (uploadData) {
+        const { data: { publicUrl } } = supabase.storage.from('joschi-photos').getPublicUrl(uploadData.path)
+        const moodTag = stool === 'diarrhea' ? 'bad' : stool === 'normal' ? 'good' : 'normal'
+        await fetch('/api/photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storage_path: uploadData.path, public_url: publicUrl, mood_tag: moodTag, health_log_id: insertData.id, taken_at: new Date(loggedAt).toISOString() }) })
+      }
+    }
+
+    router.push('/dashboard')
+  }
+
+  const stoolOptions: { value: StoolConsistency; label: string; color?: string }[] = [
+    { value: 'normal', label: '✓ Normal', color: 'bg-green-500 border-green-500 text-white' },
+    { value: 'soft', label: '~ Weich', color: 'bg-yellow-400 border-yellow-400 text-white' },
+    { value: 'diarrhea', label: '⚠ Durchfall', color: 'bg-red-500 border-red-500 text-white' },
+    { value: 'not_observed', label: '— Nicht gesehen', color: 'bg-gray-400 border-gray-400 text-white' },
+  ]
+
+  const appetiteOptions: { value: Appetite; label: string }[] = [
+    { value: 'good', label: 'ðŸ˜‹ Gut' },
+    { value: 'reduced', label: 'ðŸ˜ Wenig' },
+    { value: 'none', label: 'ðŸ˜ž Gar nicht' },
+  ]
+
+  const activityOptions: { value: Activity; label: string }[] = [
+    { value: 'normal', label: 'ðŸ¾ Normal' },
+    { value: 'tired', label: 'ðŸ˜´ Müde' },
+    { value: 'very_active', label: 'ðŸƒ Sehr aktiv' },
+  ]
+
+  return (
+    <div className="min-h-screen">
+      <Header />
+
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Link
+            href="/dashboard"
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            â† Zurück
+          </Link>
+          <h1 className="text-xl font-bold text-gray-800">ðŸ’Š Befinden eintragen</h1>
+        </div>
+
+        <div className="card p-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Uhrzeit */}
+            <div>
+              <label htmlFor="loggedAt" className="label">
+                Uhrzeit
+              </label>
+              <input
+                id="loggedAt"
+                type="datetime-local"
+                value={loggedAt}
+                onChange={(e) => setLoggedAt(e.target.value)}
+                className="input-field"
+                required
+              />
+            </div>
+
+            {/* Stuhlgang */}
+            <div>
+              <label className="label">Stuhlgang</label>
+              <ToggleGroup
+                value={stool}
+                onChange={setStool}
+                options={stoolOptions}
+              />
+            </div>
+
+            {/* Erbrochen */}
+            <div>
+              <label className="label">Erbrochen?</label>
+              <YesNoToggle value={vomiting} onChange={setVomiting} />
+            </div>
+
+            {/* Appetit */}
+            <div>
+              <label className="label">Appetit</label>
+              <ToggleGroup
+                value={appetite}
+                onChange={setAppetite}
+                options={appetiteOptions}
+              />
+            </div>
+
+            {/* Aktivität */}
+            <div>
+              <label className="label">Aktivität</label>
+              <ToggleGroup
+                value={activity}
+                onChange={setActivity}
+                options={activityOptions}
+              />
+            </div>
+
+            {/* Fell-Problem */}
+            <div>
+              <label className="label">
+                Kot im Fell?{' '}
+                <span className="text-gray-400 font-normal text-xs">(wichtig bei Langhaar)</span>
+              </label>
+              <YesNoToggle
+                value={furIssue}
+                onChange={setFurIssue}
+                yesLabel="Ja, Kot im Fell"
+                noLabel="Nein"
+                yesColor="bg-orange-500 border-orange-500 text-white"
+              />
+            </div>
+
+            {/* Notiz */}
+            <div>
+              <label htmlFor="notes" className="label">
+                Notiz <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="input-field resize-none"
+                rows={3}
+                placeholder="z.B. hat viel getrunken heute"
+              />
+            </div>
+
+            {/* Foto */}
+            <div>
+              <label className="label">Foto von Joschi <span className="text-gray-400 font-normal">(optional)</span></label>
+              {photoPreview ? (
+                <div className="relative">
+                  <div className="relative h-40 rounded-xl overflow-hidden">
+                    <Image src={photoPreview} alt="Vorschau" fill className="object-cover" sizes="100vw" />
+                  </div>
+                  <button type="button" onClick={() => { setPhotoFile(null); setPhotoPreview(null) }} className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center">×</button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-3 p-4 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-amber-300 transition-colors">
+                  <input ref={photoRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => {
+                    const f = e.target.files?.[0]
+                    if (f) { setPhotoFile(f); setPhotoPreview(URL.createObjectURL(f)) }
+                  }} />
+                  <span className="text-2xl">ðŸ“·</span>
+                  <span className="text-sm text-gray-500">Foto aufnehmen oder auswählen</span>
+                </label>
+              )}
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <Link href="/dashboard" className="btn-secondary text-center">
+                Abbrechen
+              </Link>
+              <button type="submit" disabled={loading} className="btn-primary">
+                {loading ? 'Speichern...' : 'Speichern'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </main>
+    </div>
+  )
 }
 
-init()
-},[])
-
-consthandleSubmit=async(e:React.FormEvent)=>{
-e.preventDefault()
-if(!catId){
-setError(Katzenichtgefunden.BittezuerstdasDashboardöffnen.)
-return
-}
-setLoading(true)
-setError(null)
-
-const{
-data:{user},
-}=awaitsupabase.auth.getUser()
-if(!user)return
-
-const{data:insertData,error:insertError}=awaitsupabase.from(health_logs).insert({
-cat_id:catId,
-user_id:user.id,
-logged_at:newDate(loggedAt).toISOString(),
-stool_consistency:stool,
-vomiting,
-appetite,
-activity,
-fur_issue:furIssue,
-notes:notes.trim()||null,
-}).select(id).single()
-
-if(insertError){
-setError(FehlerbeimSpeichern.Bitteerneutversuchen.)
-setLoading(false)
-return
-}
-
-//Fotohochladenfallsausgewählt
-if(photoFile&&catId&&insertData?.id){
-constext=photoFile.name.split(.).pop()??jpg
-constpath=`${catId}/${Date.now()}.${ext}`
-const{data:uploadData}=awaitsupabase.storage.from(joschi-photos).upload(path,photoFile,{contentType:photoFile.type})
-if(uploadData){
-const{data:{publicUrl}}=supabase.storage.from(joschi-photos).getPublicUrl(uploadData.path)
-constmoodTag=stool===diarrhea?bad:stool===normal?good:normal
-awaitfetch(/api/photos,{method:POST,headers:{Content-Type:application/json},body:JSON.stringify({storage_path:uploadData.path,public_url:publicUrl,mood_tag:moodTag,health_log_id:insertData.id,taken_at:newDate(loggedAt).toISOString()})})
-}
-}
-
-router.push(/dashboard)
-}
-
-conststoolOptions:{value:StoolConsistency;label:string;color?:string}[]=[
-{value:normal,label:Normal,color:bg-green-500border-green-500text-white},
-{value:soft,label:~Weich,color:bg-yellow-400border-yellow-400text-white},
-{value:diarrhea,label:Durchfall,color:bg-red-500border-red-500text-white},
-{value:not_observed,label:Nichtgesehen,color:bg-gray-400border-gray-400text-white},
-]
-
-constappetiteOptions:{value:Appetite;label:string}[]=[
-{value:good,label:ðŸ‹Gut},
-{value:reduced,label:ðŸWenig},
-{value:none,label:ðŸžGarnicht},
-]
-
-constactivityOptions:{value:Activity;label:string}[]=[
-{value:normal,label:ðŸ¾Normal},
-{value:tired,label:ðŸ´Müde},
-{value:very_active,label:ðŸƒSehraktiv},
-]
-
-return(
-<divclassName="min-h-screen">
-<Header/>
-
-<mainclassName="max-w-2xlmx-autopx-4py-6">
-<divclassName="flexitems-centergap-3mb-6">
-<Link
-href="/dashboard"
-className="text-gray-400hover:text-gray-600transition-colors"
->
-†Zurück
-</Link>
-<h1className="text-xlfont-boldtext-gray-800">ðŸ’ŠBefindeneintragen</h1>
-</div>
-
-<divclassName="cardp-5">
-<formonSubmit={handleSubmit}className="space-y-6">
-{/*Uhrzeit*/}
-<div>
-<labelhtmlFor="loggedAt"className="label">
-Uhrzeit
-</label>
-<input
-id="loggedAt"
-type="datetime-local"
-value={loggedAt}
-onChange={(e)=>setLoggedAt(e.target.value)}
-className="input-field"
-required
-/>
-</div>
-
-{/*Stuhlgang*/}
-<div>
-<labelclassName="label">Stuhlgang</label>
-<ToggleGroup
-value={stool}
-onChange={setStool}
-options={stoolOptions}
-/>
-</div>
-
-{/*Erbrochen*/}
-<div>
-<labelclassName="label">Erbrochen?</label>
-<YesNoTogglevalue={vomiting}onChange={setVomiting}/>
-</div>
-
-{/*Appetit*/}
-<div>
-<labelclassName="label">Appetit</label>
-<ToggleGroup
-value={appetite}
-onChange={setAppetite}
-options={appetiteOptions}
-/>
-</div>
-
-{/*Aktivität*/}
-<div>
-<labelclassName="label">Aktivität</label>
-<ToggleGroup
-value={activity}
-onChange={setActivity}
-options={activityOptions}
-/>
-</div>
-
-{/*Fell-Problem*/}
-<div>
-<labelclassName="label">
-KotimFell?{}
-<spanclassName="text-gray-400font-normaltext-xs">(wichtigbeiLanghaar)</span>
-</label>
-<YesNoToggle
-value={furIssue}
-onChange={setFurIssue}
-yesLabel="Ja,KotimFell"
-noLabel="Nein"
-yesColor="bg-orange-500border-orange-500text-white"
-/>
-</div>
-
-{/*Notiz*/}
-<div>
-<labelhtmlFor="notes"className="label">
-Notiz<spanclassName="text-gray-400font-normal">(optional)</span>
-</label>
-<textarea
-id="notes"
-value={notes}
-onChange={(e)=>setNotes(e.target.value)}
-className="input-fieldresize-none"
-rows={3}
-placeholder="z.B.hatvielgetrunkenheute"
-/>
-</div>
-
-{/*Foto*/}
-<div>
-<labelclassName="label">FotovonJoschi<spanclassName="text-gray-400font-normal">(optional)</span></label>
-{photoPreview?(
-<divclassName="relative">
-<divclassName="relativeh-40rounded-xloverflow-hidden">
-<Imagesrc={photoPreview}alt="Vorschau"fillclassName="object-cover"sizes="100vw"/>
-</div>
-<buttontype="button"onClick={()=>{setPhotoFile(null);setPhotoPreview(null)}}className="absolutetop-2right-2bg-black/50text-whiterounded-fullw-7h-7flexitems-centerjustify-center"></button>
-</div>
-):(
-<labelclassName="flexitems-centergap-3p-4border-2border-dashedborder-gray-200rounded-xlcursor-pointerhover:border-amber-300transition-colors">
-<inputref={photoRef}type="file"accept="image/*"capture="environment"className="hidden"onChange={e=>{
-constf=e.target.files?.[0]
-if(f){setPhotoFile(f);setPhotoPreview(URL.createObjectURL(f))}
-}}/>
-<spanclassName="text-2xl">ðŸ·</span>
-<spanclassName="text-smtext-gray-500">Fotoaufnehmenoderauswählen</span>
-</label>
-)}
-</div>
-
-{error&&(
-<divclassName="bg-red-50borderborder-red-200text-red-700px-4py-3rounded-xltext-sm">
-{error}
-</div>
-)}
-
-<divclassName="flexgap-3pt-1">
-<Linkhref="/dashboard"className="btn-secondarytext-center">
-Abbrechen
-</Link>
-<buttontype="submit"disabled={loading}className="btn-primary">
-{loading?Speichern...:Speichern}
-</button>
-</div>
-</form>
-</div>
-</main>
-</div>
-)
-}
-
-exportdefaultfunctionNewHealthPage(){
-return(
-<Suspense>
-<NewHealthForm/>
-</Suspense>
-)
+export default function NewHealthPage() {
+  return (
+    <Suspense>
+      <NewHealthForm />
+    </Suspense>
+  )
 }

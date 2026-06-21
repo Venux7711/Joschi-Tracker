@@ -1,212 +1,212 @@
-﻿﻿﻿useclient
+﻿'use client'
 
-import{useState,useEffect}fromreact
-importImagefromnext/image
-importLinkfromnext/link
-importHeaderfrom@/components/Header
-import{createClient}from@/lib/supabase/client
+import { useState, useEffect } from 'react'
+import Image from 'next/image'
+import Link from 'next/link'
+import Header from '@/components/Header'
+import { createClient } from '@/lib/supabase/client'
 
-interfacePhoto{id:string;public_url:string;mood_tag:string;taken_at:string}
+interface Photo { id: string; public_url: string; mood_tag: string; taken_at: string }
 
-interfaceDayData{
-date:string
-label:string
-photo:Photo|null
-stool:string|null
-feedings:number
+interface DayData {
+  date: string
+  label: string
+  photo: Photo | null
+  stool: string | null
+  feedings: number
 }
 
-constSTOOL_INFO:Record<string,{emoji:string;color:string;label:string}>={
-normal:{emoji:,color:#22c55e,label:Normal},
-soft:{emoji:~,color:#eab308,label:Weich},
-diarrhea:{emoji:,color:#ef4444,label:Durchfall},
-not_observed:{emoji:,color:#9ca3af,label:N/A},
+const STOOL_INFO: Record<string, { emoji: string; color: string; label: string }> = {
+  normal: { emoji: '✓', color: '#22c55e', label: 'Normal' },
+  soft: { emoji: '~', color: '#eab308', label: 'Weich' },
+  diarrhea: { emoji: '⚠', color: '#ef4444', label: 'Durchfall' },
+  not_observed: { emoji: '—', color: '#9ca3af', label: 'N/A' },
 }
 
-constWEEKDAYS=[So,Mo,Di,Mi,Do,Fr,Sa]
+const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 
-exportdefaultfunctionCollagePage(){
-constsupabase=createClient()
-const[days,setDays]=useState<DayData[]>([])
-const[loading,setLoading]=useState(true)
-const[aiSummary,setAiSummary]=useState()
-const[summaryLoading,setSummaryLoading]=useState(false)
+export default function CollagePage() {
+  const supabase = createClient()
+  const [days, setDays] = useState<DayData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [aiSummary, setAiSummary] = useState('')
+  const [summaryLoading, setSummaryLoading] = useState(false)
 
-useEffect(()=>{
-constload=async()=>{
-const{data:cats}=awaitsupabase.from(cats).select(id).limit(1)
-constcatId=cats?.[0]?.id
-if(!catId){setLoading(false);return}
+  useEffect(() => {
+    const load = async () => {
+      const { data: cats } = await supabase.from('cats').select('id').limit(1)
+      const catId = cats?.[0]?.id
+      if (!catId) { setLoading(false); return }
 
-consttoday=newDate()
-constsince=newDate(today)
-since.setDate(today.getDate()-6)
-constsinceStr=since.toISOString().slice(0,10)
-consttodayStr=today.toISOString().slice(0,10)
+      const today = new Date()
+      const since = new Date(today)
+      since.setDate(today.getDate() - 6)
+      const sinceStr = since.toISOString().slice(0, 10)
+      const todayStr = today.toISOString().slice(0, 10)
 
-//3parallelbatchqueriesinsteadof21sequential
-const[healthRes,feedRes,photoRes]=awaitPromise.all([
-supabase.from(health_logs).select(stool_consistency,logged_at)
-.eq(cat_id,catId)
-.gte(logged_at,`${sinceStr}T00:00:00`)
-.lte(logged_at,`${todayStr}T23:59:59`),
-supabase.from(feeding_logs).select(logged_at)
-.eq(cat_id,catId)
-.gte(logged_at,`${sinceStr}T00:00:00`)
-.lte(logged_at,`${todayStr}T23:59:59`),
-fetch(`/api/photos?startDate=${sinceStr}&endDate=${todayStr}&limit=7`).then(r=>r.json()),
-])
+      // 3 parallel batch queries instead of 21 sequential
+      const [healthRes, feedRes, photoRes] = await Promise.all([
+        supabase.from('health_logs').select('stool_consistency, logged_at')
+          .eq('cat_id', catId)
+          .gte('logged_at', `${sinceStr}T00:00:00`)
+          .lte('logged_at', `${todayStr}T23:59:59`),
+        supabase.from('feeding_logs').select('logged_at')
+          .eq('cat_id', catId)
+          .gte('logged_at', `${sinceStr}T00:00:00`)
+          .lte('logged_at', `${todayStr}T23:59:59`),
+        fetch(`/api/photos?startDate=${sinceStr}&endDate=${todayStr}&limit=7`).then(r => r.json()),
+      ])
 
-//Groupbydate
-conststoolByDate:Record<string,string>={}
-healthRes.data?.forEach(h=>{stoolByDate[h.logged_at.slice(0,10)]=h.stool_consistency})
+      // Group by date
+      const stoolByDate: Record<string, string> = {}
+      healthRes.data?.forEach(h => { stoolByDate[h.logged_at.slice(0, 10)] = h.stool_consistency })
 
-constfeedsByDate:Record<string,number>={}
-feedRes.data?.forEach(f=>{
-constd=f.logged_at.slice(0,10)
-feedsByDate[d]=(feedsByDate[d]??0)+1
-})
+      const feedsByDate: Record<string, number> = {}
+      feedRes.data?.forEach(f => {
+        const d = f.logged_at.slice(0, 10)
+        feedsByDate[d] = (feedsByDate[d] ?? 0) + 1
+      })
 
-constphotoByDate:Record<string,Photo>={}
-;(photoRes.photos??[]).forEach((p:Photo)=>{
-constd=p.taken_at.slice(0,10)
-if(!photoByDate[d])photoByDate[d]=p
-})
+      const photoByDate: Record<string, Photo> = {}
+      ;(photoRes.photos ?? []).forEach((p: Photo) => {
+        const d = p.taken_at.slice(0, 10)
+        if (!photoByDate[d]) photoByDate[d] = p
+      })
 
-constresult:DayData[]=[]
-for(leti=6;i>=0;i--){
-constd=newDate(today)
-d.setDate(today.getDate()-i)
-constdateStr=d.toISOString().slice(0,10)
-result.push({
-date:dateStr,
-label:`${WEEKDAYS[d.getDay()]}${d.getDate()}.${d.getMonth()+1}.`,
-stool:stoolByDate[dateStr]??null,
-feedings:feedsByDate[dateStr]??0,
-photo:photoByDate[dateStr]??null,
-})
-}
+      const result: DayData[] = []
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(today)
+        d.setDate(today.getDate() - i)
+        const dateStr = d.toISOString().slice(0, 10)
+        result.push({
+          date: dateStr,
+          label: `${WEEKDAYS[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`,
+          stool: stoolByDate[dateStr] ?? null,
+          feedings: feedsByDate[dateStr] ?? 0,
+          photo: photoByDate[dateStr] ?? null,
+        })
+      }
 
-setDays(result)
-setLoading(false)
-}
-load()
-},[])
+      setDays(result)
+      setLoading(false)
+    }
+    load()
+  }, [])
 
-constgenerateSummary=async()=>{
-setSummaryLoading(true)
-constgood=days.filter(d=>!d.stool||d.stool===normal).length
-constbad=days.filter(d=>d.stool===diarrhea).length
-consttotalFeedings=days.reduce((s,d)=>s+d.feedings,0)
-try{
-constr=awaitfetch(/api/analyze-health,{
-method:POST,
-headers:{Content-Type:application/json},
-body:JSON.stringify({
-feedings:[],
-health:days.filter(d=>d.stool).map(d=>({
-date:d.label,stool:d.stool,appetite:good,activity:normal,vomiting:false,furIssue:false,
-})),
-}),
-})
-constdata=awaitr.json()
-consttext=(data.analysis??).replace(/\*\*/g,)
-setAiSummary(text.split(\n\n)[0].slice(0,250))
-}catch{
-setAiSummary(`${good}guteTage,${bad}Durchfall-Tage,${totalFeedings}FütterungendieseWoche.`)
-}
-setSummaryLoading(false)
-}
+  const generateSummary = async () => {
+    setSummaryLoading(true)
+    const good = days.filter(d => !d.stool || d.stool === 'normal').length
+    const bad = days.filter(d => d.stool === 'diarrhea').length
+    const totalFeedings = days.reduce((s, d) => s + d.feedings, 0)
+    try {
+      const r = await fetch('/api/analyze-health', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedings: [],
+          health: days.filter(d => d.stool).map(d => ({
+            date: d.label, stool: d.stool, appetite: 'good', activity: 'normal', vomiting: false, furIssue: false,
+          })),
+        }),
+      })
+      const data = await r.json()
+      const text = (data.analysis ?? '').replace(/\*\*/g, '')
+      setAiSummary(text.split('\n\n')[0].slice(0, 250))
+    } catch {
+      setAiSummary(`${good} gute Tage, ${bad} Durchfall-Tage, ${totalFeedings} Fütterungen diese Woche.`)
+    }
+    setSummaryLoading(false)
+  }
 
-constgoodDays=days.filter(d=>!d.stool||d.stool===normal).length
-constdiarrheaDays=days.filter(d=>d.stool===diarrhea).length
-consttotalFeedings=days.reduce((s,d)=>s+d.feedings,0)
+  const goodDays = days.filter(d => !d.stool || d.stool === 'normal').length
+  const diarrheaDays = days.filter(d => d.stool === 'diarrhea').length
+  const totalFeedings = days.reduce((s, d) => s + d.feedings, 0)
 
-return(
-<divclassName="min-h-screen">
-<Header/>
-<mainclassName="max-w-2xlmx-autopx-4py-6">
-<divclassName="flexitems-centergap-3mb-6">
-<Linkhref="/dashboard"className="text-gray-400hover:text-gray-600">†Zurück</Link>
-<h1className="text-xlfont-boldtext-gray-800">ðŸï¸Wochenrückblick</h1>
-</div>
+  return (
+    <div className="min-h-screen">
+      <Header />
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">â† Zurück</Link>
+          <h1 className="text-xl font-bold text-gray-800">ðŸ—“ï¸ Wochenrückblick</h1>
+        </div>
 
-{/*Stats*/}
-<divclassName="gridgrid-cols-3gap-3mb-5">
-<divclassName="cardp-3text-center">
-<divclassName="text-2xlfont-blacktext-green-600">{goodDays}</div>
-<divclassName="text-xstext-gray-500">GuteTage</div>
-</div>
-<divclassName="cardp-3text-center">
-<divclassName="text-2xlfont-blacktext-red-500">{diarrheaDays}</div>
-<divclassName="text-xstext-gray-500">Durchfall</div>
-</div>
-<divclassName="cardp-3text-center">
-<divclassName="text-2xlfont-blacktext-amber-600">{totalFeedings}</div>
-<divclassName="text-xstext-gray-500">Fütterungen</div>
-</div>
-</div>
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="card p-3 text-center">
+            <div className="text-2xl font-black text-green-600">{goodDays}</div>
+            <div className="text-xs text-gray-500">Gute Tage</div>
+          </div>
+          <div className="card p-3 text-center">
+            <div className="text-2xl font-black text-red-500">{diarrheaDays}</div>
+            <div className="text-xs text-gray-500">Durchfall</div>
+          </div>
+          <div className="card p-3 text-center">
+            <div className="text-2xl font-black text-amber-600">{totalFeedings}</div>
+            <div className="text-xs text-gray-500">Fütterungen</div>
+          </div>
+        </div>
 
-{/*Grid*/}
-{loading?(
-<divclassName="gridgrid-cols-4gap-2">
-{Array.from({length:7}).map((_,i)=>(
-<divkey={i}className="aspect-squarebg-gray-200rounded-2xlanimate-pulse"/>
-))}
-</div>
-):(
-<divclassName="gridgrid-cols-4gap-2mb-5">
-{days.map(day=>{
-conststoolInfo=STOOL_INFO[day.stool??not_observed]
-return(
-<divkey={day.date}className="aspect-squarerelativerounded-2xloverflow-hidden">
-{day.photo?(
-<Imagesrc={day.photo.public_url}alt={day.label}fillclassName="object-cover"sizes="25vw"/>
-):(
-<divclassName="w-fullh-fullflexitems-centerjustify-center"style={{background:`${stoolInfo.color}20`}}>
-<spanclassName="text-2xl"style={{color:stoolInfo.color}}>{stoolInfo.emoji}</span>
-</div>
-)}
-<divclassName="absoluteinset-x-0bottom-0bg-gradient-to-tfrom-black/70to-transparentp-1.5">
-<pclassName="text-whitetext-[10px]font-boldleading-tight">{day.label}</p>
-<divclassName="flexitems-centergap-1">
-<spanclassName="text-[9px]"style={{color:stoolInfo.color}}></span>
-{day.feedings>0&&<spanclassName="text-white/60text-[9px]">{day.feedings}</span>}
-</div>
-</div>
-</div>
-)
-})}
-</div>
-)}
+        {/* Grid */}
+        {loading ? (
+          <div className="grid grid-cols-4 gap-2">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="aspect-square bg-gray-200 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-2 mb-5">
+            {days.map(day => {
+              const stoolInfo = STOOL_INFO[day.stool ?? 'not_observed']
+              return (
+                <div key={day.date} className="aspect-square relative rounded-2xl overflow-hidden">
+                  {day.photo ? (
+                    <Image src={day.photo.public_url} alt={day.label} fill className="object-cover" sizes="25vw" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center" style={{ background: `${stoolInfo.color}20` }}>
+                      <span className="text-2xl" style={{ color: stoolInfo.color }}>{stoolInfo.emoji}</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
+                    <p className="text-white text-[10px] font-bold leading-tight">{day.label}</p>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px]" style={{ color: stoolInfo.color }}>â—</span>
+                      {day.feedings > 0 && <span className="text-white/60 text-[9px]">{day.feedings}×</span>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
-{/*AISummary*/}
-<divclassName="cardp-4mb-3">
-<divclassName="flexitems-centerjustify-betweenmb-3">
-<pclassName="font-semiboldtext-gray-800">KI-Zusammenfassung</p>
-<button
-onClick={generateSummary}
-disabled={summaryLoading||loading}
-className="px-3py-1.5rounded-lgtext-smfont-mediumbg-violet-100text-violet-700hover:bg-violet-200transition-colorsdisabled:opacity-50"
->
-{summaryLoading?³:Erstellen}
-</button>
-</div>
-{aiSummary?(
-<pclassName="text-gray-600text-smleading-relaxed">{aiSummary}</p>
-):(
-<pclassName="text-gray-400text-sm">TippeaufžErstellen"füreineKI-ZusammenfassungderWoche.</p>
-)}
-</div>
+        {/* AI Summary */}
+        <div className="card p-4 mb-3">
+          <div className="flex items-center justify-between mb-3">
+            <p className="font-semibold text-gray-800">KI-Zusammenfassung</p>
+            <button
+              onClick={generateSummary}
+              disabled={summaryLoading || loading}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors disabled:opacity-50"
+            >
+              {summaryLoading ? '⏳ …' : '✨ Erstellen'}
+            </button>
+          </div>
+          {aiSummary ? (
+            <p className="text-gray-600 text-sm leading-relaxed">{aiSummary}</p>
+          ) : (
+            <p className="text-gray-400 text-sm">Tippe auf žErstellen" für eine KI-Zusammenfassung der Woche.</p>
+          )}
+        </div>
 
-<Linkhref="/slideshow"className="cardp-4flexitems-centerjustify-betweenhover:shadow-mdtransition-shadow">
-<div>
-<pclassName="font-semiboldtext-gray-800">ðŸ¬Foto-Diashow</p>
-<pclassName="text-xstext-gray-500">AlleFotosalsanimiertePräsentation</p>
-</div>
-<spanclassName="text-gray-400">†’</span>
-</Link>
-</main>
-</div>
-)
+        <Link href="/slideshow" className="card p-4 flex items-center justify-between hover:shadow-md transition-shadow">
+          <div>
+            <p className="font-semibold text-gray-800">ðŸŽ¬ Foto-Diashow</p>
+            <p className="text-xs text-gray-500">Alle Fotos als animierte Präsentation</p>
+          </div>
+          <span className="text-gray-400">â†’</span>
+        </Link>
+      </main>
+    </div>
+  )
 }
