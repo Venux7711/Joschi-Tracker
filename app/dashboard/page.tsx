@@ -14,6 +14,7 @@ import type { FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@/lib/
 import AiInsights from '@/components/AiInsights'
 import JoschiPhoto from '@/components/JoschiPhoto'
 import MemoryOfTheDay from '@/components/MemoryOfTheDay'
+import PushNotification from '@/components/PushNotification'
 import { ANIFIT_FOODS, getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
 
 function getPastNDays(n: number): Date[] {
@@ -675,6 +676,9 @@ export default async function DashboardPage() {
             <p className="px-4 pb-3 text-[10px] text-gray-300">Nur Sorten mit ≥2 Einträgen · Korrelation ≠ Kausalität</p>
           </div>
         )}
+
+        {/* ── PUSH-BENACHRICHTIGUNG ── */}
+        <PushNotification />
 
         {/* ── ERINNERUNG – VOR EINEM JAHR ── */}
         <MemoryOfTheDay />
