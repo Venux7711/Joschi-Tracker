@@ -31,7 +31,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="de">
-      <body className={inter.className} style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom))' }}>
+      <body className={inter.className}>
         {children}
         <BottomNav />
         <script dangerouslySetInnerHTML={{ __html: `

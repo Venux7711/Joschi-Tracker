@@ -13,6 +13,13 @@
     overflow-x: hidden;
     max-width: 100vw;
   }
+
+  /* Bottom-Nav Platz nur auf Mobile */
+  @media (max-width: 639px) {
+    body {
+      padding-bottom: calc(56px + env(safe-area-inset-bottom));
+    }
+  }
 }
 
 @layer components {

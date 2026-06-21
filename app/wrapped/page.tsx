@@ -55,7 +55,7 @@ export default function WrappedPage() {
   const [year, setYear] = useState(String(new Date().getFullYear()))
 
   const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: 3 }, (_, i) => String(currentYear - i)).reverse()
+  const years = Array.from({ length: 3 }, (_, i) => String(currentYear - i))
 
   useEffect(() => {
     setLoading(true)

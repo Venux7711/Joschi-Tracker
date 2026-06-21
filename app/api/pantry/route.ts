@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
-async function getCatId(supabase: ReturnType<typeof createClient>, userId: string) {
-  const { data } = await supabase.from('cats').select('id').eq('owner_id', userId).single()
+async function getCatId(supabase: ReturnType<typeof createClient>) {
+  const { data } = await supabase.from('cats').select('id').limit(1).single()
   return data?.id as string | undefined
 }
 
@@ -11,7 +11,7 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const catId = await getCatId(supabase, user.id)
+  const catId = await getCatId(supabase)
   if (!catId) return NextResponse.json({ items: [] })
 
   const { data } = await supabase
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const catId = await getCatId(supabase, user.id)
+  const catId = await getCatId(supabase)
   if (!catId) return NextResponse.json({ error: 'Keine Katze gefunden' }, { status: 404 })
 
   const body = await req.json()
