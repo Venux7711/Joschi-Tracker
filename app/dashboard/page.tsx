@@ -15,6 +15,8 @@ import AiInsights from '@/components/AiInsights'
 import JoschiPhoto from '@/components/JoschiPhoto'
 import MemoryOfTheDay from '@/components/MemoryOfTheDay'
 import PushNotification from '@/components/PushNotification'
+import WeightWidget from '@/components/WeightWidget'
+import MedicationsWidget from '@/components/MedicationsWidget'
 import { ANIFIT_FOODS, getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
 
 function getPastNDays(n: number): Date[] {
@@ -676,6 +678,12 @@ export default async function DashboardPage() {
             <p className="px-4 pb-3 text-[10px] text-gray-300">Nur Sorten mit ≥2 Einträgen · Korrelation ≠ Kausalität</p>
           </div>
         )}
+
+        {/* ── GEWICHT ── */}
+        <WeightWidget />
+
+        {/* ── MEDIKAMENTE ── */}
+        <MedicationsWidget />
 
         {/* ── PUSH-BENACHRICHTIGUNG ── */}
         <PushNotification />

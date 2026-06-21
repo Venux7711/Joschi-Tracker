@@ -7,8 +7,8 @@ const NAV = [
   { href: '/dashboard', icon: '🏠', label: 'Heute' },
   { href: '/fotos', icon: '📸', label: 'Fotos' },
   { href: '/collage', icon: '🗓️', label: 'Woche' },
-  { href: '/pantry', icon: '📦', label: 'Vorrat' },
-  { href: '/wrapped', icon: '🎁', label: 'Wrapped' },
+  { href: '/gewicht', icon: '⚖️', label: 'Gewicht' },
+  { href: '/medikamente', icon: '💊', label: 'Medis' },
 ]
 
 export default function BottomNav() {
