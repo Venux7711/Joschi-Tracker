@@ -236,7 +236,7 @@ function NewFeedingForm() {
           <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">
             ← Zurück
           </Link>
-          <h1 className="text-xl font-bold text-gray-800">ðŸ½️ Futter eintragen</h1>
+          <h1 className="text-xl font-bold text-gray-800">🍽️ Futter eintragen</h1>
         </div>
 
         {/* Dosenscan */}
@@ -253,7 +253,7 @@ function NewFeedingForm() {
             <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-colors ${
               scanning ? 'bg-amber-100' : scanSuccess ? 'bg-green-100' : 'bg-amber-50 hover:bg-amber-100'
             }`}>
-              {scanning ? '⏳' : scanSuccess ? '✅' : 'ðŸ“·'}
+              {scanning ? '⏳' : scanSuccess ? '✅' : '📷'}
             </div>
             <span className="text-sm font-medium text-gray-700">
               {scanning ? 'Dose wird analysiert…' : scanSuccess ? 'Felder ausgefüllt!' : 'Dose fotografieren'}
@@ -354,14 +354,14 @@ function NewFeedingForm() {
 
             {/* Leckerli */}
             <MengeSlider
-              label="ðŸ– Leckerli"
+              label="🍖 Leckerli"
               value={treatAmount}
               onChange={setTreatAmount}
             />
 
             {/* Trockenfutter */}
             <MengeSlider
-              label="ðŸ¥£ Trockenfutter"
+              label="🥣 Trockenfutter"
               value={dryFoodAmount}
               onChange={setDryFoodAmount}
             />

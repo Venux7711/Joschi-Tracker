@@ -43,7 +43,7 @@ export default function ChangePasswordPage() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-sm">
         <div className="text-center mb-6">
-          <div className="text-5xl mb-3">ðŸ”</div>
+          <div className="text-5xl mb-3">🔐</div>
           <h1 className="text-xl font-bold text-gray-800">Passwort festlegen</h1>
           <p className="text-gray-500 text-sm mt-1">
             Bitte wähle ein persönliches Passwort für deinen Account.

@@ -169,15 +169,15 @@ function NewHealthForm() {
   ]
 
   const appetiteOptions: { value: Appetite; label: string }[] = [
-    { value: 'good', label: 'ðŸ˜‹ Gut' },
-    { value: 'reduced', label: 'ðŸ˜ Wenig' },
-    { value: 'none', label: 'ðŸ˜ž Gar nicht' },
+    { value: 'good', label: '😋 Gut' },
+    { value: 'reduced', label: '😐 Wenig' },
+    { value: 'none', label: '😞 Gar nicht' },
   ]
 
   const activityOptions: { value: Activity; label: string }[] = [
     { value: 'normal', label: '🐾 Normal' },
-    { value: 'tired', label: 'ðŸ˜´ Müde' },
-    { value: 'very_active', label: 'ðŸƒ Sehr aktiv' },
+    { value: 'tired', label: '😴 Müde' },
+    { value: 'very_active', label: '🏃 Sehr aktiv' },
   ]
 
   return (
@@ -294,7 +294,7 @@ function NewHealthForm() {
                     const f = e.target.files?.[0]
                     if (f) { setPhotoFile(f); setPhotoPreview(URL.createObjectURL(f)) }
                   }} />
-                  <span className="text-2xl">ðŸ“·</span>
+                  <span className="text-2xl">📷</span>
                   <span className="text-sm text-gray-500">Foto aufnehmen oder auswählen</span>
                 </label>
               )}

@@ -77,7 +77,7 @@ export default function ReportPage() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
-            <h1 className="text-xl font-bold text-gray-800">ðŸ¥ Tierarzt-Report</h1>
+            <h1 className="text-xl font-bold text-gray-800">🏥 Tierarzt-Report</h1>
           </div>
           <button onClick={handlePrint} className="btn-primary text-sm">Drucken / PDF</button>
         </div>
@@ -104,7 +104,7 @@ export default function ReportPage() {
                   <p className="text-gray-500 text-sm mt-1">Zeitraum: {sinceStr} – {today}</p>
                   <p className="text-gray-400 text-xs mt-0.5">Rasse: Goldene Langhaar-Perser · Erkrankung: Rezidivierender Durchfall</p>
                 </div>
-                <div className="text-4xl">ðŸ±</div>
+                <div className="text-4xl">🐱</div>
               </div>
             </div>
 
