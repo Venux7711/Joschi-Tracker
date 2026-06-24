@@ -32,6 +32,7 @@ export default function FotosPage() {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Photo | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [catId, setCatId] = useState<string | null>(null)
@@ -57,18 +58,24 @@ export default function FotosPage() {
     const file = e.target.files?.[0]
     if (!file || !catId) return
     setUploading(true)
+    setUploadError(null)
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setUploading(false); return }
 
-    const ext = file.name.split('.').pop() ?? 'jpg'
+    const rawExt = file.name.includes('.') ? file.name.split('.').pop()! : 'jpg'
+    const ext = rawExt.toLowerCase().replace('heic', 'jpg').replace('heif', 'jpg')
     const path = `${catId}/${Date.now()}.${ext}`
 
     const { data: uploadData, error: uploadErr } = await supabase.storage
       .from('joschi-photos')
       .upload(path, file, { contentType: file.type })
 
-    if (uploadErr || !uploadData) { setUploading(false); return }
+    if (uploadErr || !uploadData) {
+      setUploadError(uploadErr?.message ?? 'Upload fehlgeschlagen')
+      setUploading(false)
+      return
+    }
 
     const { data: { publicUrl } } = supabase.storage.from('joschi-photos').getPublicUrl(uploadData.path)
 
@@ -116,16 +123,25 @@ export default function FotosPage() {
             <h1 className="text-xl font-bold text-gray-800">📸 Joschis Fotoalbum</h1>
           </div>
           <div className="flex gap-2">
-            <label className="cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold pressable">
+            {uploading && (
+              <span className="text-xs text-amber-600 self-center mr-1">Lädt…</span>
+            )}
+            <label className={`cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold pressable ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
               📷
               <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleUpload} disabled={uploading} />
             </label>
-            <label className="cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold pressable">
+            <label className={`cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold pressable ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
               🖼️
               <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
             </label>
           </div>
         </div>
+
+        {uploadError && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-700 text-sm">
+            ⚠ {uploadError}
+          </div>
+        )}
 
         {/* Filter */}
         <div className="flex gap-2 mb-5 flex-wrap">
