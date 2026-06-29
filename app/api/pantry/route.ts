@@ -38,6 +38,8 @@ export async function POST(req: NextRequest) {
     quantity: body.quantity ?? 1,
     restock_date: body.restock_date ?? null,
     notes: body.notes ?? null,
+    product_url: body.product_url ?? null,
+    nutrition: body.nutrition ?? null,
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })

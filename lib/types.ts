@@ -24,6 +24,19 @@ export interface FeedingLog {
   created_at: string
 }
 
+export interface NutritionData {
+  protein?: number    // Rohprotein %
+  fat?: number        // Rohfett %
+  fiber?: number      // Rohfaser %
+  moisture?: number   // Feuchtigkeit %
+  ash?: number        // Rohasche %
+  calcium?: number    // Calcium g/kg
+  phosphorus?: number // Phosphor g/kg
+  sodium?: number     // Natrium g/kg
+  magnesium?: number  // Magnesium g/kg
+  taurine?: number    // Taurin mg/kg
+}
+
 export interface PantryItem {
   id: string
   cat_id: string
@@ -33,6 +46,8 @@ export interface PantryItem {
   quantity: number
   restock_date: string | null
   notes: string | null
+  product_url: string | null
+  nutrition: NutritionData | null
   created_at: string
   updated_at: string
 }
