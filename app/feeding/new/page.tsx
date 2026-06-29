@@ -114,10 +114,9 @@ function NewFeedingForm() {
     init()
   }, [])
 
-  // Sorte zurücksetzen wenn Marke wechselt
-  useEffect(() => {
-    setFoodType('')
-  }, [foodBrand])
+  // Sorte nur zurücksetzen, wenn der Nutzer die Marke aktiv wechselt
+  // (nicht beim programmatischen Setzen durch den Dosenscan)
+  const changeBrand = (b: string) => { setFoodBrand(b); setFoodType('') }
 
   const handleScanImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -211,21 +210,30 @@ function NewFeedingForm() {
     router.push('/dashboard')
   }
 
-  // Marken-Liste: Anifit immer zuerst, dann andere
-  const brandOptions = [
-    'Anifit',
-    ...prevBrands.filter((b) => b.toLowerCase() !== 'anifit'),
-  ]
+  // Marken-Liste: Anifit zuerst, dann Vorrat-Marken, dann früher genutzte Marken (dedupe, case-insensitiv)
+  const brandOptions = (() => {
+    const seen = new Set(['anifit'])
+    const result = ['Anifit']
+    for (const b of [...pantry.map((p) => p.brand), ...prevBrands]) {
+      const key = b?.trim().toLowerCase()
+      if (key && !seen.has(key)) { seen.add(key); result.push(b.trim()) }
+    }
+    return result
+  })()
 
-  // Sorten-Liste: Vorrats-Sorten der jeweiligen Marke, sonst frühere Eingaben
+  // Sorten-Liste: Vorrats-Sorten der jeweiligen Marke + frühere Eingaben, sonst Anifit-Standardliste
   const pantryForBrand = pantry.filter(
     (p) => p.brand.toLowerCase() === foodBrand.trim().toLowerCase() && p.quantity > 0
   )
-  const typeOptions = pantryForBrand.length > 0
-    ? pantryForBrand.map((p) => p.type)
+  const baseTypes = pantryForBrand.length > 0
+    ? Array.from(new Set([...pantryForBrand.map((p) => p.type), ...(isAnifit ? [] : prevTypes)]))
     : isAnifit
       ? ANIFIT_SORTEN
       : prevTypes
+  // Aktuelle/gescannte Sorte immer enthalten, damit sie im Select wählbar ist
+  const typeOptions = (foodType && !baseTypes.includes(foodType)
+    ? [foodType, ...baseTypes]
+    : baseTypes).filter(Boolean)
 
   return (
     <div className="min-h-screen">
@@ -273,7 +281,7 @@ function NewFeedingForm() {
               <select
                 id="foodBrand"
                 value={foodBrand}
-                onChange={(e) => setFoodBrand(e.target.value)}
+                onChange={(e) => changeBrand(e.target.value)}
                 className="input-field"
                 required
               >

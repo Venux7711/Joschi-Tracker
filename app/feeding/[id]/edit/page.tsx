@@ -55,6 +55,7 @@ export default function EditFeedingPage() {
   const [extras, setExtras] = useState('')
   const [prevBrands, setPrevBrands] = useState<string[]>([])
   const [prevTypes, setPrevTypes] = useState<string[]>([])
+  const [pantry, setPantry] = useState<{ id: string; brand: string; type: string; quantity: number }[]>([])
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -96,11 +97,15 @@ export default function EditFeedingPage() {
         setPrevBrands(Array.from(new Set(logs.map((l) => l.food_brand))).filter(Boolean))
         setPrevTypes(Array.from(new Set(logs.map((l) => l.food_type))).filter(Boolean))
       }
+
+      const pantryRes = await fetch('/api/pantry')
+      const pantryData = await pantryRes.json()
+      if (pantryData.items) setPantry(pantryData.items)
     }
     init()
   }, [id])
 
-  useEffect(() => { setFoodType('') }, [foodBrand])
+  const changeBrand = (b: string) => { setFoodBrand(b); setFoodType('') }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -136,8 +141,28 @@ export default function EditFeedingPage() {
     router.back()
   }
 
-  const brandOptions = ['Anifit', ...prevBrands.filter((b) => b.toLowerCase() !== 'anifit')]
-  const typeOptions = isAnifit ? ANIFIT_SORTEN : prevTypes
+  const brandOptions = (() => {
+    const seen = new Set(['anifit'])
+    const result = ['Anifit']
+    for (const b of [...pantry.map((p) => p.brand), ...prevBrands]) {
+      const key = b?.trim().toLowerCase()
+      if (key && !seen.has(key)) { seen.add(key); result.push(b.trim()) }
+    }
+    return result
+  })()
+
+  const pantryForBrand = pantry.filter(
+    (p) => p.brand.toLowerCase() === foodBrand.trim().toLowerCase() && p.quantity > 0
+  )
+  // Aktuelle Sorte immer enthalten, damit der geladene Wert wählbar bleibt
+  const baseTypes = pantryForBrand.length > 0
+    ? Array.from(new Set([...pantryForBrand.map((p) => p.type), ...(isAnifit ? [] : prevTypes)]))
+    : isAnifit
+      ? ANIFIT_SORTEN
+      : prevTypes
+  const typeOptions = (foodType && !baseTypes.includes(foodType)
+    ? [foodType, ...baseTypes]
+    : baseTypes).filter(Boolean)
 
   if (notFound) return (
     <div className="min-h-screen"><Header />
@@ -169,7 +194,7 @@ export default function EditFeedingPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="foodBrand" className="label">Marke *</label>
-              <select id="foodBrand" value={foodBrand} onChange={(e) => setFoodBrand(e.target.value)} className="input-field" required>
+              <select id="foodBrand" value={foodBrand} onChange={(e) => changeBrand(e.target.value)} className="input-field" required>
                 {brandOptions.map((b) => <option key={b} value={b}>{b}</option>)}
                 {!brandOptions.some((b) => b.toLowerCase() === foodBrand.toLowerCase()) && foodBrand && (
                   <option value={foodBrand}>{foodBrand}</option>

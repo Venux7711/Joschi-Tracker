@@ -92,6 +92,11 @@ export default async function DashboardPage() {
 
   const feedings = (todayFeedingsRaw ?? []) as FeedingLog[]
   const healthLogs = (todayHealthRaw ?? []) as HealthLog[]
+
+  // Mahlzeiten = unterschiedliche Futtersorten heute (gleiches Futter mehrfach = 1×)
+  const distinctMealsToday = new Set(
+    feedings.map(f => `${f.food_brand}||${f.food_type}`)
+  ).size
   const health30 = (allHealth30 ?? []) as HealthLog[]
   const feedings30 = (allFeedings30 ?? []) as FeedingLog[]
   const pantry = (pantryRaw ?? []) as PantryItem[]
@@ -366,8 +371,8 @@ export default async function DashboardPage() {
               <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 3 }}>
                 Mahlzeiten
               </div>
-              <div style={{ color: feedings.length > 0 ? '#FBBF24' : 'rgba(255,255,255,0.3)', fontSize: 40, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1 }}>
-                {feedings.length}
+              <div style={{ color: distinctMealsToday > 0 ? '#FBBF24' : 'rgba(255,255,255,0.3)', fontSize: 40, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1 }}>
+                {distinctMealsToday}
               </div>
               {streak > 0 && (
                 <div style={{ color: streak >= 7 ? '#FDE68A' : 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 4, fontWeight: 500 }}>
