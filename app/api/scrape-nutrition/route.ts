@@ -39,15 +39,18 @@ function stripHtml(html: string): string {
 }
 
 async function scrapeViaFirecrawl(url: string, apiKey: string): Promise<string> {
-  const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
+  const res = await fetch('https://api.firecrawl.dev/v2/scrape', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ url, formats: ['markdown'] }),
-    signal: AbortSignal.timeout(20000),
+    body: JSON.stringify({ url, formats: ['markdown'], onlyMainContent: true }),
+    signal: AbortSignal.timeout(25000),
   })
+  if (!res.ok) {
+    throw new Error(`Firecrawl HTTP ${res.status}`)
+  }
   const data = await res.json()
   return data.data?.markdown ?? ''
 }
