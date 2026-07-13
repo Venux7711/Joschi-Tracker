@@ -5,7 +5,9 @@ const STOOL: Record<string, string> = { normal: 'Normal', soft: 'Weich', diarrhe
 const APPETITE: Record<string, string> = { good: 'Gut', reduced: 'Wenig', none: 'Gar nicht' }
 const ACTIVITY: Record<string, string> = { normal: 'Normal', tired: 'Müde', very_active: 'Sehr aktiv' }
 
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent`
+// gemini-1.5-* ist abgeschaltet, gemini-2.5-flash für neue Projekte gesperrt.
+// gemini-flash-latest zeigt immer auf das aktuelle Flash-Modell.
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`
 
 export async function POST(req: NextRequest) {
   try {
@@ -69,12 +71,22 @@ Bitte analysiere und antworte auf Deutsch mit folgender Struktur:
 
 Sei präzise. Maximal 280 Wörter. Falls zu wenig Daten: Sag das ehrlich.`
 
-    const res = await fetch(`${GEMINI_URL}?key=${process.env.GOOGLE_AI_KEY}`, {
+    const apiKey = process.env.GOOGLE_AI_KEY
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'Analyse fehlgeschlagen', detail: 'GOOGLE_AI_KEY ist nicht gesetzt.' },
+        { status: 500 },
+      )
+    }
+
+    const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 1024, temperature: 0.4 },
+        // Flash denkt vor dem Antworten – das Denken zählt gegen maxOutputTokens.
+        // Budget muss Thinking + ~280 Wörter Antwort abdecken, sonst kommt sie leer zurück.
+        generationConfig: { maxOutputTokens: 4096, temperature: 0.4 },
       }),
     })
 
@@ -85,7 +97,25 @@ Sei präzise. Maximal 280 Wörter. Falls zu wenig Daten: Sag das ehrlich.`
     }
 
     const data = await res.json()
-    const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Keine Antwort erhalten.'
+    const candidate = data.candidates?.[0]
+    const analysis = candidate?.content?.parts
+      ?.map((p: { text?: string }) => p.text ?? '')
+      .join('')
+      .trim()
+
+    if (!analysis) {
+      const reason = candidate?.finishReason ?? 'unbekannt'
+      console.error('Gemini leere Antwort, finishReason:', reason, JSON.stringify(data.usageMetadata))
+      return NextResponse.json(
+        {
+          error: 'Analyse fehlgeschlagen',
+          detail: reason === 'MAX_TOKENS'
+            ? 'Antwort-Budget aufgebraucht. Bitte erneut versuchen.'
+            : `Keine Antwort erhalten (${reason}).`,
+        },
+        { status: 500 },
+      )
+    }
 
     return NextResponse.json({ analysis })
   } catch (err) {

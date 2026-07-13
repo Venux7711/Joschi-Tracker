@@ -157,8 +157,9 @@ function NewHealthForm() {
       }
     }
 
+    // Aus dem Verlauf eingetragen (?date=…) → dorthin zurück, sonst Dashboard
     router.refresh()
-    router.push('/dashboard')
+    router.push(dateParam ? '/history' : '/dashboard')
   }
 
   const stoolOptions: { value: StoolConsistency; label: string; color?: string }[] = [

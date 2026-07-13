@@ -206,8 +206,9 @@ function NewFeedingForm() {
       }
     }
 
+    // Aus dem Verlauf eingetragen (?date=…) → dorthin zurück, sonst Dashboard
     router.refresh()
-    router.push('/dashboard')
+    router.push(dateParam ? '/history' : '/dashboard')
   }
 
   // Marken-Liste: Anifit zuerst, dann Vorrat-Marken, dann früher genutzte Marken (dedupe, case-insensitiv)
