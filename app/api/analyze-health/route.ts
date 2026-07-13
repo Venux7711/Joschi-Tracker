@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { CAT_PROFILE } from '@/lib/cat-profile'
 
 const MENGE = ['nichts', 'sehr wenig', 'wenig', 'mittel', 'viel']
 const STOOL: Record<string, string> = { normal: 'Normal', soft: 'Weich', diarrhea: 'DURCHFALL', not_observed: 'Nicht gesehen' }
@@ -40,7 +41,10 @@ export async function POST(req: NextRequest) {
       ? `\n═══ AKTUELLER VORRAT ═══\n${(pantry as string[]).join('\n')}`
       : ''
 
-    const prompt = `Du bist ein erfahrener Tiergesundheits-Assistent. Analysiere folgende Daten für Joschi, eine goldene Langhaar-Perserkatze mit wiederkehrendem Durchfall.
+    const prompt = `Du bist ein erfahrener Tiergesundheits-Assistent. Analysiere folgende Daten für ${CAT_PROFILE.name}, ${CAT_PROFILE.descriptionAccusative} mit wiederkehrendem Durchfall.
+
+Zur Rasse: ${CAT_PROFILE.name} ist ${CAT_PROFILE.breed}. Als Langhaarrasse ist bei ihm Kot im Fell
+ein relevantes Begleitproblem bei weichem Stuhl.
 
 WICHTIG zu Proteinquellen:
 - Mono-Protein = nur eine Fleischquelle (z.B. nur Truthahn) → besser bei Unverträglichkeiten

@@ -1,6 +1,6 @@
 # 🐱 Joschi Tracker
 
-Gesundheitstracker für Joschi – eine Langhaarkatze mit wiederkehrendem Durchfall.
+Gesundheitstracker für Joschi – einen goldenen Britisch-Langhaar-Kater mit wiederkehrendem Durchfall.
 
 Ermöglicht das einfache Erfassen von Futter und Befinden direkt vom Handy, um Muster zwischen Futtersorten und Verdauungsproblemen zu erkennen.
 

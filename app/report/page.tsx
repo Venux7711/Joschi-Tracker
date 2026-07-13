@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
+import { CAT_PROFILE } from '@/lib/cat-profile'
 
 interface HealthLog { logged_at: string; stool_consistency: string; appetite: string; activity: string; vomiting: boolean; fur_issue: boolean; notes: string | null }
 interface FeedingLog { logged_at: string; food_brand: string; food_type: string; amount_grams: number | null }
@@ -102,7 +103,7 @@ export default function ReportPage() {
                 <div>
                   <h2 className="text-2xl font-black text-gray-800">{catName} – Gesundheitsbericht</h2>
                   <p className="text-gray-500 text-sm mt-1">Zeitraum: {sinceStr} – {today}</p>
-                  <p className="text-gray-400 text-xs mt-0.5">Rasse: Goldene Langhaar-Perser · Erkrankung: Rezidivierender Durchfall</p>
+                  <p className="text-gray-400 text-xs mt-0.5">Rasse: {CAT_PROFILE.breedLabel} · Erkrankung: {CAT_PROFILE.condition}</p>
                 </div>
                 <div className="text-4xl">🐱</div>
               </div>
