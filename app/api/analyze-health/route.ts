@@ -1,14 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { CAT_PROFILE } from '@/lib/cat-profile'
 
+// Vercel: mehr Zeitbudget, damit Retry + Fallback-Modell nicht ins Funktions-Timeout laufen
+export const maxDuration = 30
+
 const MENGE = ['nichts', 'sehr wenig', 'wenig', 'mittel', 'viel']
 const STOOL: Record<string, string> = { normal: 'Normal', soft: 'Weich', diarrhea: 'DURCHFALL', not_observed: 'Nicht gesehen' }
 const APPETITE: Record<string, string> = { good: 'Gut', reduced: 'Wenig', none: 'Gar nicht' }
 const ACTIVITY: Record<string, string> = { normal: 'Normal', tired: 'Müde', very_active: 'Sehr aktiv' }
 
+// Modellkette: primär das aktuelle Flash, bei Überlastung das Lite-Modell
+// (geringere Nachfrage, 0 Thinking-Tokens → schnell & robust).
 // gemini-1.5-* ist abgeschaltet, gemini-2.5-flash für neue Projekte gesperrt.
-// gemini-flash-latest zeigt immer auf das aktuelle Flash-Modell.
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`
+const GEMINI_MODELS = ['gemini-flash-latest', 'gemini-flash-lite-latest']
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
+
+// 503/429/UNAVAILABLE/„overloaded" = transiente Überlastung → erneut versuchen lohnt sich
+function isOverloaded(status: number, body: string): boolean {
+  if (status === 503 || status === 429) return true
+  return /overload|high demand|unavailable|resource_exhausted|try again/i.test(body)
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+type GeminiResult =
+  | { ok: true; analysis: string }
+  | { ok: false; overloaded: boolean; detail: string }
+
+async function callGemini(model: string, apiKey: string, prompt: string): Promise<GeminiResult> {
+  const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      // Flash denkt vor dem Antworten – das Denken zählt gegen maxOutputTokens.
+      // Budget muss Thinking + ~280 Wörter Antwort abdecken, sonst kommt sie leer zurück.
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.4 },
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    console.error(`Gemini ${model} HTTP ${res.status}:`, err.slice(0, 300))
+    return { ok: false, overloaded: isOverloaded(res.status, err), detail: err }
+  }
+
+  const data = await res.json()
+  const candidate = data.candidates?.[0]
+  const analysis = candidate?.content?.parts
+    ?.map((p: { text?: string }) => p.text ?? '')
+    .join('')
+    .trim()
+
+  if (!analysis) {
+    const reason = candidate?.finishReason ?? 'unbekannt'
+    console.error(`Gemini ${model} leere Antwort, finishReason:`, reason, JSON.stringify(data.usageMetadata))
+    // Leere Antwort einmal woanders versuchen zu lassen ist sinnvoll → als „overloaded" behandeln
+    return { ok: false, overloaded: true, detail: `Keine Antwort erhalten (${reason}).` }
+  }
+
+  return { ok: true, analysis }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -83,45 +135,47 @@ Sei präzise. Maximal 280 Wörter. Falls zu wenig Daten: Sag das ehrlich.`
       )
     }
 
-    const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        // Flash denkt vor dem Antworten – das Denken zählt gegen maxOutputTokens.
-        // Budget muss Thinking + ~280 Wörter Antwort abdecken, sonst kommt sie leer zurück.
-        generationConfig: { maxOutputTokens: 4096, temperature: 0.4 },
-      }),
-    })
+    // Modellkette durchgehen: primäres Flash, dann Lite. Pro Modell ein zweiter
+    // Versuch nach kurzem Backoff, falls es gerade überlastet ist.
+    let lastDetail = 'Unbekannter Fehler'
+    let lastOverloaded = false
 
-    if (!res.ok) {
-      const err = await res.text()
-      console.error('Gemini API error:', err)
-      return NextResponse.json({ error: 'Analyse fehlgeschlagen', detail: err }, { status: 500 })
+    for (let m = 0; m < GEMINI_MODELS.length; m++) {
+      const model = GEMINI_MODELS[m]
+      const attempts = 2
+
+      for (let a = 0; a < attempts; a++) {
+        const result = await callGemini(model, apiKey, prompt)
+        if (result.ok) {
+          return NextResponse.json({ analysis: result.analysis })
+        }
+
+        lastDetail = result.detail
+        lastOverloaded = result.overloaded
+
+        // Nicht-transienter Fehler (z.B. ungültiger Key) → nicht weiter probieren
+        if (!result.overloaded) {
+          return NextResponse.json(
+            { error: 'Analyse fehlgeschlagen', detail: lastDetail },
+            { status: 500 },
+          )
+        }
+
+        // Vor dem zweiten Versuch am selben Modell kurz warten
+        if (a < attempts - 1) await sleep(1200)
+      }
+      // Modell dauerhaft überlastet → nächstes Modell in der Kette
     }
 
-    const data = await res.json()
-    const candidate = data.candidates?.[0]
-    const analysis = candidate?.content?.parts
-      ?.map((p: { text?: string }) => p.text ?? '')
-      .join('')
-      .trim()
-
-    if (!analysis) {
-      const reason = candidate?.finishReason ?? 'unbekannt'
-      console.error('Gemini leere Antwort, finishReason:', reason, JSON.stringify(data.usageMetadata))
-      return NextResponse.json(
-        {
-          error: 'Analyse fehlgeschlagen',
-          detail: reason === 'MAX_TOKENS'
-            ? 'Antwort-Budget aufgebraucht. Bitte erneut versuchen.'
-            : `Keine Antwort erhalten (${reason}).`,
-        },
-        { status: 500 },
-      )
-    }
-
-    return NextResponse.json({ analysis })
+    // Alle Modelle überlastet → 503 mit retriable-Flag, Client versucht es automatisch erneut
+    return NextResponse.json(
+      {
+        error: 'Analyse fehlgeschlagen',
+        detail: 'Gemini ist gerade stark ausgelastet. Bitte gleich noch einmal versuchen.',
+        retriable: lastOverloaded,
+      },
+      { status: 503 },
+    )
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('analyze-health error:', msg)

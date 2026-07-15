@@ -45,24 +45,56 @@ export default function AiInsights({
 }) {
   const [analysis, setAnalysis] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const analyze = async () => {
     setLoading(true)
     setError(null)
-    try {
-      const res = await fetch('/api/analyze-health', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedings, health, pantry }),
-      })
-      const data = await res.json()
-      if (data.error) throw new Error(data.detail ?? data.error)
-      setAnalysis(data.analysis)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unbekannter Fehler')
+    setStatus(null)
+
+    const maxAttempts = 3
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const res = await fetch('/api/analyze-health', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ feedings, health, pantry }),
+        })
+        const data = await res.json()
+
+        if (res.ok && data.analysis) {
+          setAnalysis(data.analysis)
+          setStatus(null)
+          setLoading(false)
+          return
+        }
+
+        // Transiente Überlastung → automatisch erneut versuchen
+        const retriable = res.status === 503 || data.retriable === true
+        if (retriable && attempt < maxAttempts - 1) {
+          setStatus(`Gemini ist gerade überlastet – neuer Versuch (${attempt + 2}/${maxAttempts})…`)
+          await new Promise((r) => setTimeout(r, (attempt + 1) * 2500))
+          continue
+        }
+
+        setError(data.detail ?? data.error ?? 'Unbekannter Fehler')
+        setStatus(null)
+        setLoading(false)
+        return
+      } catch (e) {
+        // Netzwerkfehler → ebenfalls erneut versuchen
+        if (attempt < maxAttempts - 1) {
+          setStatus(`Verbindungsproblem – neuer Versuch (${attempt + 2}/${maxAttempts})…`)
+          await new Promise((r) => setTimeout(r, (attempt + 1) * 2500))
+          continue
+        }
+        setError(e instanceof Error ? e.message : 'Unbekannter Fehler')
+        setStatus(null)
+        setLoading(false)
+        return
+      }
     }
-    setLoading(false)
   }
 
   return (
@@ -98,7 +130,14 @@ export default function AiInsights({
 
       {loading && (
         <div style={{ padding: '24px 20px', textAlign: 'center' }}>
-          <p style={{ fontSize: 14, color: '#7C3AED' }}>Analysiere {feedings.length} Einträge…</p>
+          <p style={{ fontSize: 14, color: '#7C3AED' }}>
+            {status ?? `Analysiere ${feedings.length} Einträge…`}
+          </p>
+          {status && (
+            <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', marginTop: 4 }}>
+              Das kann bei hoher Auslastung einen Moment dauern.
+            </p>
+          )}
         </div>
       )}
 
