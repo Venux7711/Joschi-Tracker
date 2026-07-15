@@ -186,6 +186,9 @@ export default async function DashboardPage() {
     new Date(h.logged_at) >= sevenDaysAgo &&
     (h.stool_consistency === 'diarrhea' || h.stool_consistency === 'soft')
   )
+  // Empfindlicher Bauch: aktuell Durchfall/weicher Stuhl → JETZT nichts Neues
+  // ausprobieren, sondern auf Bewährtes/Mono setzen (deckt sich mit der KI-Analyse)
+  const digestiveSensitive = recentDiarrhea || softOrDiarrhea7
 
   type FoodRecCandidate = {
     brand: string; type: string; inPantry: boolean; quantity?: number
@@ -216,21 +219,22 @@ export default async function DashboardPage() {
     // Vorrat bevorzugen
     if (c.inPantry) score += 15
 
-    // Neue Proteinquelle (nicht in letzten 7 Tagen)
+    // Protein-Rotation (Neuheit) NUR belohnen, wenn der Bauch stabil ist.
+    // Bei Durchfall/weichem Stuhl ist Abwechslung riskant → keine Neuheits-Boni.
     const newProteins = proteins.filter(p => !recentProteins7.has(p))
-    if (newProteins.length === proteins.length) {
-      score += 12
-      reasons.push(`Frische Proteinquelle: ${proteins.join(' + ')}`)
-    } else if (newProteins.length > 0) {
-      score += 6
-      reasons.push(`Teilweise neue Proteine: ${newProteins.join(', ')}`)
-    }
-
-    // Neue Proteinfamilie (nicht in letzten 3 Tagen)
     const newFamilies = families.filter(f => !recentFamilies3.has(f))
-    if (newFamilies.length > 0) {
-      score += 5
-      reasons.push(`Andere Proteinfamilie: ${newFamilies.join('/')}`)
+    if (!digestiveSensitive) {
+      if (proteins.length > 0 && newProteins.length === proteins.length) {
+        score += 12
+        reasons.push(`Frische Proteinquelle: ${proteins.join(' + ')}`)
+      } else if (newProteins.length > 0) {
+        score += 6
+        reasons.push(`Teilweise neue Proteine: ${newProteins.join(', ')}`)
+      }
+      if (newFamilies.length > 0) {
+        score += 5
+        reasons.push(`Andere Proteinfamilie: ${newFamilies.join('/')}`)
+      }
     }
 
     // Mono-Protein bei Verdauungsproblemen
@@ -252,13 +256,13 @@ export default async function DashboardPage() {
       }
     }
 
-    // Verträglichkeits-Historie
+    // Verträglichkeits-Historie – bewährte Sorten zählen bei empfindlichem Bauch doppelt
     if (diarrheaRate !== null && corr) {
       if (diarrheaRate === 0 && corr.total >= 3) {
-        score += 8
+        score += digestiveSensitive ? 16 : 8
         reasons.push(`Sehr gute Verträglichkeit (${corr.total}× gegeben, 0% Durchfall)`)
       } else if (diarrheaRate === 0 && corr.total >= 1) {
-        score += 3
+        score += digestiveSensitive ? 8 : 3
         reasons.push(`Bisher verträglich (${corr.total}× gegeben)`)
       } else if (diarrheaRate > 0.6) {
         score -= 12
@@ -267,10 +271,14 @@ export default async function DashboardPage() {
         score -= 5
         warnings.push(`Mäßige Verträglichkeit: ${Math.round(diarrheaRate * 100)}% Durchfall-Rate`)
       }
+    } else if (digestiveSensitive) {
+      // Empfindlicher Bauch → neue, unerprobte Sorte ist jetzt keine gute Idee
+      score -= 8
+      warnings.push('Unerprobte Sorte – bei empfindlichem Bauch lieber Bewährtes')
     } else {
-      // Noch nie gegeben → interessant ausprobieren
+      // Bauch stabil → neue Sorte liefert wertvolle Daten
       score += 3
-      reasons.push('Noch nicht getestet → wertvolle Datenpunkt')
+      reasons.push('Noch nicht getestet → wertvoller Datenpunkt')
     }
 
     // Heute schon gegeben → abwerten
