@@ -150,7 +150,7 @@ export default function GewichtPage() {
           {loading ? (
             <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />)}</div>
           ) : weights.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-6">Noch kein Gewicht eingetragen. Wiege Joschi und tippe auf ž+ Wiegen".</p>
+            <p className="text-gray-400 text-sm text-center py-6">Noch kein Gewicht eingetragen. Wiegen und auf "+ Wiegen" tippen.</p>
           ) : (
             <div className="space-y-2">
               {weights.map((w, i) => (

@@ -2,11 +2,20 @@ export type StoolConsistency = 'normal' | 'soft' | 'diarrhea' | 'not_observed'
 export type Appetite = 'good' | 'reduced' | 'none'
 export type Activity = 'normal' | 'tired' | 'very_active'
 
+export type CatTheme = 'amber' | 'silver'
+
 export interface Cat {
   id: string
   name: string
   owner_id: string
   created_at: string
+  breed: string | null
+  coat: string | null
+  condition: string | null
+  description_accusative: string | null
+  breed_label: string | null
+  theme: CatTheme
+  photo_url: string | null
 }
 
 export interface FeedingLog {

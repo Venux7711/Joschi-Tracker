@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { pickActiveCat } from '@/lib/active-cat-client'
+import type { Cat } from '@/lib/types'
 
 interface WrappedStats {
   year: string
@@ -53,9 +55,16 @@ export default function WrappedPage() {
   const [current, setCurrent] = useState(0)
   const [visible, setVisible] = useState(true)
   const [year, setYear] = useState(String(new Date().getFullYear()))
+  const [cat, setCat] = useState<Cat | null>(null)
+  const [photoError, setPhotoError] = useState(false)
 
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 3 }, (_, i) => String(currentYear - i))
+  const catName = cat?.name ?? 'deine Katze'
+
+  useEffect(() => {
+    fetch('/api/cats').then((r) => r.json()).then((d) => setCat(pickActiveCat((d.cats ?? []) as Cat[]) ?? null))
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -68,7 +77,7 @@ export default function WrappedPage() {
     {
       bg: 'from-amber-400 via-orange-500 to-red-500',
       emoji: '🐾',
-      title: `Joschis Jahr ${s.year}`,
+      title: `${catName}s Jahr ${s.year}`,
       subtitle: 'Deine persönliche Jahresrückschau',
       isIntro: true,
     },
@@ -77,14 +86,14 @@ export default function WrappedPage() {
       emoji: '🍽️',
       big: s.totalFeedings,
       label: 'Fütterungen',
-      sublabel: 'so oft hast du für Joschi gesorgt',
+      sublabel: `so oft hast du für ${catName} gesorgt`,
     },
     {
       bg: 'from-emerald-400 via-teal-500 to-cyan-600',
       emoji: '⭐',
       big: s.topFood.split('(')[0].trim(),
       label: `${s.topFoodCount}× dein Lieblingsfutter`,
-      sublabel: 'Joschis absoluter Favorit',
+      sublabel: `${catName}s absoluter Favorit`,
     },
     {
       bg: 'from-sky-400 via-blue-500 to-blue-700',
@@ -125,7 +134,7 @@ export default function WrappedPage() {
       bg: 'from-pink-400 via-rose-500 to-red-500',
       emoji: '❤️',
       title: 'Danke für deine Fürsorge',
-      subtitle: `${s.totalEntries} Einträge – Joschi ist in den besten Händen`,
+      subtitle: `${s.totalEntries} Einträge – ${catName} ist in den besten Händen`,
       isOutro: true,
     },
   ]
@@ -139,7 +148,7 @@ export default function WrappedPage() {
     <div className="min-h-screen bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center">
       <div className="text-white text-center">
         <div className="text-6xl mb-4 animate-bounce">🐾</div>
-        <p className="text-xl font-bold">Joschis Jahr wird analysiert…</p>
+        <p className="text-xl font-bold">{catName}s Jahr wird analysiert…</p>
       </div>
     </div>
   )
@@ -184,8 +193,10 @@ export default function WrappedPage() {
       >
         {slide.isIntro ? (
           <>
-            <div className="relative w-28 h-28 rounded-full overflow-hidden border-4 border-white/50 mb-6 shadow-2xl">
-              <Image src="/joschi.jpg" alt="Joschi" fill className="object-cover object-top" />
+            <div className="relative w-28 h-28 rounded-full overflow-hidden border-4 border-white/50 mb-6 shadow-2xl flex items-center justify-center bg-white/20">
+              {cat?.photo_url && !photoError
+                ? <Image src={cat.photo_url} alt={catName} fill className="object-cover object-top" onError={() => setPhotoError(true)} />
+                : <span className="text-5xl">🐾</span>}
             </div>
             <div className="text-7xl mb-4">{slide.emoji}</div>
             <h1 className="text-4xl font-black mb-3 leading-tight">{slide.title}</h1>

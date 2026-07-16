@@ -10,14 +10,16 @@ import {
   getAppetiteLabel,
   getActivityLabel,
 } from '@/lib/utils'
-import type { FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@/lib/types'
+import type { Cat, FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@/lib/types'
 import AiInsights from '@/components/AiInsights'
-import JoschiPhoto from '@/components/JoschiPhoto'
+import CatPhoto from '@/components/CatPhoto'
 import MemoryOfTheDay from '@/components/MemoryOfTheDay'
 import PushNotification from '@/components/PushNotification'
 import WeightWidget from '@/components/WeightWidget'
 import MedicationsWidget from '@/components/MedicationsWidget'
 import { ANIFIT_FOODS, getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
+import { getActiveCat, getCats } from '@/lib/active-cat.server'
+import { getCatTheme } from '@/lib/cat-theme'
 
 function getPastNDays(n: number): Date[] {
   return Array.from({ length: n }, (_, i) => {
@@ -46,18 +48,27 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Katze holen oder anlegen
-  let { data: cats } = await supabase.from('cats').select('*').limit(1)
-  let cat = cats?.[0]
+  // Aktive Katze (per Umschalter gewählt) holen, oder Joschi als allererste Katze anlegen
+  let cat: Cat | undefined = await getActiveCat(supabase)
   if (!cat) {
-    const { data: newCat } = await supabase.from('cats').insert({ name: 'Joschi', owner_id: user.id }).select().single()
-    cat = newCat
+    const { data: newCat } = await supabase.from('cats').insert({
+      name: 'Joschi', owner_id: user.id, theme: 'amber', photo_url: '/joschi.jpg',
+      breed: 'Britisch Langhaar', coat: 'golden', condition: 'Rezidivierender Durchfall',
+      description_accusative: 'einen goldenen Britisch-Langhaar-Kater (British Longhair)',
+      breed_label: 'Britisch Langhaar (golden)',
+    }).select().single()
+    cat = newCat as Cat | undefined
   }
   if (!cat) return (
     <div className="min-h-screen flex items-center justify-center">
       <p className="text-gray-500">Fehler beim Laden. Seite neu laden.</p>
     </div>
   )
+  const theme = getCatTheme(cat.theme)
+
+  // Vorrat ist Haushalts-, nicht Katzen-spezifisch – über alle Katzen des Besitzers
+  const allCats = await getCats(supabase)
+  const allCatIds = allCats.map((c) => c.id)
 
   // Datumsrahmen
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
@@ -87,7 +98,7 @@ export default async function DashboardPage() {
     supabase.from('feeding_logs').select('*')
       .eq('cat_id', cat.id).gte('logged_at', thirtyDaysAgo.toISOString())
       .order('logged_at', { ascending: true }),
-    supabase.from('pantry_items').select('*').eq('cat_id', cat.id).gt('quantity', 0),
+    supabase.from('pantry_items').select('*').in('cat_id', allCatIds).gt('quantity', 0),
   ])
 
   const feedings = (todayFeedingsRaw ?? []) as FeedingLog[]
@@ -347,28 +358,38 @@ export default async function DashboardPage() {
         <div
           className="rounded-3xl relative overflow-hidden"
           style={{
-            background: 'linear-gradient(140deg, #1C1C1E 0%, #2D1500 55%, #78350F 100%)',
+            background: theme.heroGradient,
             boxShadow: '0 8px 36px rgba(0,0,0,0.22)',
             padding: '20px 20px 20px 20px',
           }}
         >
-          {/* warm glow */}
-          <div className="absolute" style={{ inset: 0, backgroundImage: 'radial-gradient(ellipse at 70% 0%, rgba(251,191,36,0.12) 0%, transparent 60%)', pointerEvents: 'none' }} />
+          {/* glow */}
+          <div className="absolute" style={{ inset: 0, backgroundImage: theme.heroGlow, pointerEvents: 'none' }} />
+
+          {/* dezenter Lichtreflex bei glänzenden Themes (z.B. Bellas Silver Tabby) */}
+          {theme.hasSheen && (
+            <div className="absolute" style={{ inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+              <div style={{
+                position: 'absolute', top: '-60%', bottom: '-60%', left: '58%', width: '26%',
+                background: 'linear-gradient(75deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+              }} />
+            </div>
+          )}
 
           <div className="flex items-center gap-4 relative">
-            {/* Photo with warm ring */}
-            <div style={{ flexShrink: 0, padding: 3, borderRadius: '50%', background: 'linear-gradient(135deg, #FBBF24, #92400E)' }}>
+            {/* Photo with themed ring */}
+            <div style={{ flexShrink: 0, padding: 3, borderRadius: '50%', background: theme.photoGradient }}>
               <div style={{ borderRadius: '50%', overflow: 'hidden', width: 72, height: 72, border: '2px solid #1C1C1E' }}>
-                <JoschiPhoto size={72} />
+                <CatPhoto src={cat.photo_url} name={cat.name} theme={cat.theme} size={72} />
               </div>
             </div>
 
             <div className="flex-1 min-w-0">
-              <p style={{ color: 'rgba(251,191,36,0.7)', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>
+              <p style={{ color: theme.heroAccentSoft, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>
                 {greeting} 🐾
               </p>
               <h1 style={{ color: 'white', fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1 }}>
-                Joschi
+                {cat.name}
               </h1>
               <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: 12, marginTop: 4, letterSpacing: '-0.01em' }}>
                 {today.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -379,11 +400,11 @@ export default async function DashboardPage() {
               <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 3 }}>
                 Mahlzeiten
               </div>
-              <div style={{ color: distinctMealsToday > 0 ? '#FBBF24' : 'rgba(255,255,255,0.3)', fontSize: 40, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1 }}>
+              <div style={{ color: distinctMealsToday > 0 ? theme.heroAccent : 'rgba(255,255,255,0.3)', fontSize: 40, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1 }}>
                 {distinctMealsToday}
               </div>
               {streak > 0 && (
-                <div style={{ color: streak >= 7 ? '#FDE68A' : 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 4, fontWeight: 500 }}>
+                <div style={{ color: streak >= 7 ? theme.heroAccentBright : 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 4, fontWeight: 500 }}>
                   {streak >= 7 ? `🌟 ${streak}d` : `${streak}d gut`}
                 </div>
               )}
@@ -405,7 +426,7 @@ export default async function DashboardPage() {
             <span style={{ fontSize: 26, lineHeight: 1 }}>🍽️</span>
             <div>
               <div style={{ color: 'white', fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1 }}>Futter</div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 3, fontWeight: 500 }}>für Joschi erfassen</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 3, fontWeight: 500 }}>für {cat.name} erfassen</div>
             </div>
           </Link>
           <Link
@@ -416,7 +437,7 @@ export default async function DashboardPage() {
             <span style={{ fontSize: 26, lineHeight: 1 }}>🩺</span>
             <div>
               <div style={{ color: '#1C1C1E', fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1 }}>Befinden</div>
-              <div style={{ color: 'rgba(60,60,67,0.4)', fontSize: 11, marginTop: 3, fontWeight: 500 }}>wie geht es Joschi?</div>
+              <div style={{ color: 'rgba(60,60,67,0.4)', fontSize: 11, marginTop: 3, fontWeight: 500 }}>wie geht es {cat.name}?</div>
             </div>
           </Link>
         </div>
@@ -650,7 +671,7 @@ export default async function DashboardPage() {
           {feedings.length === 0 ? (
             <div style={{ padding: '28px 20px', textAlign: 'center' }}>
               <p style={{ fontSize: 22, marginBottom: 8 }}>🐾</p>
-              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)', fontWeight: 500 }}>Joschi wartet auf sein Futter</p>
+              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)', fontWeight: 500 }}>{cat.name} wartet auf sein Futter</p>
               <Link href="/feeding/new" style={{ display: 'inline-block', marginTop: 10, fontSize: 14, color: '#D97706', fontWeight: 700, letterSpacing: '-0.01em' }}>
                 Jetzt füttern →
               </Link>
@@ -700,7 +721,7 @@ export default async function DashboardPage() {
             <div style={{ padding: '28px 20px', textAlign: 'center' }}>
               <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)', fontWeight: 500 }}>Noch kein Befinden für heute</p>
               <Link href="/health/new" style={{ display: 'inline-block', marginTop: 10, fontSize: 14, color: '#D97706', fontWeight: 700, letterSpacing: '-0.01em' }}>
-                Wie geht es Joschi? →
+                Wie geht es {cat.name}? →
               </Link>
             </div>
           ) : (
@@ -826,7 +847,17 @@ export default async function DashboardPage() {
         <MemoryOfTheDay />
 
         {/* ── KI-AUSWERTUNG ── */}
-        <AiInsights feedings={aiFeedings} health={aiHealth} pantry={aiPantry} />
+        <AiInsights
+          feedings={aiFeedings}
+          health={aiHealth}
+          pantry={aiPantry}
+          cat={{
+            name: cat.name,
+            breed: cat.breed ?? '',
+            descriptionAccusative: cat.description_accusative ?? cat.name,
+            condition: cat.condition ?? '',
+          }}
+        />
 
 
       </main>

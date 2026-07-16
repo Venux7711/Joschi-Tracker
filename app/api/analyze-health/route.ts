@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { CAT_PROFILE } from '@/lib/cat-profile'
 
 // Vercel: mehr Zeitbudget, damit Retry + Fallback-Modell nicht ins Funktions-Timeout laufen
 export const maxDuration = 30
@@ -64,7 +63,12 @@ async function callGemini(model: string, apiKey: string, prompt: string): Promis
 
 export async function POST(req: NextRequest) {
   try {
-    const { feedings, health, pantry = [] } = await req.json()
+    const { feedings, health, pantry = [], cat = {} } = await req.json()
+    const catName: string = cat.name || 'die Katze'
+    const catBreed: string = cat.breed || ''
+    const catDescription: string = cat.descriptionAccusative || catName
+    const catCondition: string = cat.condition || ''
+    const isLonghair = /langhaar/i.test(catBreed)
 
     const feedingLines = feedings.map((f: {
       date: string; brand: string; type: string; grams?: number
@@ -93,11 +97,13 @@ export async function POST(req: NextRequest) {
       ? `\n═══ AKTUELLER VORRAT ═══\n${(pantry as string[]).join('\n')}`
       : ''
 
-    const prompt = `Du bist ein erfahrener Tiergesundheits-Assistent. Analysiere folgende Daten für ${CAT_PROFILE.name}, ${CAT_PROFILE.descriptionAccusative} mit wiederkehrendem Durchfall.
+    const conditionClause = catCondition ? ` mit ${catCondition.toLowerCase()}` : ''
+    const furParagraph = isLonghair
+      ? `\nZur Rasse: ${catName} ist ${catBreed}. Als Langhaarrasse ist bei ihm Kot im Fell ein relevantes Begleitproblem bei weichem Stuhl.\n`
+      : catBreed ? `\nZur Rasse: ${catName} ist ${catBreed}.\n` : ''
 
-Zur Rasse: ${CAT_PROFILE.name} ist ${CAT_PROFILE.breed}. Als Langhaarrasse ist bei ihm Kot im Fell
-ein relevantes Begleitproblem bei weichem Stuhl.
-
+    const prompt = `Du bist ein erfahrener Tiergesundheits-Assistent. Analysiere folgende Daten für ${catName}, ${catDescription}${conditionClause}.
+${furParagraph}
 WICHTIG zu Proteinquellen:
 - Mono-Protein = nur eine Fleischquelle (z.B. nur Truthahn) → besser bei Unverträglichkeiten
 - Multi-Protein = mehrere Fleischquellen → höheres Allergiepotenzial

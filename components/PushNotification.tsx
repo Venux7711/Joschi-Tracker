@@ -73,7 +73,7 @@ export default function PushNotification() {
       <div className="flex items-center justify-between">
         <div>
           <p className="font-semibold text-gray-800 text-sm">Tägliche Benachrichtigung</p>
-          <p className="text-xs text-gray-500">Jeden Morgen um 7 Uhr – Joschis Status</p>
+          <p className="text-xs text-gray-500">Jeden Morgen um 7 Uhr – Tagesstatus</p>
         </div>
         {status === 'denied' ? (
           <span className="text-xs text-red-500">In Browser-Einstellungen erlauben</span>

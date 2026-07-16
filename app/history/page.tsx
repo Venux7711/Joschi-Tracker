@@ -10,6 +10,7 @@ import {
   getActivityLabel,
 } from '@/lib/utils'
 import type { FeedingLog, HealthLog } from '@/lib/types'
+import { getActiveCat } from '@/lib/active-cat.server'
 
 function formatDayFull(date: Date): string {
   const today = new Date()
@@ -45,12 +46,7 @@ export default async function HistoryPage() {
 
   if (!user) redirect('/login')
 
-  const { data: cats } = await supabase
-    .from('cats')
-    .select('id')
-    .limit(1)
-
-  const cat = cats?.[0]
+  const cat = await getActiveCat(supabase)
 
   if (!cat) {
     return (
@@ -58,7 +54,7 @@ export default async function HistoryPage() {
         <Header />
         <main className="max-w-2xl mx-auto px-4 py-6">
           <p className="text-gray-500 text-center mt-12">
-            Bitte zuerst das Dashboard öffnen, um Joschi anzulegen.
+            Bitte zuerst das Dashboard öffnen, um deine Katze anzulegen.
           </p>
         </main>
       </div>

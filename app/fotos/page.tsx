@@ -5,6 +5,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
+import { pickActiveCat } from '@/lib/active-cat-client'
+import type { Cat } from '@/lib/types'
 
 interface Photo {
   id: string
@@ -39,8 +41,9 @@ export default function FotosPage() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: cats } = await supabase.from('cats').select('id').limit(1)
-      if (cats?.length) setCatId(cats[0].id)
+      const { data: cats } = await supabase.from('cats').select('*').order('created_at', { ascending: true })
+      const activeCat = pickActiveCat((cats ?? []) as Cat[])
+      if (activeCat) setCatId(activeCat.id)
       loadPhotos()
     }
     init()
@@ -120,7 +123,7 @@ export default function FotosPage() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="text-gray-400 hover:text-gray-600">← Zurück</Link>
-            <h1 className="text-xl font-bold text-gray-800">📸 Joschis Fotoalbum</h1>
+            <h1 className="text-xl font-bold text-gray-800">📸 Fotoalbum</h1>
           </div>
           <div className="flex gap-2">
             {uploading && (
@@ -168,7 +171,7 @@ export default function FotosPage() {
           <div className="card p-12 text-center">
             <div className="text-5xl mb-4">📸</div>
             <p className="text-gray-500 mb-2">Noch keine Fotos</p>
-            <p className="text-sm text-gray-400">Tippe auf "+ Foto" um Joschis erstes Bild hinzuzufügen</p>
+            <p className="text-sm text-gray-400">Tippe auf "+ Foto" um das erste Bild hinzuzufügen</p>
           </div>
         ) : (
           <div className="space-y-6">

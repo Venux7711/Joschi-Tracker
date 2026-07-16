@@ -34,14 +34,18 @@ function renderAnalysis(text: string) {
   })
 }
 
+type CatContext = { name: string; breed: string; descriptionAccusative: string; condition: string }
+
 export default function AiInsights({
   feedings,
   health,
   pantry = [],
+  cat,
 }: {
   feedings: FeedingEntry[]
   health: HealthEntry[]
   pantry?: string[]
+  cat: CatContext
 }) {
   const [analysis, setAnalysis] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -59,7 +63,7 @@ export default function AiInsights({
         const res = await fetch('/api/analyze-health', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ feedings, health, pantry }),
+          body: JSON.stringify({ feedings, health, pantry, cat }),
         })
         const data = await res.json()
 
@@ -123,7 +127,7 @@ export default function AiInsights({
       {!analysis && !loading && !error && (
         <div style={{ padding: '24px 20px', textAlign: 'center' }}>
           <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)', lineHeight: 1.5, maxWidth: 280, margin: '0 auto' }}>
-            Gemini analysiert Muster zwischen Futter und Joschis Befinden der letzten 30 Tage.
+            Gemini analysiert Muster zwischen Futter und {cat.name}s Befinden der letzten 30 Tage.
           </p>
         </div>
       )}

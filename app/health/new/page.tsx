@@ -7,7 +7,8 @@ import Image from 'next/image'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { toLocalISOString } from '@/lib/utils'
-import type { StoolConsistency, Appetite, Activity } from '@/lib/types'
+import { pickActiveCat } from '@/lib/active-cat-client'
+import type { Cat, StoolConsistency, Appetite, Activity } from '@/lib/types'
 
 interface ToggleGroupProps<T extends string> {
   value: T
@@ -80,6 +81,7 @@ function NewHealthForm() {
   const supabase = createClient()
   const photoRef = useRef<HTMLInputElement>(null)
 
+  const [cats, setCats] = useState<Cat[]>([])
   const [catId, setCatId] = useState<string | null>(null)
   const [loggedAt, setLoggedAt] = useState('')
   const [stool, setStool] = useState<StoolConsistency>('not_observed')
@@ -102,12 +104,14 @@ function NewHealthForm() {
       } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: cats } = await supabase
+      const { data: catRows } = await supabase
         .from('cats')
-        .select('id')
-        .limit(1)
+        .select('*')
+        .order('created_at', { ascending: true })
 
-      if (cats && cats.length > 0) setCatId(cats[0].id)
+      const catList = (catRows ?? []) as Cat[]
+      setCats(catList)
+      setCatId(pickActiveCat(catList)?.id ?? null)
     }
 
     init()
@@ -196,6 +200,27 @@ function NewHealthForm() {
           <h1 className="text-xl font-bold text-gray-800">💊 Befinden eintragen</h1>
         </div>
 
+        {/* Für wen? Nur relevant, wenn es mehr als eine Katze gibt – Befinden ist immer individuell. */}
+        {cats.length > 1 && (
+          <div className="card p-4 mb-4">
+            <p className="label mb-2">Für wen?</p>
+            <div className="flex gap-2">
+              {cats.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setCatId(c.id)}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                    catId === c.id ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-500 border-gray-200'
+                  }`}
+                >
+                  🐾 {c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="card p-5">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Uhrzeit */}
@@ -281,7 +306,7 @@ function NewHealthForm() {
 
             {/* Foto */}
             <div>
-              <label className="label">Foto von Joschi <span className="text-gray-400 font-normal">(optional)</span></label>
+              <label className="label">Foto <span className="text-gray-400 font-normal">(optional)</span></label>
               {photoPreview ? (
                 <div className="relative">
                   <div className="relative h-40 rounded-xl overflow-hidden">

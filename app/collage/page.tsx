@@ -5,6 +5,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
+import { pickActiveCat } from '@/lib/active-cat-client'
+import type { Cat } from '@/lib/types'
 
 interface Photo { id: string; public_url: string; mood_tag: string; taken_at: string }
 
@@ -34,8 +36,8 @@ export default function CollagePage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: cats } = await supabase.from('cats').select('id').limit(1)
-      const catId = cats?.[0]?.id
+      const { data: cats } = await supabase.from('cats').select('*').order('created_at', { ascending: true })
+      const catId = pickActiveCat((cats ?? []) as Cat[])?.id
       if (!catId) { setLoading(false); return }
 
       const today = new Date()
