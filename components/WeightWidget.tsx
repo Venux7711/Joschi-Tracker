@@ -23,7 +23,7 @@ export default function WeightWidget() {
   const diff = latest.weight_grams - prev.weight_grams
   const diffKg = (Math.abs(diff) / 1000).toFixed(3)
   const trending = diff > 50 ? 'up' : diff < -50 ? 'down' : 'stable'
-  const trendColor = diff > 100 ? '#DC2626' : diff < -100 ? '#D97706' : '#16A34A'
+  const trendColor = diff > 100 ? '#DC2626' : diff < -100 ? 'var(--am-600)' : '#16A34A'
   const trendLabel = weights.length > 1
     ? (diff === 0 ? 'Stabil' : `${diff > 0 ? '+' : '−'}${diffKg} kg`)
     : 'Erste Messung'
@@ -62,7 +62,7 @@ export default function WeightWidget() {
                 width: 6,
                 height: h,
                 borderRadius: 3,
-                background: i === spark.length - 1 ? '#FBBF24' : 'rgba(251,191,36,0.25)',
+                background: i === spark.length - 1 ? 'var(--am-400)' : 'rgba(var(--am-400-rgb), 0.25)',
               }}
             />
           )

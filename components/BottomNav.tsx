@@ -88,14 +88,14 @@ export default function BottomNav() {
                         gap: 5,
                         padding: '12px 4px',
                         borderRadius: 16,
-                        background: active ? 'rgba(217,119,6,0.08)' : 'transparent',
+                        background: active ? 'rgba(var(--am-600-rgb), 0.08)' : 'transparent',
                       }}
                     >
                       <span style={{ fontSize: 24 }}>{item.emoji}</span>
                       <span style={{
                         fontSize: 10,
                         fontWeight: active ? 700 : 500,
-                        color: active ? '#D97706' : 'rgba(60,60,67,0.55)',
+                        color: active ? 'var(--am-600)' : 'rgba(60,60,67,0.55)',
                         letterSpacing: '-0.01em',
                         textAlign: 'center',
                       }}>
@@ -144,7 +144,7 @@ export default function BottomNav() {
                 <div style={{
                   padding: '3px 12px',
                   borderRadius: 9,
-                  background: active ? 'rgba(217,119,6,0.1)' : 'transparent',
+                  background: active ? 'rgba(var(--am-600-rgb), 0.1)' : 'transparent',
                   transition: 'background 0.2s ease',
                   fontSize: 20,
                   lineHeight: 1,
@@ -155,7 +155,7 @@ export default function BottomNav() {
                 <span style={{
                   fontSize: 10,
                   fontWeight: active ? 700 : 500,
-                  color: active ? '#D97706' : 'rgba(60,60,67,0.48)',
+                  color: active ? 'var(--am-600)' : 'rgba(60,60,67,0.48)',
                   transition: 'color 0.2s ease',
                   letterSpacing: '-0.01em',
                 }}>
@@ -184,7 +184,7 @@ export default function BottomNav() {
             <div style={{
               padding: '3px 12px',
               borderRadius: 9,
-              background: (showMore || moreActive) ? 'rgba(217,119,6,0.1)' : 'transparent',
+              background: (showMore || moreActive) ? 'rgba(var(--am-600-rgb), 0.1)' : 'transparent',
               transition: 'background 0.2s ease',
               fontSize: 20,
               lineHeight: 1,
@@ -204,7 +204,7 @@ export default function BottomNav() {
             <span style={{
               fontSize: 10,
               fontWeight: (showMore || moreActive) ? 700 : 500,
-              color: (showMore || moreActive) ? '#D97706' : 'rgba(60,60,67,0.48)',
+              color: (showMore || moreActive) ? 'var(--am-600)' : 'rgba(60,60,67,0.48)',
               transition: 'color 0.2s ease',
               letterSpacing: '-0.01em',
             }}>

@@ -10,7 +10,7 @@ import {
   getActivityLabel,
 } from '@/lib/utils'
 import type { FeedingLog, HealthLog } from '@/lib/types'
-import { getActiveCat } from '@/lib/active-cat.server'
+import { getActiveCat, getCats } from '@/lib/active-cat.server'
 
 function formatDayFull(date: Date): string {
   const today = new Date()
@@ -61,6 +61,10 @@ export default async function HistoryPage() {
     )
   }
 
+  // Fütterung ist Haushalts-Sache (zusammen gefüttert) → über alle Katzen,
+  // Befinden individuell → nur die aktive Katze
+  const allCatIds = (await getCats(supabase)).map((c) => c.id)
+
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29)
   thirtyDaysAgo.setHours(0, 0, 0, 0)
@@ -75,7 +79,7 @@ export default async function HistoryPage() {
     supabase
       .from('feeding_logs')
       .select('*')
-      .eq('cat_id', cat.id)
+      .in('cat_id', allCatIds)
       .gte('logged_at', thirtyDaysAgo.toISOString())
       .order('logged_at', { ascending: true }),
   ])

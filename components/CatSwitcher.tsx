@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getActiveCatIdClient, setActiveCatIdClient } from '@/lib/active-cat-client'
+import {
+  getActiveCatIdClient, setActiveCatIdClient,
+  getActiveCatThemeClient, setActiveCatThemeClient,
+} from '@/lib/active-cat-client'
 import { getCatTheme } from '@/lib/cat-theme'
 import type { Cat } from '@/lib/types'
 
@@ -17,7 +20,15 @@ export default function CatSwitcher() {
       setCats(list)
       if (list.length) {
         const stored = getActiveCatIdClient()
-        setActiveId(list.find((c) => c.id === stored)?.id ?? list[0].id)
+        const active = list.find((c) => c.id === stored) ?? list[0]
+        setActiveId(active.id)
+        // Theme-Cookie mit der aktiven Katze synchron halten. Der Server rendert
+        // bei fehlendem Cookie amber – nur bei echter Abweichung (z.B. Bella aktiv,
+        // aber App noch amber) einmal refreshen, damit sich die App sofort umfärbt.
+        const themeVal = active.theme ?? 'amber'
+        const serverTheme = getActiveCatThemeClient() ?? 'amber'
+        setActiveCatThemeClient(themeVal)
+        if (serverTheme !== themeVal) router.refresh()
       }
     })
   }, [])
@@ -27,8 +38,10 @@ export default function CatSwitcher() {
 
   const select = (id: string) => {
     if (id === activeId) return
+    const cat = cats.find((c) => c.id === id)
     setActiveId(id)
     setActiveCatIdClient(id)
+    setActiveCatThemeClient(cat?.theme ?? 'amber')
     router.refresh()
   }
 

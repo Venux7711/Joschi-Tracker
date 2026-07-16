@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { getActiveCat } from '@/lib/active-cat.server'
+import { getActiveCat, getCats } from '@/lib/active-cat.server'
 
 function makeSupabase() {
   const cookieStore = cookies()
@@ -26,9 +26,11 @@ export async function GET(req: NextRequest) {
   const cat = await getActiveCat(supabase)
   if (!cat) return NextResponse.json({ error: 'Keine Katze' }, { status: 404 })
   const catId = cat.id
+  const allCatIds = (await getCats(supabase)).map((c) => c.id)
 
+  // Fütterung geteilt (Haushalt), Befinden individuell (aktive Katze)
   const [feedRes, healthRes] = await Promise.all([
-    supabase.from('feeding_logs').select('food_type, food_brand, amount_grams, logged_at').eq('cat_id', catId).gte('logged_at', start).lte('logged_at', end),
+    supabase.from('feeding_logs').select('food_type, food_brand, amount_grams, logged_at').in('cat_id', allCatIds).gte('logged_at', start).lte('logged_at', end),
     supabase.from('health_logs').select('stool_consistency, logged_at').eq('cat_id', catId).gte('logged_at', start).lte('logged_at', end),
   ])
 

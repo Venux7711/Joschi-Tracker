@@ -38,7 +38,7 @@ export default function LoginPage() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center p-6"
-      style={{ background: 'linear-gradient(160deg, #F2F2F7 0%, #FEF3C7 100%)' }}
+      style={{ background: 'linear-gradient(160deg, #F2F2F7 0%, var(--am-100) 100%)' }}
     >
       {/* Logo block */}
       <div className="text-center mb-10">
@@ -50,7 +50,7 @@ export default function LoginPage() {
             borderRadius: 28,
             boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
             border: '3px solid rgba(255,255,255,0.8)',
-            background: 'linear-gradient(145deg, #FBBF24 0%, #D97706 100%)',
+            background: 'linear-gradient(145deg, var(--am-400) 0%, var(--am-600) 100%)',
             fontSize: 44,
           }}
         >
@@ -128,7 +128,7 @@ export default function LoginPage() {
         <div className="text-center mt-5">
           <Link
             href="/auth/forgot-password"
-            style={{ fontSize: 13, color: '#D97706', fontWeight: 500 }}
+            style={{ fontSize: 13, color: 'var(--am-600)', fontWeight: 500 }}
           >
             Passwort vergessen?
           </Link>

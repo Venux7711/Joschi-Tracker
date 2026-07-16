@@ -86,9 +86,11 @@ export default async function DashboardPage() {
     { data: allFeedings30 },
     { data: pantryRaw },
   ] = await Promise.all([
-    supabase.from('feeding_logs').select('*').eq('cat_id', cat.id)
+    // Fütterung ist Haushalts-Sache (zusammen gefüttert) → über alle Katzen
+    supabase.from('feeding_logs').select('*').in('cat_id', allCatIds)
       .gte('logged_at', todayStart.toISOString()).lte('logged_at', todayEnd.toISOString())
       .order('logged_at', { ascending: true }),
+    // Befinden ist individuell → nur die aktive Katze
     supabase.from('health_logs').select('*').eq('cat_id', cat.id)
       .gte('logged_at', todayStart.toISOString()).lte('logged_at', todayEnd.toISOString())
       .order('logged_at', { ascending: false }),
@@ -96,7 +98,7 @@ export default async function DashboardPage() {
       .eq('cat_id', cat.id).gte('logged_at', thirtyDaysAgo.toISOString())
       .order('logged_at', { ascending: false }),
     supabase.from('feeding_logs').select('*')
-      .eq('cat_id', cat.id).gte('logged_at', thirtyDaysAgo.toISOString())
+      .in('cat_id', allCatIds).gte('logged_at', thirtyDaysAgo.toISOString())
       .order('logged_at', { ascending: true }),
     supabase.from('pantry_items').select('*').in('cat_id', allCatIds).gt('quantity', 0),
   ])
@@ -419,8 +421,8 @@ export default async function DashboardPage() {
             className="pressable rounded-2xl flex items-center gap-3.5"
             style={{
               padding: '18px 20px',
-              background: 'linear-gradient(145deg, #FBBF24 0%, #D97706 100%)',
-              boxShadow: '0 4px 20px rgba(217,119,6,0.28), 0 1px 4px rgba(217,119,6,0.15)',
+              background: 'linear-gradient(145deg, var(--am-400) 0%, var(--am-600) 100%)',
+              boxShadow: '0 4px 20px rgba(var(--am-600-rgb), 0.28), 0 1px 4px rgba(var(--am-600-rgb), 0.15)',
             }}
           >
             <span style={{ fontSize: 26, lineHeight: 1 }}>🍽️</span>
@@ -519,7 +521,7 @@ export default async function DashboardPage() {
                         {rec.type}
                       </span>
                       {rec.inPantry && (
-                        <span style={{ fontSize: 10, fontWeight: 600, color: '#D97706', background: 'rgba(217,119,6,0.08)', padding: '2px 7px', borderRadius: 999, flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--am-600)', background: 'rgba(var(--am-600-rgb), 0.08)', padding: '2px 7px', borderRadius: 999, flexShrink: 0 }}>
                           Vorrat
                         </span>
                       )}
@@ -536,7 +538,7 @@ export default async function DashboardPage() {
 
           {/* Streak */}
           <div className="card" style={{ padding: '20px 20px 18px' }}>
-            <div style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1, color: streak >= 3 ? '#16A34A' : streak > 0 ? '#D97706' : '#DC2626' }}>
+            <div style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1, color: streak >= 3 ? '#16A34A' : streak > 0 ? 'var(--am-600)' : '#DC2626' }}>
               {streak}
             </div>
             <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(60,60,67,0.55)', marginTop: 6, letterSpacing: '-0.01em', lineHeight: 1.3 }}>
@@ -546,7 +548,7 @@ export default async function DashboardPage() {
 
           {/* 30-Tage Durchfall */}
           <div className="card" style={{ padding: '20px 20px 18px' }}>
-            <div style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1, color: diarrhea30Days === 0 ? '#16A34A' : diarrhea30Days <= 5 ? '#D97706' : '#DC2626' }}>
+            <div style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1, color: diarrhea30Days === 0 ? '#16A34A' : diarrhea30Days <= 5 ? 'var(--am-600)' : '#DC2626' }}>
               {diarrhea30Days}
             </div>
             <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(60,60,67,0.55)', marginTop: 6, letterSpacing: '-0.01em', lineHeight: 1.3 }}>
@@ -615,7 +617,7 @@ export default async function DashboardPage() {
           <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
             {trend14.map(({ day, stool }, i) => {
               const bg = stool === 'normal' ? '#4ADE80'
-                : stool === 'soft' ? '#FCD34D'
+                : stool === 'soft' ? 'var(--am-300)'
                 : stool === 'diarrhea' ? '#F87171'
                 : undefined
               return (
@@ -640,7 +642,7 @@ export default async function DashboardPage() {
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', paddingTop: 4, borderTop: '0.5px solid rgba(60,60,67,0.07)' }}>
             {([
               { color: '#4ADE80', label: 'Normal' },
-              { color: '#FCD34D', label: 'Weich' },
+              { color: 'var(--am-300)', label: 'Weich' },
               { color: '#F87171', label: 'Durchfall = rot' },
               { border: true, label: 'Kein Eintrag' },
             ] as { color?: string; border?: boolean; label: string }[]).map(({ color, border, label }) => (
@@ -662,7 +664,7 @@ export default async function DashboardPage() {
             <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Futter heute</h3>
             <Link
               href="/feeding/new"
-              style={{ fontSize: 13, fontWeight: 600, color: '#D97706', background: 'rgba(217,119,6,0.08)', padding: '6px 14px', borderRadius: 999 }}
+              style={{ fontSize: 13, fontWeight: 600, color: 'var(--am-600)', background: 'rgba(var(--am-600-rgb), 0.08)', padding: '6px 14px', borderRadius: 999 }}
             >
               + Eintrag
             </Link>
@@ -672,7 +674,7 @@ export default async function DashboardPage() {
             <div style={{ padding: '28px 20px', textAlign: 'center' }}>
               <p style={{ fontSize: 22, marginBottom: 8 }}>🐾</p>
               <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)', fontWeight: 500 }}>{cat.name} wartet auf sein Futter</p>
-              <Link href="/feeding/new" style={{ display: 'inline-block', marginTop: 10, fontSize: 14, color: '#D97706', fontWeight: 700, letterSpacing: '-0.01em' }}>
+              <Link href="/feeding/new" style={{ display: 'inline-block', marginTop: 10, fontSize: 14, color: 'var(--am-600)', fontWeight: 700, letterSpacing: '-0.01em' }}>
                 Jetzt füttern →
               </Link>
             </div>
@@ -685,7 +687,7 @@ export default async function DashboardPage() {
                   className="list-row flex items-center gap-3"
                   style={{ padding: '14px 20px', textDecoration: 'none', display: 'flex', ...(i > 0 ? { borderTop: '0.5px solid rgba(60,60,67,0.07)' } : {}) }}
                 >
-                  <div style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 10, background: 'rgba(251,191,36,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>
+                  <div style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 10, background: 'rgba(var(--am-400-rgb), 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>
                     🍽️
                   </div>
                   <div className="flex-1 min-w-0">
@@ -711,7 +713,7 @@ export default async function DashboardPage() {
             <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Befinden heute</h3>
             <Link
               href="/health/new"
-              style={{ fontSize: 13, fontWeight: 600, color: '#D97706', background: 'rgba(217,119,6,0.08)', padding: '6px 14px', borderRadius: 999 }}
+              style={{ fontSize: 13, fontWeight: 600, color: 'var(--am-600)', background: 'rgba(var(--am-600-rgb), 0.08)', padding: '6px 14px', borderRadius: 999 }}
             >
               + Eintrag
             </Link>
@@ -720,7 +722,7 @@ export default async function DashboardPage() {
           {healthLogs.length === 0 ? (
             <div style={{ padding: '28px 20px', textAlign: 'center' }}>
               <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)', fontWeight: 500 }}>Noch kein Befinden für heute</p>
-              <Link href="/health/new" style={{ display: 'inline-block', marginTop: 10, fontSize: 14, color: '#D97706', fontWeight: 700, letterSpacing: '-0.01em' }}>
+              <Link href="/health/new" style={{ display: 'inline-block', marginTop: 10, fontSize: 14, color: 'var(--am-600)', fontWeight: 700, letterSpacing: '-0.01em' }}>
                 Wie geht es {cat.name}? →
               </Link>
             </div>
@@ -794,7 +796,7 @@ export default async function DashboardPage() {
                       </div>
                     </div>
                     <div style={{ height: 3, background: 'rgba(120,120,128,0.1)', borderRadius: 999, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', background: '#FBBF24', borderRadius: 999, width: `${barWidth}%` }} />
+                      <div style={{ height: '100%', background: 'var(--am-400)', borderRadius: 999, width: `${barWidth}%` }} />
                     </div>
                   </div>
                 )
@@ -812,8 +814,8 @@ export default async function DashboardPage() {
             <div style={{ padding: '4px 20px 16px' }}>
               {foodCorrelation.map((s, i) => {
                 const pct = Math.round((s.diarrhea / s.total) * 100)
-                const barBg = pct >= 60 ? '#F87171' : pct >= 30 ? '#FCD34D' : '#4ADE80'
-                const pctColor = pct >= 60 ? '#DC2626' : pct >= 30 ? '#D97706' : '#16A34A'
+                const barBg = pct >= 60 ? '#F87171' : pct >= 30 ? 'var(--am-300)' : '#4ADE80'
+                const pctColor = pct >= 60 ? '#DC2626' : pct >= 30 ? 'var(--am-600)' : '#16A34A'
                 return (
                   <div key={`${s.brand}||${s.type}`} style={{ paddingTop: i === 0 ? 12 : 14, paddingBottom: 4 }}>
                     <div className="flex items-center justify-between gap-3 mb-1.5">

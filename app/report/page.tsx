@@ -31,14 +31,16 @@ export default function ReportPage() {
     const activeCat = pickActiveCat((cats ?? []) as Cat[])
     if (!activeCat) { setLoading(false); return }
     setCat(activeCat)
+    const allCatIds = (cats ?? []).map((c) => c.id)
 
     const since = new Date()
     since.setDate(since.getDate() - days)
     const sinceStr = since.toISOString()
 
+    // Befinden individuell (aktive Katze), Fütterung geteilt (Haushalt)
     const [hRes, fRes] = await Promise.all([
       supabase.from('health_logs').select('*').eq('cat_id', activeCat.id).gte('logged_at', sinceStr).order('logged_at', { ascending: true }),
-      supabase.from('feeding_logs').select('*').eq('cat_id', activeCat.id).gte('logged_at', sinceStr).order('logged_at', { ascending: true }),
+      supabase.from('feeding_logs').select('*').in('cat_id', allCatIds).gte('logged_at', sinceStr).order('logged_at', { ascending: true }),
     ])
 
     setHealth(hRes.data ?? [])

@@ -39,6 +39,7 @@ export default function CollagePage() {
       const { data: cats } = await supabase.from('cats').select('*').order('created_at', { ascending: true })
       const catId = pickActiveCat((cats ?? []) as Cat[])?.id
       if (!catId) { setLoading(false); return }
+      const allCatIds = (cats ?? []).map((c) => c.id)
 
       const today = new Date()
       const since = new Date(today)
@@ -46,14 +47,14 @@ export default function CollagePage() {
       const sinceStr = since.toISOString().slice(0, 10)
       const todayStr = today.toISOString().slice(0, 10)
 
-      // 3 parallel batch queries instead of 21 sequential
+      // Befinden individuell (aktive Katze), Fütterung geteilt (Haushalt)
       const [healthRes, feedRes, photoRes] = await Promise.all([
         supabase.from('health_logs').select('stool_consistency, logged_at')
           .eq('cat_id', catId)
           .gte('logged_at', `${sinceStr}T00:00:00`)
           .lte('logged_at', `${todayStr}T23:59:59`),
         supabase.from('feeding_logs').select('logged_at')
-          .eq('cat_id', catId)
+          .in('cat_id', allCatIds)
           .gte('logged_at', `${sinceStr}T00:00:00`)
           .lte('logged_at', `${todayStr}T23:59:59`),
         fetch(`/api/photos?startDate=${sinceStr}&endDate=${todayStr}&limit=7`).then(r => r.json()),

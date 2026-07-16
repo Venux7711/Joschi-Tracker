@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
+import { cookies } from 'next/headers'
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
 
@@ -29,8 +30,13 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // Theme der aktiven Katze aus dem Cookie (vom CatSwitcher gesetzt) →
+  // färbt via CSS-Variablen die ganze App. Standard = Joschi (amber).
+  const themeCookie = cookies().get('active_cat_theme')?.value
+  const theme = themeCookie === 'silver' ? 'silver' : 'amber'
+
   return (
-    <html lang="de">
+    <html lang="de" data-theme={theme}>
       <body className={inter.className}>
         {children}
         <BottomNav />

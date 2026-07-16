@@ -355,7 +355,8 @@ export async function POST(req: NextRequest) {
     ] = await Promise.all([
       supabase.from('chat_messages').select('*').eq('cat_id', catId).order('created_at', { ascending: false }).limit(HISTORY_LIMIT),
       supabase.from('ai_memories').select('*').eq('cat_id', catId).order('created_at', { ascending: false }),
-      supabase.from('feeding_logs').select('*').eq('cat_id', catId).gte('logged_at', fourteenDaysAgo.toISOString()).order('logged_at', { ascending: false }).limit(30),
+      // Fütterung geteilt (Haushalt), Befinden individuell (aktive Katze)
+      supabase.from('feeding_logs').select('*').in('cat_id', allCatIds).gte('logged_at', fourteenDaysAgo.toISOString()).order('logged_at', { ascending: false }).limit(30),
       supabase.from('health_logs').select('*').eq('cat_id', catId).gte('logged_at', fourteenDaysAgo.toISOString()).order('logged_at', { ascending: false }).limit(30),
       // Vorrat ist Haushalts-, nicht Katzen-spezifisch
       supabase.from('pantry_items').select('*').in('cat_id', allCatIds).gt('quantity', 0),

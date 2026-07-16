@@ -43,7 +43,7 @@ export default function Header() {
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <div
             className="relative flex-shrink-0 flex items-center justify-center"
-            style={{ width: 32, height: 32, borderRadius: 10, background: 'linear-gradient(145deg, #FBBF24 0%, #D97706 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', fontSize: 16 }}
+            style={{ width: 32, height: 32, borderRadius: 10, background: 'linear-gradient(145deg, var(--am-400) 0%, var(--am-600) 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', fontSize: 16 }}
           >
             🐾
           </div>
@@ -65,8 +65,8 @@ export default function Header() {
                   borderRadius: 8,
                   fontSize: 14,
                   fontWeight: active ? 600 : 500,
-                  color: active ? '#D97706' : 'rgba(60,60,67,0.6)',
-                  background: active ? 'rgba(217,119,6,0.08)' : 'transparent',
+                  color: active ? 'var(--am-600)' : 'rgba(60,60,67,0.6)',
+                  background: active ? 'rgba(var(--am-600-rgb), 0.08)' : 'transparent',
                   transition: 'all 0.15s',
                   whiteSpace: 'nowrap',
                   letterSpacing: '-0.01em',
