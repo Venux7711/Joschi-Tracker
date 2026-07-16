@@ -21,6 +21,7 @@ export default function Header() {
     { href: '/history', label: 'Verlauf' },
     { href: '/pantry', label: 'Vorrat' },
     { href: '/fotos', label: 'Fotos', match: ['/fotos', '/slideshow'] },
+    { href: '/chat', label: 'Chat' },
     { href: '/collage', label: 'Woche' },
     { href: '/gewicht', label: 'Gewicht' },
     { href: '/medikamente', label: 'Medis' },

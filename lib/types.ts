@@ -65,3 +65,24 @@ export interface HealthLog {
   notes: string | null
   created_at: string
 }
+
+export type ChatRole = 'user' | 'assistant'
+export type AiMemoryKind = 'fact' | 'instruction'
+
+export interface ChatMessage {
+  id: string
+  cat_id: string
+  user_id: string
+  role: ChatRole
+  content: string
+  created_at: string
+}
+
+export interface AiMemory {
+  id: string
+  cat_id: string
+  user_id: string
+  kind: AiMemoryKind
+  content: string
+  created_at: string
+}
