@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
-import { CAT_PROFILE } from '@/lib/cat-profile'
+import { pickActiveCat } from '@/lib/active-cat-client'
+import type { Cat } from '@/lib/types'
 
 interface HealthLog { logged_at: string; stool_consistency: string; appetite: string; activity: string; vomiting: boolean; fur_issue: boolean; notes: string | null }
 interface FeedingLog { logged_at: string; food_brand: string; food_type: string; amount_grams: number | null }
@@ -20,24 +21,24 @@ export default function ReportPage() {
   const [health, setHealth] = useState<HealthLog[]>([])
   const [feedings, setFeedings] = useState<FeedingLog[]>([])
   const [loading, setLoading] = useState(true)
-  const [catName, setCatName] = useState('Joschi')
+  const [cat, setCat] = useState<Cat | null>(null)
 
   useEffect(() => { load() }, [days])
 
   const load = async () => {
     setLoading(true)
-    const { data: cats } = await supabase.from('cats').select('id, name').limit(1)
-    const cat = cats?.[0]
-    if (!cat) { setLoading(false); return }
-    if (cat.name) setCatName(cat.name)
+    const { data: cats } = await supabase.from('cats').select('*').order('created_at', { ascending: true })
+    const activeCat = pickActiveCat((cats ?? []) as Cat[])
+    if (!activeCat) { setLoading(false); return }
+    setCat(activeCat)
 
     const since = new Date()
     since.setDate(since.getDate() - days)
     const sinceStr = since.toISOString()
 
     const [hRes, fRes] = await Promise.all([
-      supabase.from('health_logs').select('*').eq('cat_id', cat.id).gte('logged_at', sinceStr).order('logged_at', { ascending: true }),
-      supabase.from('feeding_logs').select('*').eq('cat_id', cat.id).gte('logged_at', sinceStr).order('logged_at', { ascending: true }),
+      supabase.from('health_logs').select('*').eq('cat_id', activeCat.id).gte('logged_at', sinceStr).order('logged_at', { ascending: true }),
+      supabase.from('feeding_logs').select('*').eq('cat_id', activeCat.id).gte('logged_at', sinceStr).order('logged_at', { ascending: true }),
     ])
 
     setHealth(hRes.data ?? [])
@@ -101,9 +102,15 @@ export default function ReportPage() {
             <div className="card p-5 print:border print:border-gray-300">
               <div className="flex items-start justify-between">
                 <div>
-                  <h2 className="text-2xl font-black text-gray-800">{catName} – Gesundheitsbericht</h2>
+                  <h2 className="text-2xl font-black text-gray-800">{cat?.name ?? 'Katze'} – Gesundheitsbericht</h2>
                   <p className="text-gray-500 text-sm mt-1">Zeitraum: {sinceStr} – {today}</p>
-                  <p className="text-gray-400 text-xs mt-0.5">Rasse: {CAT_PROFILE.breedLabel} · Erkrankung: {CAT_PROFILE.condition}</p>
+                  {(cat?.breed_label || cat?.condition) && (
+                    <p className="text-gray-400 text-xs mt-0.5">
+                      {cat?.breed_label && <>Rasse: {cat.breed_label}</>}
+                      {cat?.breed_label && cat?.condition && <> · </>}
+                      {cat?.condition && <>Erkrankung: {cat.condition}</>}
+                    </p>
+                  )}
                 </div>
                 <div className="text-4xl">🐱</div>
               </div>

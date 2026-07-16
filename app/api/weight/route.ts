@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { getActiveCat } from '@/lib/active-cat.server'
 
 function makeSupabase() {
   const cookieStore = cookies()
@@ -16,13 +17,13 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: cats } = await supabase.from('cats').select('id').limit(1)
-  if (!cats?.length) return NextResponse.json({ weights: [] })
+  const cat = await getActiveCat(supabase)
+  if (!cat) return NextResponse.json({ weights: [] })
 
   const { data: weights } = await supabase
     .from('weights')
     .select('*')
-    .eq('cat_id', cats[0].id)
+    .eq('cat_id', cat.id)
     .order('measured_at', { ascending: false })
     .limit(50)
 
@@ -34,12 +35,12 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: cats } = await supabase.from('cats').select('id').limit(1)
-  if (!cats?.length) return NextResponse.json({ error: 'Keine Katze' }, { status: 404 })
+  const cat = await getActiveCat(supabase)
+  if (!cat) return NextResponse.json({ error: 'Keine Katze' }, { status: 404 })
 
   const { weight_grams, notes, measured_at } = await req.json()
   const { data, error } = await supabase.from('weights').insert({
-    cat_id: cats[0].id,
+    cat_id: cat.id,
     user_id: user.id,
     weight_grams: parseInt(weight_grams),
     notes: notes ?? null,

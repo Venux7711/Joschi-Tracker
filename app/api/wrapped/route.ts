@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { getActiveCat } from '@/lib/active-cat.server'
 
 function makeSupabase() {
   const cookieStore = cookies()
@@ -22,9 +23,9 @@ export async function GET(req: NextRequest) {
   const start = `${year}-01-01T00:00:00`
   const end = `${year}-12-31T23:59:59`
 
-  const { data: cats } = await supabase.from('cats').select('id').limit(1)
-  if (!cats?.length) return NextResponse.json({ error: 'Keine Katze' }, { status: 404 })
-  const catId = cats[0].id
+  const cat = await getActiveCat(supabase)
+  if (!cat) return NextResponse.json({ error: 'Keine Katze' }, { status: 404 })
+  const catId = cat.id
 
   const [feedRes, healthRes] = await Promise.all([
     supabase.from('feeding_logs').select('food_type, food_brand, amount_grams, logged_at').eq('cat_id', catId).gte('logged_at', start).lte('logged_at', end),

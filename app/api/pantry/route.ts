@@ -1,21 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
+import { getCats } from '@/lib/active-cat.server'
 import { NextRequest, NextResponse } from 'next/server'
 
-async function getCatId(supabase: ReturnType<typeof createClient>) {
-  const { data } = await supabase.from('cats').select('id').limit(1).single()
-  return data?.id as string | undefined
-}
-
+// Vorrat ist Haushalts-, nicht Katzen-spezifisch – über alle Katzen des Besitzers.
 export async function GET() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const catId = await getCatId(supabase)
-  if (!catId) return NextResponse.json({ items: [] })
+  const catIds = (await getCats(supabase)).map((c) => c.id)
+  if (catIds.length === 0) return NextResponse.json({ items: [] })
 
   const { data } = await supabase
-    .from('pantry_items').select('*').eq('cat_id', catId)
+    .from('pantry_items').select('*').in('cat_id', catIds)
     .order('brand').order('type')
 
   return NextResponse.json({ items: data ?? [] })
@@ -26,7 +23,9 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const catId = await getCatId(supabase)
+  // Welche Katze das Item "gehört" ist egal, da nie danach gefiltert wird –
+  // einfach die zuerst angelegte als Anker nehmen.
+  const catId = (await getCats(supabase))[0]?.id
   if (!catId) return NextResponse.json({ error: 'Keine Katze gefunden' }, { status: 404 })
 
   const body = await req.json()

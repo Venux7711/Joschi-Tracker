@@ -24,42 +24,46 @@ export async function GET(req: NextRequest) {
     { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
   )
 
-  // Get all cats
-  const { data: cats } = await supabase.from('cats').select('id, name').limit(1)
-  const cat = cats?.[0]
-  if (!cat) return NextResponse.json({ ok: true, sent: 0 })
+  // Alle Katzen des Haushalts – ein Cron-Lauf betrifft nicht nur "eine aktive" Katze
+  const { data: cats } = await supabase.from('cats').select('id, name').order('created_at', { ascending: true })
+  if (!cats?.length) return NextResponse.json({ ok: true, sent: 0 })
 
   // Yesterday's health data
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
   const dayStr = yesterday.toISOString().slice(0, 10)
 
-  const { data: healthLogs } = await supabase
-    .from('health_logs')
-    .select('stool_consistency, appetite')
-    .eq('cat_id', cat.id)
-    .gte('logged_at', `${dayStr}T00:00:00`)
-    .lte('logged_at', `${dayStr}T23:59:59`)
+  const catSummaries = await Promise.all(cats.map(async (cat) => {
+    const { data: healthLogs } = await supabase
+      .from('health_logs')
+      .select('stool_consistency, appetite')
+      .eq('cat_id', cat.id)
+      .gte('logged_at', `${dayStr}T00:00:00`)
+      .lte('logged_at', `${dayStr}T23:59:59`)
 
-  const { data: feedLogs } = await supabase
-    .from('feeding_logs')
-    .select('food_type')
-    .eq('cat_id', cat.id)
-    .gte('logged_at', `${dayStr}T00:00:00`)
-    .lte('logged_at', `${dayStr}T23:59:59`)
+    const { data: feedLogs } = await supabase
+      .from('feeding_logs')
+      .select('food_type')
+      .eq('cat_id', cat.id)
+      .gte('logged_at', `${dayStr}T00:00:00`)
+      .lte('logged_at', `${dayStr}T23:59:59`)
 
-  const stool = healthLogs?.[0]?.stool_consistency
-  let statusEmoji = '✅'
-  let statusText = 'Alles normal gestern'
-  if (stool === 'diarrhea') { statusEmoji = '⚠️'; statusText = 'Durchfall gestern – heute im Blick behalten' }
-  else if (stool === 'soft') { statusEmoji = '🟡'; statusText = 'Weicher Stuhl gestern' }
-  else if (!stool) { statusText = 'Kein Befinden eingetragen' }
+    const stool = healthLogs?.[0]?.stool_consistency
+    let statusEmoji = '✅'
+    let statusText = 'alles normal'
+    if (stool === 'diarrhea') { statusEmoji = '⚠️'; statusText = 'Durchfall – im Blick behalten' }
+    else if (stool === 'soft') { statusEmoji = '🟡'; statusText = 'weicher Stuhl' }
+    else if (!stool) { statusText = 'kein Befinden eingetragen' }
 
-  const lastFood = feedLogs?.at(-1)?.food_type ?? 'Unbekannt'
+    const lastFood = feedLogs?.at(-1)?.food_type ?? 'unbekannt'
+    return { name: cat.name, statusEmoji, line: `${cat.name}: ${statusText} · Futter: ${lastFood}` }
+  }))
+
+  const overallEmoji = catSummaries.some((c) => c.statusEmoji === '⚠️') ? '⚠️' : catSummaries.every((c) => c.statusEmoji === '✅') ? '✅' : '🟡'
 
   const payload = JSON.stringify({
-    title: `Joschi – Guten Morgen! ${statusEmoji}`,
-    body: `${statusText}\nLetztes Futter: ${lastFood}`,
+    title: `Guten Morgen! ${overallEmoji}`,
+    body: catSummaries.map((c) => c.line).join('\n'),
     url: '/dashboard',
   })
 

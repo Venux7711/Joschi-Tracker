@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
-import { CAT_PROFILE } from '@/lib/cat-profile'
-import type { AiMemory, ChatMessage, StoolConsistency, Appetite, Activity } from '@/lib/types'
+import { getActiveCat, getCats } from '@/lib/active-cat.server'
+import type { AiMemory, Cat, ChatMessage, StoolConsistency, Appetite, Activity } from '@/lib/types'
 
 // Vercel: mehr Zeitbudget, damit Retry + Fallback-Modell nicht ins Funktions-Timeout laufen
 export const maxDuration = 30
@@ -190,26 +190,23 @@ async function callGemini(
   return { ok: true, result }
 }
 
-async function getCatId(supabase: ReturnType<typeof createClient>) {
-  const { data } = await supabase.from('cats').select('id').limit(1).single()
-  return data?.id as string | undefined
-}
-
 function buildSystemPrompt(
-  memories: AiMemory[], feedingLines: string, healthLines: string, pantryLines: string, medsLines: string, weightLines: string, now: Date,
+  cat: Cat, memories: AiMemory[], feedingLines: string, healthLines: string, pantryLines: string, medsLines: string, weightLines: string, now: Date,
 ): string {
   const nowLabel = now.toLocaleString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
   const instructions = memories.filter((m) => m.kind === 'instruction')
   const facts = memories.filter((m) => m.kind === 'fact')
+  const description = cat.description_accusative || cat.name
+  const conditionClause = cat.condition ? ` mit ${cat.condition.toLowerCase()}` : ''
 
   const instructionsBlock = instructions.length
     ? `═══ VERHALTENSREGELN VOM NUTZER ═══\n${instructions.map((m) => `- ${m.content}`).join('\n')}\n`
     : ''
   const factsBlock = facts.length
-    ? `═══ WAS DU ÜBER ${CAT_PROFILE.name.toUpperCase()} WEISST ═══\n${facts.map((m) => `- ${m.content}`).join('\n')}\n`
+    ? `═══ WAS DU ÜBER ${cat.name.toUpperCase()} WEISST ═══\n${facts.map((m) => `- ${m.content}`).join('\n')}\n`
     : ''
 
-  return `Du bist der persönliche Chat-Assistent rund um ${CAT_PROFILE.name}, ${CAT_PROFILE.descriptionAccusative} mit ${CAT_PROFILE.condition.toLowerCase()}. Du sprichst mit ${CAT_PROFILE.name}s Dosenöffner:in über Fütterung, Gesundheit und Alltag.
+  return `Du bist der persönliche Chat-Assistent rund um ${cat.name}, ${description}${conditionClause}. Du sprichst mit ${cat.name}s Dosenöffner:in über Fütterung, Gesundheit und Alltag.
 
 Aktuelles Datum/Uhrzeit: ${nowLabel} (ISO: ${now.toISOString()})
 
@@ -229,11 +226,11 @@ ${weightLines || 'Kein Gewicht erfasst.'}
 Antworte immer auf Deutsch, freundlich, direkt und knapp (max. ca. 120 Wörter), außer der Nutzer bittet ausdrücklich um mehr Details oder eine "Verhaltensregel" oben verlangt etwas anderes – Verhaltensregeln vom Nutzer haben Vorrang vor diesen Standard-Vorgaben.
 
 ═══ MERKEN ═══
-Wenn der Nutzer dir in seiner Nachricht etwas beibringen will, das du dir DAUERHAFT merken sollst – z.B. einen Fakt über ${CAT_PROFILE.name} ("er verträgt kein Huhn") oder eine Anweisung, wie du künftig antworten sollst ("antworte immer sehr kurz", "sei nicht so förmlich") – dann trage das in "remember" ein. Merke es dir sofort, ohne erst nachzufragen, und bestätige kurz in "reply". Nutze "fact" für Wissen über die Katze/den Alltag, "instruction" für Verhaltensregeln, wie du antworten sollst. Bei normalen Fragen bleibt "remember" ein leeres Array.
+Wenn der Nutzer dir in seiner Nachricht etwas beibringen will, das du dir DAUERHAFT merken sollst – z.B. einen Fakt über ${cat.name} ("er verträgt kein Huhn") oder eine Anweisung, wie du künftig antworten sollst ("antworte immer sehr kurz", "sei nicht so förmlich") – dann trage das in "remember" ein. Merke es dir sofort, ohne erst nachzufragen, und bestätige kurz in "reply". Nutze "fact" für Wissen über die Katze/den Alltag, "instruction" für Verhaltensregeln, wie du antworten sollst. Bei normalen Fragen bleibt "remember" ein leeres Array.
 
 ═══ HANDELN ═══
 Du kannst auch direkt Einträge für den Nutzer vornehmen, wenn er dir von etwas erzählt, das passiert ist – trage das SOFORT ein, ohne nachzufragen, und bestätige in "reply" knapp und konkret, was genau du mit welcher Uhrzeit eingetragen hast (damit Fehler sofort auffallen):
-- "log_feeding" {food_brand, food_type, amount_grams?, logged_at?}: wenn Joschi gefüttert wurde/wird.
+- "log_feeding" {food_brand, food_type, amount_grams?, logged_at?}: wenn ${cat.name} gefüttert wurde/wird.
 - "log_health" {stool_consistency: "normal"|"soft"|"diarrhea"|"not_observed", vomiting: bool, appetite: "good"|"reduced"|"none", activity: "normal"|"tired"|"very_active", fur_issue: bool, notes?, logged_at?}: wenn der Nutzer sein Befinden beschreibt. Setze nur Felder, die klar aus der Nachricht hervorgehen, sonst nutze plausible neutrale Standardwerte (stool_consistency "not_observed", appetite "good", activity "normal", vomiting/fur_issue false). Alles, was über die festen Felder hinausgeht – Aussehen/Menge/Farbe von Kot, Auffälligkeiten, sonstige Beobachtungen – schreibst du als kurzen, klaren Satz in "notes", damit nichts verloren geht.
 - "adjust_pantry" {brand, food_type, delta}: wenn eine Dose geöffnet/verbraucht wurde (delta negativ, meist -1) oder neuer Vorrat dazukam (delta positiv). Kein logged_at nötig.
 - "log_weight" {weight_grams}: wenn der Nutzer ein aktuelles Gewicht nennt (in Gramm, z.B. 4200 für 4,2kg). Kein logged_at nötig.
@@ -245,7 +242,7 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt in genau diesem Format, ohne Mark
 }
 
 async function executeAction(
-  rlsSupabase: ReturnType<typeof createClient>, userId: string, catId: string, action: ChatAction,
+  rlsSupabase: ReturnType<typeof createClient>, userId: string, catId: string, allCatIds: string[], action: ChatAction,
 ): Promise<string | null> {
   if (action.type === 'log_feeding') {
     const loggedAt = action.logged_at ?? new Date().toISOString()
@@ -270,8 +267,9 @@ async function executeAction(
   }
 
   if (action.type === 'adjust_pantry') {
+    // Vorrat ist Haushalts-, nicht Katzen-spezifisch – über alle Katzen suchen
     const { data: existing } = await rlsSupabase.from('pantry_items').select('*')
-      .eq('cat_id', catId).ilike('brand', action.brand).ilike('type', action.food_type).maybeSingle()
+      .in('cat_id', allCatIds).ilike('brand', action.brand).ilike('type', action.food_type).maybeSingle()
 
     if (existing) {
       const newQty = Math.max(0, existing.quantity + action.delta)
@@ -309,12 +307,12 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const catId = await getCatId(supabase)
-  if (!catId) return NextResponse.json({ messages: [], memories: [] })
+  const cat = await getActiveCat(supabase)
+  if (!cat) return NextResponse.json({ messages: [], memories: [] })
 
   const [{ data: messages }, { data: memories }] = await Promise.all([
-    supabase.from('chat_messages').select('*').eq('cat_id', catId).order('created_at', { ascending: true }).limit(200),
-    supabase.from('ai_memories').select('*').eq('cat_id', catId).order('created_at', { ascending: false }),
+    supabase.from('chat_messages').select('*').eq('cat_id', cat.id).order('created_at', { ascending: true }).limit(200),
+    supabase.from('ai_memories').select('*').eq('cat_id', cat.id).order('created_at', { ascending: false }),
   ])
 
   return NextResponse.json({ messages: messages ?? [], memories: memories ?? [] })
@@ -325,8 +323,8 @@ export async function DELETE() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const catId = await getCatId(supabase)
-  if (catId) await supabase.from('chat_messages').delete().eq('cat_id', catId).eq('user_id', user.id)
+  const cat = await getActiveCat(supabase)
+  if (cat) await supabase.from('chat_messages').delete().eq('cat_id', cat.id).eq('user_id', user.id)
 
   return NextResponse.json({ ok: true })
 }
@@ -341,8 +339,10 @@ export async function POST(req: NextRequest) {
     const trimmed = typeof message === 'string' ? message.trim() : ''
     if (!trimmed) return NextResponse.json({ error: 'Nachricht fehlt' }, { status: 400 })
 
-    const catId = await getCatId(supabase)
-    if (!catId) return NextResponse.json({ error: 'Keine Katze gefunden' }, { status: 404 })
+    const cat = await getActiveCat(supabase)
+    if (!cat) return NextResponse.json({ error: 'Keine Katze gefunden' }, { status: 404 })
+    const catId = cat.id
+    const allCatIds = (await getCats(supabase)).map((c) => c.id)
 
     const fourteenDaysAgo = new Date()
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
@@ -357,7 +357,8 @@ export async function POST(req: NextRequest) {
       supabase.from('ai_memories').select('*').eq('cat_id', catId).order('created_at', { ascending: false }),
       supabase.from('feeding_logs').select('*').eq('cat_id', catId).gte('logged_at', fourteenDaysAgo.toISOString()).order('logged_at', { ascending: false }).limit(30),
       supabase.from('health_logs').select('*').eq('cat_id', catId).gte('logged_at', fourteenDaysAgo.toISOString()).order('logged_at', { ascending: false }).limit(30),
-      supabase.from('pantry_items').select('*').eq('cat_id', catId).gt('quantity', 0),
+      // Vorrat ist Haushalts-, nicht Katzen-spezifisch
+      supabase.from('pantry_items').select('*').in('cat_id', allCatIds).gt('quantity', 0),
       serviceSupabase.from('medications').select('*').eq('cat_id', catId).eq('active', true),
       serviceSupabase.from('weights').select('*').eq('cat_id', catId).order('measured_at', { ascending: false }).limit(6),
     ])
@@ -389,7 +390,7 @@ export async function POST(req: NextRequest) {
       ? (weights ?? []).map((w) => `${(w.weight_grams / 1000).toFixed(2)}kg am ${w.measured_at.slice(0, 10)}`).join('\n')
       : ''
 
-    const systemPrompt = buildSystemPrompt((memories ?? []) as AiMemory[], feedingLines, healthLines, pantryLines, medsLines, weightLines, new Date())
+    const systemPrompt = buildSystemPrompt(cat, (memories ?? []) as AiMemory[], feedingLines, healthLines, pantryLines, medsLines, weightLines, new Date())
 
     const orderedHistory = [...(history ?? [])].reverse() as ChatMessage[]
     const contents = [
@@ -427,7 +428,7 @@ export async function POST(req: NextRequest) {
 
           const performed: string[] = []
           for (const action of actions) {
-            const summary = await executeAction(supabase, user.id, catId, action)
+            const summary = await executeAction(supabase, user.id, catId, allCatIds, action)
             if (summary) performed.push(summary)
           }
 

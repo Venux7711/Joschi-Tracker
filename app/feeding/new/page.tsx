@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { toLocalISOString } from '@/lib/utils'
+import type { Cat } from '@/lib/types'
 
 const ANIFIT_SORTEN = [
   'Puterichs Delight (Truthahn)',
@@ -59,7 +60,8 @@ function NewFeedingForm() {
   const dateParam = searchParams.get('date')
   const supabase = createClient()
 
-  const [catId, setCatId] = useState<string | null>(null)
+  const [cats, setCats] = useState<Cat[]>([])
+  const [selectedCatIds, setSelectedCatIds] = useState<Set<string>>(new Set())
   const [foodBrand, setFoodBrand] = useState('Anifit')
   const [foodType, setFoodType] = useState('')
   const [amountGrams, setAmountGrams] = useState('')
@@ -85,12 +87,15 @@ function NewFeedingForm() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: cats } = await supabase
+      const { data: catRows } = await supabase
         .from('cats')
-        .select('id')
-        .limit(1)
+        .select('*')
+        .order('created_at', { ascending: true })
 
-      if (cats && cats.length > 0) setCatId(cats[0].id)
+      const catList = (catRows ?? []) as Cat[]
+      setCats(catList)
+      // Standard: für alle Katzen (sie werden immer gemeinsam gefüttert)
+      setSelectedCatIds(new Set(catList.map((c) => c.id)))
 
       const { data: logs } = await supabase
         .from('feeding_logs')
@@ -117,6 +122,14 @@ function NewFeedingForm() {
   // Sorte nur zurücksetzen, wenn der Nutzer die Marke aktiv wechselt
   // (nicht beim programmatischen Setzen durch den Dosenscan)
   const changeBrand = (b: string) => { setFoodBrand(b); setFoodType('') }
+
+  const toggleCat = (id: string) => {
+    setSelectedCatIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
 
   const handleScanImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -146,8 +159,8 @@ function NewFeedingForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!catId) {
-      setError('Katze nicht gefunden. Bitte zuerst das Dashboard öffnen.')
+    if (selectedCatIds.size === 0) {
+      setError(cats.length === 0 ? 'Katze nicht gefunden. Bitte zuerst das Dashboard öffnen.' : 'Bitte mindestens eine Katze auswählen.')
       return
     }
     setLoading(true)
@@ -156,8 +169,11 @@ function NewFeedingForm() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { error: insertError } = await supabase.from('feeding_logs').insert({
-      cat_id: catId,
+    // Sie werden immer gemeinsam gefüttert → ein Eintrag pro ausgewählter Katze,
+    // gleiche Sorte/Uhrzeit/Menge
+    const catIds = Array.from(selectedCatIds)
+    const { error: insertError } = await supabase.from('feeding_logs').insert(catIds.map((cid) => ({
+      cat_id: cid,
       user_id: user.id,
       logged_at: new Date(loggedAt).toISOString(),
       food_brand: foodBrand.trim(),
@@ -167,7 +183,7 @@ function NewFeedingForm() {
       treat_amount: treatAmount > 0 ? treatAmount : null,
       dry_food_amount: dryFoodAmount > 0 ? dryFoodAmount : null,
       extras: extras.trim() || null,
-    })
+    })))
 
     if (insertError) {
       setError('Fehler beim Speichern. Bitte erneut versuchen.')
@@ -175,11 +191,13 @@ function NewFeedingForm() {
       return
     }
 
-    // Vorrat automatisch reduzieren wenn Sorte wechselt
+    // Vorrat automatisch reduzieren wenn Sorte wechselt (Vorrat ist geteilt, daher
+    // reicht die Historie einer der gefütterten Katzen als Referenz)
+    const anchorCatId = catIds[0]
     const { data: lastLogs } = await supabase
       .from('feeding_logs')
       .select('food_brand, food_type')
-      .eq('cat_id', catId)
+      .eq('cat_id', anchorCatId)
       .order('logged_at', { ascending: false })
       .limit(10)
 
@@ -247,6 +265,34 @@ function NewFeedingForm() {
           </Link>
           <h1 className="text-xl font-bold text-gray-800">🍽️ Futter eintragen</h1>
         </div>
+
+        {/* Für wen? Nur relevant, wenn es mehr als eine Katze gibt – sie werden
+            normalerweise gemeinsam gefüttert, daher standardmäßig alle ausgewählt. */}
+        {cats.length > 1 && (
+          <div className="card p-4 mb-4">
+            <p className="label mb-2">Für wen?</p>
+            <div className="flex gap-2">
+              {cats.map((c) => {
+                const active = selectedCatIds.has(c.id)
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => toggleCat(c.id)}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                      active ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-500 border-gray-200'
+                    }`}
+                  >
+                    🐾 {c.name}
+                  </button>
+                )
+              })}
+            </div>
+            {selectedCatIds.size === 0 && (
+              <p className="text-xs text-red-500 mt-2">Bitte mindestens eine Katze auswählen.</p>
+            )}
+          </div>
+        )}
 
         {/* Dosenscan */}
         <div className="card p-4 mb-4">

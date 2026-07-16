@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
@@ -44,19 +43,21 @@ export default function LoginPage() {
       {/* Logo block */}
       <div className="text-center mb-10">
         <div
-          className="relative mx-auto mb-5 overflow-hidden"
+          className="relative mx-auto mb-5 flex items-center justify-center"
           style={{
             width: 96,
             height: 96,
             borderRadius: 28,
             boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
             border: '3px solid rgba(255,255,255,0.8)',
+            background: 'linear-gradient(145deg, #FBBF24 0%, #D97706 100%)',
+            fontSize: 44,
           }}
         >
-          <Image src="/joschi.jpg" alt="Joschi" fill className="object-cover object-top" priority />
+          🐾
         </div>
         <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em', color: '#1C1C1E' }}>
-          Joschi
+          Tracker
         </h1>
         <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.5)', marginTop: 4, letterSpacing: '-0.01em' }}>
           Gesundheitstracker

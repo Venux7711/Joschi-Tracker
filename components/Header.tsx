@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import CatSwitcher from './CatSwitcher'
 
 export default function Header() {
   const router = useRouter()
@@ -42,13 +42,13 @@ export default function Header() {
       <div className="max-w-2xl mx-auto px-4 flex items-center justify-between" style={{ height: 52 }}>
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <div
-            className="relative flex-shrink-0 overflow-hidden"
-            style={{ width: 32, height: 32, borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+            className="relative flex-shrink-0 flex items-center justify-center"
+            style={{ width: 32, height: 32, borderRadius: 10, background: 'linear-gradient(145deg, #FBBF24 0%, #D97706 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', fontSize: 16 }}
           >
-            <Image src="/joschi.jpg" alt="Joschi" fill className="object-cover object-top" />
+            🐾
           </div>
           <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>
-            Joschi
+            Tracker
           </span>
         </Link>
 
@@ -113,6 +113,10 @@ export default function Header() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1" />
           </svg>
         </button>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4">
+        <CatSwitcher />
       </div>
     </header>
   )
