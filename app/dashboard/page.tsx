@@ -421,6 +421,26 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
+        {/* ── CHAT MIT DER KI ── */}
+        <Link
+          href="/chat"
+          className="pressable rounded-2xl flex items-center gap-3.5"
+          style={{
+            padding: '16px 20px',
+            background: 'linear-gradient(145deg, #A78BFA 0%, #7C3AED 100%)',
+            boxShadow: '0 4px 20px rgba(124,58,237,0.26), 0 1px 4px rgba(124,58,237,0.15)',
+          }}
+        >
+          <span style={{ fontSize: 24, lineHeight: 1 }}>💬</span>
+          <div className="flex-1 min-w-0">
+            <div style={{ color: 'white', fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1 }}>Chat mit der KI</div>
+            <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 3, fontWeight: 500 }}>Fragen stellen & ihr beibringen, was sie wissen soll</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth={2.5} style={{ flexShrink: 0 }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+
         {/* ── FUTTER-EMPFEHLUNG ── */}
         {bestRec && (
           <div className="card overflow-hidden">
