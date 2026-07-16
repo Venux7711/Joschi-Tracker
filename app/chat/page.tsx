@@ -4,10 +4,41 @@ import { useEffect, useRef, useState } from 'react'
 import Header from '@/components/Header'
 import type { AiMemory, ChatMessage } from '@/lib/types'
 
-function Bubble({ msg }: { msg: ChatMessage }) {
+type DisplayMessage = ChatMessage & { tags?: string[] }
+
+// Web Speech API ist nicht Teil der TS-DOM-Lib – minimale Typen für das, was wir nutzen.
+interface SpeechRecognitionResultLike { transcript: string }
+interface SpeechRecognitionEventLike { results: ArrayLike<ArrayLike<SpeechRecognitionResultLike>> }
+interface SpeechRecognitionLike extends EventTarget {
+  lang: string
+  interimResults: boolean
+  continuous: boolean
+  start: () => void
+  stop: () => void
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike
+
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
+  if (typeof window === 'undefined') return null
+  const w = window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor }
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+
+const SUGGESTIONS = [
+  { emoji: '🍽️', label: 'Gerade gefüttert', prompt: 'Joschi hat gerade gefressen: ' },
+  { emoji: '🩺', label: 'Befinden melden', prompt: 'Joschis Befinden gerade eben: ' },
+  { emoji: '⚖️', label: 'Gewicht eintragen', prompt: 'Joschi wiegt gerade ' },
+  { emoji: '🥫', label: 'Vorrat ändern', prompt: 'Wir haben gerade eine Dose ' },
+  { emoji: '🧠', label: 'Was weißt du?', prompt: 'Was weißt du bisher über Joschi?' },
+]
+
+function Bubble({ msg }: { msg: DisplayMessage }) {
   const isUser = msg.role === 'user'
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
       <div
         className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
           isUser
@@ -17,6 +48,15 @@ function Bubble({ msg }: { msg: ChatMessage }) {
       >
         {msg.content}
       </div>
+      {msg.tags && msg.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-1.5 max-w-[80%]">
+          {msg.tags.map((t, i) => (
+            <span key={i} className="text-[11px] font-medium text-green-700 bg-green-50 border border-green-100 px-2 py-1 rounded-full">
+              ✓ {t}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -125,7 +165,7 @@ function KnowledgePanel({
 }
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<DisplayMessage[]>([])
   const [memories, setMemories] = useState<AiMemory[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
@@ -134,7 +174,12 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null)
   const [showKnowledge, setShowKnowledge] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [confirmClear, setConfirmClear] = useState(false)
+  const [speechSupported, setSpeechSupported] = useState(false)
+  const [listening, setListening] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
 
   useEffect(() => {
     fetch('/api/chat').then((r) => r.json()).then((d) => {
@@ -145,20 +190,54 @@ export default function ChatPage() {
   }, [])
 
   useEffect(() => {
+    setSpeechSupported(!!getSpeechRecognitionCtor())
+    return () => { recognitionRef.current?.stop() }
+  }, [])
+
+  const toggleListening = () => {
+    if (listening) {
+      recognitionRef.current?.stop()
+      return
+    }
+    const Ctor = getSpeechRecognitionCtor()
+    if (!Ctor) return
+
+    const recognition = new Ctor()
+    recognition.lang = 'de-DE'
+    recognition.interimResults = false
+    recognition.continuous = false
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results).map((r) => r[0].transcript).join(' ').trim()
+      if (transcript) setInput((prev) => (prev.trim() ? `${prev.trim()} ${transcript}` : transcript))
+    }
+    recognition.onerror = () => setListening(false)
+    recognition.onend = () => setListening(false)
+    recognitionRef.current = recognition
+    recognition.start()
+    setListening(true)
+  }
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
 
   useEffect(() => {
     if (!toast) return
-    const t = setTimeout(() => setToast(null), 3500)
+    const t = setTimeout(() => setToast(null), 4000)
     return () => clearTimeout(t)
   }, [toast])
 
-  const send = async () => {
-    const text = input.trim()
+  useEffect(() => {
+    if (!confirmClear) return
+    const t = setTimeout(() => setConfirmClear(false), 3000)
+    return () => clearTimeout(t)
+  }, [confirmClear])
+
+  const send = async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim()
     if (!text || sending) return
 
-    const optimistic: ChatMessage = {
+    const optimistic: DisplayMessage = {
       id: `pending-${Date.now()}`, cat_id: '', user_id: '', role: 'user', content: text, created_at: new Date().toISOString(),
     }
     setMessages((prev) => [...prev, optimistic])
@@ -177,15 +256,19 @@ export default function ChatPage() {
         const data = await res.json()
 
         if (res.ok && data.reply) {
+          const tags: string[] = [
+            ...(data.performed ?? []),
+            ...((data.remembered ?? []).map((r: { content: string }) => `Gemerkt: ${r.content}`)),
+          ]
           setMessages((prev) => [
             ...prev,
-            { id: `reply-${Date.now()}`, cat_id: '', user_id: '', role: 'assistant', content: data.reply, created_at: new Date().toISOString() },
+            { id: `reply-${Date.now()}`, cat_id: '', user_id: '', role: 'assistant', content: data.reply, created_at: new Date().toISOString(), tags },
           ])
           if (data.remembered?.length) {
             fetch('/api/memories').then((r) => r.json()).then((d) => setMemories(d.memories ?? []))
-            const label = data.remembered.length === 1 ? 'Gemerkt: ' + data.remembered[0].content : `${data.remembered.length} Dinge gemerkt`
-            setToast(label)
           }
+          if (tags.length === 1) setToast(tags[0])
+          else if (tags.length > 1) setToast(`${tags.length} Aktionen erledigt`)
           setStatus(null)
           setSending(false)
           return
@@ -216,6 +299,11 @@ export default function ChatPage() {
     }
   }
 
+  const useSuggestion = (prompt: string) => {
+    setInput(prompt)
+    inputRef.current?.focus()
+  }
+
   const addMemory = async (kind: 'fact' | 'instruction', content: string) => {
     const res = await fetch('/api/memories', {
       method: 'POST',
@@ -235,20 +323,39 @@ export default function ChatPage() {
     })
   }
 
+  const clearHistory = async () => {
+    if (!confirmClear) { setConfirmClear(true); return }
+    setConfirmClear(false)
+    setMessages([])
+    await fetch('/api/chat', { method: 'DELETE' })
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <div className="max-w-2xl w-full mx-auto px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <div>
+      <div className="max-w-2xl w-full mx-auto px-4 py-3 flex items-center justify-between flex-shrink-0 gap-2">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-gray-800">Chat</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Frag mich alles über Joschi – und bring mir bei, was ich wissen soll</p>
+          <p className="text-xs text-gray-400 mt-0.5 truncate">Fragen stellen, Einträge machen, ihr etwas beibringen</p>
         </div>
-        <button
-          onClick={() => setShowKnowledge(true)}
-          className="text-sm font-medium text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
-        >
-          🧠 Wissen{memories.length > 0 ? ` (${memories.length})` : ''}
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {messages.length > 0 && (
+            <button
+              onClick={clearHistory}
+              className={`text-sm font-medium px-3 py-2 rounded-xl transition-colors whitespace-nowrap ${
+                confirmClear ? 'text-white bg-red-500 hover:bg-red-600' : 'text-gray-400 bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              {confirmClear ? 'Wirklich?' : '🗑️'}
+            </button>
+          )}
+          <button
+            onClick={() => setShowKnowledge(true)}
+            className="text-sm font-medium text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+          >
+            🧠 Wissen{memories.length > 0 ? ` (${memories.length})` : ''}
+          </button>
+        </div>
       </div>
 
       <main className="max-w-2xl w-full mx-auto px-4 flex-1 flex flex-col min-h-0 pb-4">
@@ -262,7 +369,9 @@ export default function ChatPage() {
           {!loading && messages.length === 0 && (
             <div className="card p-6 text-center mt-4">
               <p className="text-gray-400 text-sm">Noch keine Unterhaltung.</p>
-              <p className="text-gray-300 text-xs mt-1">Frag z.B. "Wie oft hatte Joschi diese Woche Durchfall?" oder sag mir "Merk dir, dass er kein Huhn verträgt".</p>
+              <p className="text-gray-300 text-xs mt-1.5 leading-relaxed">
+                Frag mich etwas, bring mir etwas bei, oder trag direkt einen Eintrag ein – z.B. "Joschi hat gerade 85g Anifit Pute gefressen" oder "Merk dir, dass er kein Huhn verträgt".
+              </p>
             </div>
           )}
 
@@ -286,17 +395,41 @@ export default function ChatPage() {
           <div ref={bottomRef} />
         </div>
 
-        <div className="flex-shrink-0 flex items-end gap-2 pt-2">
+        <div className="flex-shrink-0 flex gap-1.5 overflow-x-auto pb-2 pt-1" style={{ scrollbarWidth: 'none' }}>
+          {SUGGESTIONS.map((s) => (
+            <button
+              key={s.label}
+              onClick={() => useSuggestion(s.prompt)}
+              className="flex-shrink-0 text-xs font-medium text-gray-600 bg-white border border-gray-200 hover:border-amber-300 hover:text-amber-700 px-3 py-1.5 rounded-full transition-colors whitespace-nowrap"
+            >
+              {s.emoji} {s.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-shrink-0 flex items-end gap-2">
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-            placeholder="Nachricht an die KI …"
+            placeholder={listening ? 'Ich höre zu …' : 'Nachricht an die KI …'}
             rows={1}
             className="flex-1 border border-gray-200 rounded-2xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 max-h-32"
           />
+          {speechSupported && (
+            <button
+              onClick={toggleListening}
+              aria-label={listening ? 'Aufnahme stoppen' : 'Spracheingabe starten'}
+              className={`w-11 h-11 rounded-full flex items-center justify-center text-lg flex-shrink-0 transition-colors ${
+                listening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              🎤
+            </button>
+          )}
           <button
-            onClick={send}
+            onClick={() => send()}
             disabled={!input.trim() || sending}
             className="px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-2xl disabled:opacity-40 transition-colors flex-shrink-0"
           >
