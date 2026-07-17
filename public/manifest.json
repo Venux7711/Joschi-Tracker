@@ -1,7 +1,7 @@
 {
-  "name": "Joschi",
-  "short_name": "Joschi",
-  "description": "Gesundheitstracker für Joschi",
+  "name": "Joschi und Bella Tracker",
+  "short_name": "Joschi und Bella",
+  "description": "Gesundheitstracker für Joschi und Bella",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#fffbeb",

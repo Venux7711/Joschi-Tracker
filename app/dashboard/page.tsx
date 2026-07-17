@@ -379,11 +379,9 @@ export default async function DashboardPage() {
           )}
 
           <div className="flex items-center gap-4 relative">
-            {/* Photo with themed ring */}
+            {/* Photo with themed ring – kein overflow:hidden hier, sonst wird das Kamera-Badge abgeschnitten */}
             <div style={{ flexShrink: 0, padding: 3, borderRadius: '50%', background: theme.photoGradient }}>
-              <div style={{ borderRadius: '50%', overflow: 'hidden', width: 72, height: 72, border: '2px solid #1C1C1E' }}>
-                <CatPhoto src={cat.photo_url} name={cat.name} theme={cat.theme} size={72} />
-              </div>
+              <CatPhoto src={cat.photo_url} name={cat.name} theme={cat.theme} size={72} editable catId={cat.id} />
             </div>
 
             <div className="flex-1 min-w-0">

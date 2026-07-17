@@ -1,6 +1,6 @@
 self.addEventListener('push', function (event) {
   const data = event.data ? event.data.json() : {}
-  const title = data.title || 'Joschi Tracker'
+  const title = data.title || 'Joschi und Bella Tracker'
   const options = {
     body: data.body || '',
     icon: '/joschi.jpg',
