@@ -98,8 +98,11 @@ export default async function DashboardPage() {
     supabase.from('health_logs').select('*').eq('cat_id', cat.id)
       .gte('logged_at', todayStart.toISOString()).lte('logged_at', todayEnd.toISOString())
       .order('logged_at', { ascending: false }),
+    // 30 Tage über ALLE Katzen: die Futterempfehlung ist eine Haushalts-
+    // Entscheidung (gefüttert wird gemeinsam) – Statistiken filtern unten
+    // wieder auf die aktive Katze
     supabase.from('health_logs').select('*')
-      .eq('cat_id', cat.id).gte('logged_at', thirtyDaysAgo.toISOString())
+      .in('cat_id', allCatIds).gte('logged_at', thirtyDaysAgo.toISOString())
       .order('logged_at', { ascending: false }),
     supabase.from('feeding_logs').select('*')
       .in('cat_id', allCatIds).gte('logged_at', thirtyDaysAgo.toISOString())
@@ -115,7 +118,9 @@ export default async function DashboardPage() {
   const distinctMealsToday = new Set(
     feedings.map(f => `${f.food_brand}||${f.food_type}`)
   ).size
-  const health30 = (allHealth30 ?? []) as HealthLog[]
+  // Haushaltsweit (für Empfehlung/Korrelation) vs. nur aktive Katze (für Statistiken)
+  const health30Household = (allHealth30 ?? []) as HealthLog[]
+  const health30 = health30Household.filter(h => h.cat_id === cat.id)
   const feedings30 = dedupeSharedFeedings((allFeedings30 ?? []) as FeedingLog[])
   const pantry = (pantryRaw ?? []) as PantryItem[]
 
@@ -170,7 +175,8 @@ export default async function DashboardPage() {
     const fDay = new Date(f.logged_at)
     const nextDay = new Date(fDay); nextDay.setDate(nextDay.getDate() + 1)
 
-    const hasDiarrhea = health30.some(h => {
+    // Haushaltsweit: Durchfall bei irgendeiner Katze nach diesem Futter zählt
+    const hasDiarrhea = health30Household.some(h => {
       const hDay = new Date(h.logged_at)
       return (isSameDay(hDay, fDay) || isSameDay(hDay, nextDay)) && h.stool_consistency === 'diarrhea'
     })
@@ -197,10 +203,12 @@ export default async function DashboardPage() {
   const recentFamilies3 = new Set(
     recentFeedings3.flatMap(f => getFoodInfo(f.food_brand, f.food_type)?.proteinFamily ?? [])
   )
-  const recentDiarrhea = health30.some(h =>
+  // Haushaltsweit: hat IRGENDEINE Katze gerade einen empfindlichen Bauch, gilt
+  // das fürs gemeinsame Futter – die Empfehlung ist dadurch in beiden Tabs gleich
+  const recentDiarrhea = health30Household.some(h =>
     new Date(h.logged_at) >= threeDaysAgo && h.stool_consistency === 'diarrhea'
   )
-  const softOrDiarrhea7 = health30.some(h =>
+  const softOrDiarrhea7 = health30Household.some(h =>
     new Date(h.logged_at) >= sevenDaysAgo &&
     (h.stool_consistency === 'diarrhea' || h.stool_consistency === 'soft')
   )
