@@ -42,7 +42,10 @@ export default function CatSwitcher() {
     setActiveId(id)
     setActiveCatIdClient(id)
     setActiveCatThemeClient(cat?.theme ?? 'amber')
-    router.refresh()
+    // Voller Reload statt router.refresh(): Client-Seiten (Gewicht, Medis, Fotos …)
+    // laden ihre Daten nur beim Mount – ein RSC-Refresh würde sie mit der alten
+    // Katze stehen lassen.
+    window.location.reload()
   }
 
   return (
