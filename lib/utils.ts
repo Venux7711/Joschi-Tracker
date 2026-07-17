@@ -1,5 +1,17 @@
 import type { StoolConsistency, Appetite, Activity } from './types'
 
+// Eine gemeinsame Mahlzeit erzeugt eine Zeile pro Katze (gleiche Sorte, gleicher
+// Zeitpunkt). Für Anzeigen/Statistiken auf Haushaltsebene zählt sie nur einmal.
+export function dedupeSharedFeedings<T extends { food_brand: string; food_type: string; logged_at: string }>(logs: T[]): T[] {
+  const seen = new Set<string>()
+  return logs.filter((f) => {
+    const key = `${f.food_brand}||${f.food_type}||${f.logged_at}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
   return date.toLocaleDateString('de-DE', {

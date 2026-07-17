@@ -8,6 +8,7 @@ import {
   getStoolColor,
   getAppetiteLabel,
   getActivityLabel,
+  dedupeSharedFeedings,
 } from '@/lib/utils'
 import type { FeedingLog, HealthLog } from '@/lib/types'
 import { getActiveCat, getCats } from '@/lib/active-cat.server'
@@ -85,7 +86,8 @@ export default async function HistoryPage() {
   ])
 
   const health = (allHealth ?? []) as HealthLog[]
-  const feedings = (allFeedings ?? []) as FeedingLog[]
+  // Geteilte Mahlzeiten (eine Zeile pro Katze) nur einmal anzeigen
+  const feedings = dedupeSharedFeedings((allFeedings ?? []) as FeedingLog[])
 
   const days = getPast30Days()
 

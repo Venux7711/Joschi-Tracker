@@ -23,9 +23,12 @@ export default function CatPhoto({
   const [open, setOpen] = useState(false)
   const [errored, setErrored] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [localSrc, setLocalSrc] = useState<string | null>(null)
+  // "Gerade hochgeladen"-Vorschau ist an die Katze gebunden, für die hochgeladen
+  // wurde – sonst klebt nach dem Umschalten das Bild der anderen Katze am Profil.
+  const [localUpload, setLocalUpload] = useState<{ forCatId: string; url: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const localSrc = localUpload && localUpload.forCatId === catId ? localUpload.url : null
   const effectiveSrc = localSrc ?? src
   // Neues Bild lokal anzeigen → nie erneut als "fehlgeschlagen" behandeln
   const showPhoto = !!effectiveSrc && (!errored || !!localSrc)
@@ -70,7 +73,7 @@ export default function CatPhoto({
       })
       if (!res.ok) { setError('Speichern fehlgeschlagen'); return }
 
-      setLocalSrc(publicUrl)
+      setLocalUpload({ forCatId: catId, url: publicUrl })
       setErrored(false)
       router.refresh()
     } finally {

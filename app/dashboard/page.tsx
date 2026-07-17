@@ -9,6 +9,7 @@ import {
   getStoolColor,
   getAppetiteLabel,
   getActivityLabel,
+  dedupeSharedFeedings,
 } from '@/lib/utils'
 import type { Cat, FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@/lib/types'
 import AiInsights from '@/components/AiInsights'
@@ -69,6 +70,9 @@ export default async function DashboardPage() {
   // Vorrat ist Haushalts-, nicht Katzen-spezifisch – über alle Katzen des Besitzers
   const allCats = await getCats(supabase)
   const allCatIds = allCats.map((c) => c.id)
+  // Fütterung gilt immer für den ganzen Haushalt → Beschriftung entsprechend
+  const householdNames = allCats.map((c) => c.name).join(' & ')
+  const multiCat = allCats.length > 1
 
   // Datumsrahmen
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
@@ -103,7 +107,8 @@ export default async function DashboardPage() {
     supabase.from('pantry_items').select('*').in('cat_id', allCatIds).gt('quantity', 0),
   ])
 
-  const feedings = (todayFeedingsRaw ?? []) as FeedingLog[]
+  // Geteilte Mahlzeiten (eine Zeile pro Katze) nur einmal anzeigen/zählen
+  const feedings = dedupeSharedFeedings((todayFeedingsRaw ?? []) as FeedingLog[])
   const healthLogs = (todayHealthRaw ?? []) as HealthLog[]
 
   // Mahlzeiten = unterschiedliche Futtersorten heute (gleiches Futter mehrfach = 1×)
@@ -111,7 +116,7 @@ export default async function DashboardPage() {
     feedings.map(f => `${f.food_brand}||${f.food_type}`)
   ).size
   const health30 = (allHealth30 ?? []) as HealthLog[]
-  const feedings30 = (allFeedings30 ?? []) as FeedingLog[]
+  const feedings30 = dedupeSharedFeedings((allFeedings30 ?? []) as FeedingLog[])
   const pantry = (pantryRaw ?? []) as PantryItem[]
 
   // === Statistiken berechnen ===
@@ -381,7 +386,8 @@ export default async function DashboardPage() {
           <div className="flex items-center gap-4 relative">
             {/* Photo with themed ring – kein overflow:hidden hier, sonst wird das Kamera-Badge abgeschnitten */}
             <div style={{ flexShrink: 0, padding: 3, borderRadius: '50%', background: theme.photoGradient }}>
-              <CatPhoto src={cat.photo_url} name={cat.name} theme={cat.theme} size={72} editable catId={cat.id} />
+              {/* key erzwingt Remount beim Katzenwechsel – sonst überlebt Upload-/Fehler-State den Switch */}
+              <CatPhoto key={cat.id} src={cat.photo_url} name={cat.name} theme={cat.theme} size={72} editable catId={cat.id} />
             </div>
 
             <div className="flex-1 min-w-0">
@@ -426,7 +432,7 @@ export default async function DashboardPage() {
             <span style={{ fontSize: 26, lineHeight: 1 }}>🍽️</span>
             <div>
               <div style={{ color: 'white', fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1 }}>Futter</div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 3, fontWeight: 500 }}>für {cat.name} erfassen</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 3, fontWeight: 500 }}>für {householdNames} erfassen</div>
             </div>
           </Link>
           <Link
@@ -671,7 +677,9 @@ export default async function DashboardPage() {
           {feedings.length === 0 ? (
             <div style={{ padding: '28px 20px', textAlign: 'center' }}>
               <p style={{ fontSize: 22, marginBottom: 8 }}>🐾</p>
-              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)', fontWeight: 500 }}>{cat.name} wartet auf sein Futter</p>
+              <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.4)', fontWeight: 500 }}>
+                {multiCat ? `${householdNames} warten auf ihr Futter` : `${cat.name} wartet auf sein Futter`}
+              </p>
               <Link href="/feeding/new" style={{ display: 'inline-block', marginTop: 10, fontSize: 14, color: 'var(--am-600)', fontWeight: 700, letterSpacing: '-0.01em' }}>
                 Jetzt füttern →
               </Link>

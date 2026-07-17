@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { getActiveCat, getCats } from '@/lib/active-cat.server'
+import { dedupeSharedFeedings } from '@/lib/utils'
 import type { AiMemory, Cat, ChatMessage, StoolConsistency, Appetite, Activity } from '@/lib/types'
 
 // Vercel: mehr Zeitbudget, damit Retry + Fallback-Modell nicht ins Funktions-Timeout laufen
@@ -246,10 +247,11 @@ async function executeAction(
 ): Promise<string | null> {
   if (action.type === 'log_feeding') {
     const loggedAt = action.logged_at ?? new Date().toISOString()
-    const { error } = await rlsSupabase.from('feeding_logs').insert({
-      user_id: userId, cat_id: catId, food_brand: action.food_brand, food_type: action.food_type,
+    // Gefüttert wird immer gemeinsam → eine Zeile pro Katze (wie im Futter-Formular)
+    const { error } = await rlsSupabase.from('feeding_logs').insert(allCatIds.map((cid) => ({
+      user_id: userId, cat_id: cid, food_brand: action.food_brand, food_type: action.food_type,
       amount_grams: action.amount_grams ?? null, logged_at: loggedAt,
-    })
+    })))
     if (error) { console.error('log_feeding error:', error.message); return null }
     return `Futter eingetragen: ${action.food_type || action.food_brand}${action.amount_grams ? ` (${action.amount_grams}g)` : ''}${formatWhen(loggedAt)}`
   }
@@ -364,7 +366,7 @@ export async function POST(req: NextRequest) {
       serviceSupabase.from('weights').select('*').eq('cat_id', catId).order('measured_at', { ascending: false }).limit(6),
     ])
 
-    const feedingLines = (feedings ?? []).map((f) => {
+    const feedingLines = dedupeSharedFeedings(feedings ?? []).map((f) => {
       let line = `${f.logged_at.slice(0, 10)}: ${f.food_brand} – ${f.food_type}`
       if (f.amount_grams) line += ` (${f.amount_grams}g)`
       return line
