@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { getActiveCat, getCats } from '@/lib/active-cat.server'
+import { dedupeSharedFeedings } from '@/lib/utils'
 
 function makeSupabase() {
   const cookieStore = cookies()
@@ -34,7 +35,8 @@ export async function GET(req: NextRequest) {
     supabase.from('health_logs').select('stool_consistency, logged_at').eq('cat_id', catId).gte('logged_at', start).lte('logged_at', end),
   ])
 
-  const feedings = feedRes.data ?? []
+  // Geteilte Mahlzeiten (eine Zeile pro Katze) nur einmal zählen
+  const feedings = dedupeSharedFeedings(feedRes.data ?? [])
   const healthLogs = healthRes.data ?? []
 
   // Total feedings

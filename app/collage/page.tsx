@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { pickActiveCat } from '@/lib/active-cat-client'
+import { dedupeSharedFeedings } from '@/lib/utils'
 import type { Cat } from '@/lib/types'
 
 interface Photo { id: string; public_url: string; mood_tag: string; taken_at: string }
@@ -53,7 +54,7 @@ export default function CollagePage() {
           .eq('cat_id', catId)
           .gte('logged_at', `${sinceStr}T00:00:00`)
           .lte('logged_at', `${todayStr}T23:59:59`),
-        supabase.from('feeding_logs').select('logged_at')
+        supabase.from('feeding_logs').select('logged_at, food_brand, food_type')
           .in('cat_id', allCatIds)
           .gte('logged_at', `${sinceStr}T00:00:00`)
           .lte('logged_at', `${todayStr}T23:59:59`),
@@ -65,7 +66,7 @@ export default function CollagePage() {
       healthRes.data?.forEach(h => { stoolByDate[h.logged_at.slice(0, 10)] = h.stool_consistency })
 
       const feedsByDate: Record<string, number> = {}
-      feedRes.data?.forEach(f => {
+      dedupeSharedFeedings(feedRes.data ?? []).forEach(f => {
         const d = f.logged_at.slice(0, 10)
         feedsByDate[d] = (feedsByDate[d] ?? 0) + 1
       })

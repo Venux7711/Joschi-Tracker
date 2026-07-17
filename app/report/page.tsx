@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { pickActiveCat } from '@/lib/active-cat-client'
+import { dedupeSharedFeedings } from '@/lib/utils'
 import type { Cat } from '@/lib/types'
 
 interface HealthLog { logged_at: string; stool_consistency: string; appetite: string; activity: string; vomiting: boolean; fur_issue: boolean; notes: string | null }
@@ -44,7 +45,7 @@ export default function ReportPage() {
     ])
 
     setHealth(hRes.data ?? [])
-    setFeedings(fRes.data ?? [])
+    setFeedings(dedupeSharedFeedings(fRes.data ?? []))
     setLoading(false)
   }
 
