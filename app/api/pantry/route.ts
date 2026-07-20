@@ -53,12 +53,17 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json()
   const { id, ...updates } = body
 
+  // Kein user_id-Filter: Vorrat ist Haushalts-Sache, jeder eingeladene Nutzer
+  // darf auch Einträge des anderen ändern (RLS: Migration 006).
   const { data, error } = await supabase.from('pantry_items')
     .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', id).eq('user_id', user.id).select().single()
+    .eq('id', id).select()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-  return NextResponse.json({ item: data })
+  // 0 geänderte Zeilen = von RLS blockiert oder ID unbekannt → ehrlich als Fehler melden,
+  // statt so zu tun, als wäre gespeichert worden
+  if (!data?.length) return NextResponse.json({ error: 'Eintrag nicht gefunden oder keine Berechtigung' }, { status: 404 })
+  return NextResponse.json({ item: data[0] })
 }
 
 export async function DELETE(req: NextRequest) {
@@ -67,6 +72,8 @@ export async function DELETE(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await req.json()
-  await supabase.from('pantry_items').delete().eq('id', id).eq('user_id', user.id)
+  const { data, error } = await supabase.from('pantry_items').delete().eq('id', id).select()
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  if (!data?.length) return NextResponse.json({ error: 'Eintrag nicht gefunden oder keine Berechtigung' }, { status: 404 })
   return NextResponse.json({ ok: true })
 }

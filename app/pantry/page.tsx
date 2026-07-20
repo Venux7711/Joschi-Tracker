@@ -125,6 +125,7 @@ export default function PantryPage() {
   // Restock edit
   const [editRestockId, setEditRestockId] = useState<string | null>(null)
   const [editRestockDate, setEditRestockDate] = useState('')
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/pantry').then(r => r.json()).then(d => {
@@ -133,34 +134,68 @@ export default function PantryPage() {
     })
   }, [])
 
+  useEffect(() => {
+    if (!saveError) return
+    const t = setTimeout(() => setSaveError(null), 4000)
+    return () => clearTimeout(t)
+  }, [saveError])
+
+  // Speichern fehlgeschlagen → optimistische Änderung zurückrollen und Fehler zeigen,
+  // statt so zu tun, als hätte es geklappt
+  const failSave = (prevItems: PantryItem[], detail?: string) => {
+    setItems(prevItems)
+    setSaveError(detail ?? 'Speichern fehlgeschlagen – bitte erneut versuchen')
+  }
+
   const updateQty = async (id: string, delta: number) => {
     const item = items.find(i => i.id === id)
     if (!item) return
+    const prevItems = items
     const newQty = Math.max(0, item.quantity + delta)
     setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: newQty } : i))
-    await fetch('/api/pantry', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, quantity: newQty }),
-    })
+    try {
+      const res = await fetch('/api/pantry', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, quantity: newQty }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.item) failSave(prevItems, data.error)
+    } catch {
+      failSave(prevItems)
+    }
   }
 
   const deleteItem = async (id: string) => {
+    const prevItems = items
     setItems(prev => prev.filter(i => i.id !== id))
-    await fetch('/api/pantry', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    })
+    try {
+      const res = await fetch('/api/pantry', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) failSave(prevItems, data.error)
+    } catch {
+      failSave(prevItems)
+    }
   }
 
   const saveRestock = async (id: string) => {
+    const prevItems = items
     setItems(prev => prev.map(i => i.id === id ? { ...i, restock_date: editRestockDate || null } : i))
-    await fetch('/api/pantry', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, restock_date: editRestockDate || null }),
-    })
+    try {
+      const res = await fetch('/api/pantry', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, restock_date: editRestockDate || null }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.item) failSave(prevItems, data.error)
+    } catch {
+      failSave(prevItems)
+    }
     setEditRestockId(null)
   }
 
@@ -269,6 +304,12 @@ export default function PantryPage() {
             + Hinzufügen
           </button>
         </div>
+
+        {saveError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+            ⚠ {saveError}
+          </div>
+        )}
 
         {loading && (
           <div className="space-y-3 animate-pulse">

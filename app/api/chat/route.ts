@@ -23,7 +23,8 @@ const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 const HISTORY_LIMIT = 20
 const MAX_REMEMBER_PER_TURN = 5
-const MAX_ACTIONS_PER_TURN = 5
+// Hoch genug, dass "füll den ganzen Vorrat wieder auf" jede Sorte einzeln abdecken kann
+const MAX_ACTIONS_PER_TURN = 12
 
 // weights/medications laufen (wie in /api/weight und /api/medications) über den
 // Service-Role-Client, weil die RLS-Policies dieser Tabellen anonyme/normale
@@ -58,7 +59,7 @@ type HealthAction = {
   type: 'log_health'; stool_consistency: StoolConsistency; vomiting: boolean
   appetite: Appetite; activity: Activity; fur_issue: boolean; notes?: string; logged_at?: string
 }
-type PantryAction = { type: 'adjust_pantry'; brand: string; food_type: string; delta: number }
+type PantryAction = { type: 'adjust_pantry'; brand: string; food_type: string; delta?: number; quantity?: number }
 type WeightAction = { type: 'log_weight'; weight_grams: number }
 type ChatAction = FeedingAction | HealthAction | PantryAction | WeightAction
 
@@ -112,9 +113,11 @@ function parseAction(raw: unknown): ChatAction | null {
   if (a.type === 'adjust_pantry') {
     const brand = str(a.brand, 100)
     const food_type = str(a.food_type, 100)
-    const delta = typeof a.delta === 'number' && isFinite(a.delta) ? clamp(a.delta, -20, 20) : 0
-    if (!brand || !food_type || delta === 0) return null
-    return { type: 'adjust_pantry', brand, food_type, delta }
+    const delta = typeof a.delta === 'number' && isFinite(a.delta) ? clamp(a.delta, -20, 20) : undefined
+    // Absoluter Zielbestand ("auffüllen auf 6") hat Vorrang vor delta
+    const quantity = typeof a.quantity === 'number' && isFinite(a.quantity) ? clamp(a.quantity, 0, 50) : undefined
+    if (!brand || !food_type || (quantity === undefined && (delta === undefined || delta === 0))) return null
+    return { type: 'adjust_pantry', brand, food_type, delta, quantity }
   }
 
   if (a.type === 'log_weight') {
@@ -233,7 +236,7 @@ Wenn der Nutzer dir in seiner Nachricht etwas beibringen will, das du dir DAUERH
 Du kannst auch direkt Einträge für den Nutzer vornehmen, wenn er dir von etwas erzählt, das passiert ist – trage das SOFORT ein, ohne nachzufragen, und bestätige in "reply" knapp und konkret, was genau du mit welcher Uhrzeit eingetragen hast (damit Fehler sofort auffallen):
 - "log_feeding" {food_brand, food_type, amount_grams?, logged_at?}: wenn ${cat.name} gefüttert wurde/wird.
 - "log_health" {stool_consistency: "normal"|"soft"|"diarrhea"|"not_observed", vomiting: bool, appetite: "good"|"reduced"|"none", activity: "normal"|"tired"|"very_active", fur_issue: bool, notes?, logged_at?}: wenn der Nutzer sein Befinden beschreibt. Setze nur Felder, die klar aus der Nachricht hervorgehen, sonst nutze plausible neutrale Standardwerte (stool_consistency "not_observed", appetite "good", activity "normal", vomiting/fur_issue false). Alles, was über die festen Felder hinausgeht – Aussehen/Menge/Farbe von Kot, Auffälligkeiten, sonstige Beobachtungen – schreibst du als kurzen, klaren Satz in "notes", damit nichts verloren geht.
-- "adjust_pantry" {brand, food_type, delta}: wenn eine Dose geöffnet/verbraucht wurde (delta negativ, meist -1) oder neuer Vorrat dazukam (delta positiv). Kein logged_at nötig.
+- "adjust_pantry" {brand, food_type, delta?, quantity?}: wenn eine Dose geöffnet/verbraucht wurde (delta negativ, meist -1), neuer Vorrat dazukam (delta positiv) oder der Nutzer einen Zielbestand nennt (quantity = absoluter neuer Bestand, z.B. "füll wieder auf 6 auf" → quantity 6). Bei "füll alles wieder auf" ohne Zahl: eine Aktion pro Sorte im AKTUELLEN VORRAT oben mit einer sinnvollen quantity (z.B. 6, oder frag kurz nach der gewünschten Menge). Kein logged_at nötig. Der Vorrat gilt für beide Katzen gemeinsam.
 - "log_weight" {weight_grams}: wenn der Nutzer ein aktuelles Gewicht nennt (in Gramm, z.B. 4200 für 4,2kg). Kein logged_at nötig.
 
 Zeitpunkt ("logged_at"): Optionales Feld als ISO-8601-Datetime (z.B. "2026-07-16T12:30:00"). Berechne es aus dem, was der Nutzer sagt, relativ zum aktuellen Datum/Uhrzeit oben – "gerade eben"/keine Angabe → weglassen (wird automatisch "jetzt"), "heute Mittag"/"18 Uhr" → heutiges Datum mit dieser Uhrzeit, "vor 2 Stunden" → aktuelle Zeit minus 2h, "gestern Abend" → gestriges Datum. Rückdatierung funktioniert nur bis zu 7 Tage in die Vergangenheit; bei älteren oder sehr unklaren Zeitangaben trage nichts ein und verweise stattdessen auf die passende Seite in der App. Bei Unsicherheit über Werte lieber kurz nachfragen statt zu raten. Bei reinen Fragen bleibt "actions" ein leeres Array.
@@ -270,23 +273,28 @@ async function executeAction(
 
   if (action.type === 'adjust_pantry') {
     // Vorrat ist Haushalts-, nicht Katzen-spezifisch – über alle Katzen suchen
-    const { data: existing } = await rlsSupabase.from('pantry_items').select('*')
-      .in('cat_id', allCatIds).ilike('brand', action.brand).ilike('type', action.food_type).maybeSingle()
+    // (limit statt maybeSingle: Duplikate dürfen die Aktion nicht crashen)
+    const { data: matches } = await rlsSupabase.from('pantry_items').select('*')
+      .in('cat_id', allCatIds).ilike('brand', action.brand).ilike('type', action.food_type).limit(1)
+    const existing = matches?.[0]
 
     if (existing) {
-      const newQty = Math.max(0, existing.quantity + action.delta)
-      const { error } = await rlsSupabase.from('pantry_items')
-        .update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', existing.id)
-      if (error) { console.error('adjust_pantry update error:', error.message); return null }
+      const newQty = action.quantity ?? Math.max(0, existing.quantity + (action.delta ?? 0))
+      // .select() als Erfolgskontrolle: 0 Zeilen (z.B. von RLS blockiert) darf
+      // NICHT als Erfolg gemeldet werden
+      const { data: updated, error } = await rlsSupabase.from('pantry_items')
+        .update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', existing.id).select()
+      if (error || !updated?.length) { console.error('adjust_pantry update error:', error?.message ?? '0 rows'); return null }
       return `Vorrat aktualisiert: ${action.food_type || action.brand} → ${newQty} Dose${newQty !== 1 ? 'n' : ''}`
     }
 
-    if (action.delta > 0) {
-      const { error } = await rlsSupabase.from('pantry_items').insert({
-        user_id: userId, cat_id: catId, brand: action.brand, type: action.food_type, quantity: action.delta,
-      })
-      if (error) { console.error('adjust_pantry insert error:', error.message); return null }
-      return `Neu im Vorrat: ${action.food_type || action.brand} (${action.delta} Dose${action.delta !== 1 ? 'n' : ''})`
+    const initialQty = action.quantity ?? action.delta ?? 0
+    if (initialQty > 0) {
+      const { data: inserted, error } = await rlsSupabase.from('pantry_items').insert({
+        user_id: userId, cat_id: catId, brand: action.brand, type: action.food_type, quantity: initialQty,
+      }).select()
+      if (error || !inserted?.length) { console.error('adjust_pantry insert error:', error?.message ?? '0 rows'); return null }
+      return `Neu im Vorrat: ${action.food_type || action.brand} (${initialQty} Dose${initialQty !== 1 ? 'n' : ''})`
     }
 
     return null
