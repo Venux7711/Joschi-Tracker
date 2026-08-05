@@ -16,6 +16,8 @@ interface Photo {
   caption: string | null
   taken_at: string
   health_log_id: string | null
+  /** Markierung, wer auf dem Bild ist – die Bibliothek selbst ist gemeinsam. */
+  cat_id: string | null
 }
 
 const MOOD_LABELS: Record<string, { label: string; color: string }> = {
@@ -37,17 +39,25 @@ export default function FotosPage() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Photo | null>(null)
   const [filter, setFilter] = useState<string>('all')
+  const [catFilter, setCatFilter] = useState<string>('all')
+  const [cats, setCats] = useState<Cat[]>([])
   const [catId, setCatId] = useState<string | null>(null)
 
   useEffect(() => {
     const init = async () => {
-      const { data: cats } = await supabase.from('cats').select('*').order('created_at', { ascending: true })
-      const activeCat = pickActiveCat((cats ?? []) as Cat[])
+      const { data: catRows } = await supabase.from('cats').select('*').order('created_at', { ascending: true })
+      const catList = (catRows ?? []) as Cat[]
+      setCats(catList)
+      // Aktive Katze nur als Standard-Markierung für neue Uploads – die
+      // Bibliothek zeigt immer alle Fotos beider Katzen
+      const activeCat = pickActiveCat(catList)
       if (activeCat) setCatId(activeCat.id)
       loadPhotos()
     }
     init()
   }, [])
+
+  const catName = (id: string | null) => cats.find(c => c.id === id)?.name ?? null
 
   const loadPhotos = async () => {
     setLoading(true)
@@ -85,7 +95,12 @@ export default function FotosPage() {
     await fetch('/api/photos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ storage_path: uploadData.path, public_url: publicUrl, mood_tag: 'normal', taken_at: new Date().toISOString() }),
+      body: JSON.stringify({
+        storage_path: uploadData.path, public_url: publicUrl, mood_tag: 'normal',
+        taken_at: new Date().toISOString(),
+        // Beim Filtern nach einer Katze wird das Foto auch für diese markiert
+        cat_id: catFilter !== 'all' ? catFilter : catId,
+      }),
     })
 
     await loadPhotos()
@@ -95,12 +110,19 @@ export default function FotosPage() {
 
   const handleDelete = async (photo: Photo) => {
     if (!confirm('Foto löschen?')) return
-    await fetch('/api/photos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: photo.id, storage_path: photo.storage_path }) })
+    const res = await fetch('/api/photos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: photo.id, storage_path: photo.storage_path }) })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setUploadError(data.error ?? 'Löschen fehlgeschlagen')
+      return
+    }
     setSelected(null)
     await loadPhotos()
   }
 
-  const filtered = filter === 'all' ? photos : photos.filter(p => p.mood_tag === filter)
+  const filtered = photos
+    .filter(p => filter === 'all' || p.mood_tag === filter)
+    .filter(p => catFilter === 'all' || p.cat_id === catFilter)
 
   const grouped: Record<string, Photo[]> = {}
   filtered.forEach(p => {
@@ -146,7 +168,32 @@ export default function FotosPage() {
           </div>
         )}
 
-        {/* Filter */}
+        {/* Katzen-Filter – gemeinsame Bibliothek, optional nach Markierung filtern */}
+        {cats.length > 1 && (
+          <div className="flex gap-2 mb-3 flex-wrap">
+            <button
+              onClick={() => setCatFilter('all')}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                catFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
+              }`}
+            >
+              Beide ({photos.length})
+            </button>
+            {cats.map(c => (
+              <button
+                key={c.id}
+                onClick={() => setCatFilter(c.id)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  catFilter === c.id ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                🐾 {c.name} ({photos.filter(p => p.cat_id === c.id).length})
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Stimmungs-Filter */}
         <div className="flex gap-2 mb-5 flex-wrap">
           {['all', 'good', 'normal', 'bad', 'vet'].map(f => (
             <button
@@ -156,7 +203,7 @@ export default function FotosPage() {
                 filter === f ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-amber-300'
               }`}
             >
-              {f === 'all' ? `Alle (${photos.length})` : MOOD_LABELS[f]?.label}
+              {f === 'all' ? 'Alle Stimmungen' : MOOD_LABELS[f]?.label}
             </button>
           ))}
         </div>
@@ -170,8 +217,17 @@ export default function FotosPage() {
         ) : filtered.length === 0 ? (
           <div className="card p-12 text-center">
             <div className="text-5xl mb-4">📸</div>
-            <p className="text-gray-500 mb-2">Noch keine Fotos</p>
-            <p className="text-sm text-gray-400">Tippe auf "+ Foto" um das erste Bild hinzuzufügen</p>
+            {photos.length === 0 ? (
+              <>
+                <p className="text-gray-500 mb-2">Noch keine Fotos</p>
+                <p className="text-sm text-gray-400">Tippe oben auf 📷 oder 🖼️ um das erste Bild hinzuzufügen</p>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-500 mb-2">Keine Fotos für diesen Filter</p>
+                <p className="text-sm text-gray-400">Insgesamt sind {photos.length} Fotos in der Bibliothek</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-6">
@@ -189,6 +245,11 @@ export default function FotosPage() {
                       {photo.mood_tag !== 'normal' && (
                         <div className={`absolute top-1 right-1 text-xs px-1.5 py-0.5 rounded-full font-medium ${MOOD_LABELS[photo.mood_tag]?.color}`}>
                           {MOOD_LABELS[photo.mood_tag]?.label}
+                        </div>
+                      )}
+                      {cats.length > 1 && catName(photo.cat_id) && (
+                        <div className="absolute bottom-1 left-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-black/55 text-white">
+                          {catName(photo.cat_id)}
                         </div>
                       )}
                     </button>
@@ -215,6 +276,11 @@ export default function FotosPage() {
                 <span className={`text-xs px-2 py-1 rounded-full ${MOOD_LABELS[selected.mood_tag]?.color ?? 'bg-gray-100 text-gray-600'}`}>
                   {MOOD_LABELS[selected.mood_tag]?.label ?? selected.mood_tag}
                 </span>
+                {cats.length > 1 && catName(selected.cat_id) && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-white/15 text-white ml-1.5">
+                    🐾 {catName(selected.cat_id)}
+                  </span>
+                )}
                 <p className="text-gray-400 text-sm mt-1">
                   {new Date(selected.taken_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>

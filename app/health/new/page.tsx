@@ -157,7 +157,7 @@ function NewHealthForm() {
       if (uploadData) {
         const { data: { publicUrl } } = supabase.storage.from('joschi-photos').getPublicUrl(uploadData.path)
         const moodTag = stool === 'diarrhea' ? 'bad' : stool === 'normal' ? 'good' : 'normal'
-        await fetch('/api/photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storage_path: uploadData.path, public_url: publicUrl, mood_tag: moodTag, health_log_id: insertData.id, taken_at: new Date(loggedAt).toISOString() }) })
+        await fetch('/api/photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storage_path: uploadData.path, public_url: publicUrl, mood_tag: moodTag, health_log_id: insertData.id, taken_at: new Date(loggedAt).toISOString(), cat_id: catId }) })
       }
     }
 

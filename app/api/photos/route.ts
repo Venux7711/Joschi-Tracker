@@ -17,23 +17,22 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const cat = await getActiveCat(supabase)
-  if (!cat) return NextResponse.json({ photos: [] })
-  const catId = cat.id
-
   const limit = parseInt(req.nextUrl.searchParams.get('limit') ?? '100')
   const mood = req.nextUrl.searchParams.get('mood')
+  const catFilter = req.nextUrl.searchParams.get('catId')    // optional: nur Fotos einer Katze
   const date = req.nextUrl.searchParams.get('date')         // YYYY-MM-DD exact day
   const startDate = req.nextUrl.searchParams.get('startDate') // YYYY-MM-DD range start
   const endDate = req.nextUrl.searchParams.get('endDate')     // YYYY-MM-DD range end
 
+  // Gemeinsame Fotobibliothek: keine Filterung nach aktiver Katze. cat_id ist nur
+  // noch eine Markierung, wer auf dem Bild ist – explizit über ?catId= filterbar.
   let query = supabase
     .from('photos')
     .select('*')
-    .eq('cat_id', catId)
     .order('taken_at', { ascending: false })
     .limit(limit)
 
+  if (catFilter) query = query.eq('cat_id', catFilter)
   if (mood) query = query.eq('mood_tag', mood)
   if (date) {
     query = query.gte('taken_at', `${date}T00:00:00`).lte('taken_at', `${date}T23:59:59`)
@@ -52,12 +51,14 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const cat = await getActiveCat(supabase)
-  if (!cat) return NextResponse.json({ error: 'Katze nicht gefunden' }, { status: 404 })
-  const catId = cat.id
-
   const body = await req.json()
   const { storage_path, public_url, mood_tag, health_log_id, caption, taken_at } = body
+
+  // cat_id markiert nur, wer auf dem Bild ist. Kommt keine Angabe mit, wird die
+  // aktive Katze als Standard genutzt – die Sichtbarkeit hängt nicht daran.
+  const catId = body.cat_id !== undefined
+    ? body.cat_id
+    : (await getActiveCat(supabase))?.id ?? null
 
   const { data, error } = await supabase.from('photos').insert({
     cat_id: catId,
@@ -85,7 +86,10 @@ export async function DELETE(req: NextRequest) {
     await supabase.storage.from('joschi-photos').remove([storage_path])
   }
 
-  const { error } = await supabase.from('photos').delete().eq('id', id).eq('user_id', user.id)
+  // Kein user_id-Filter: gemeinsame Bibliothek, jeder eingeladene Nutzer darf
+  // auch Fotos des anderen löschen (RLS: Migration 007).
+  const { data, error } = await supabase.from('photos').delete().eq('id', id).select()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data?.length) return NextResponse.json({ error: 'Foto nicht gefunden oder keine Berechtigung' }, { status: 404 })
   return NextResponse.json({ ok: true })
 }
