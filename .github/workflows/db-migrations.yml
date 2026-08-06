@@ -1,0 +1,33 @@
+name: Datenbank-Migrationen
+
+# Spielt neue supabase/migrations/*.sql automatisch in die Supabase-DB ein,
+# sobald sie auf main landen. Braucht nur ein Secret: SUPABASE_ACCESS_TOKEN
+# (Personal Access Token aus https://supabase.com/dashboard/account/tokens).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/scripts/apply-migrations.mjs'
+      - '.github/workflows/db-migrations.yml'
+  workflow_dispatch: {}
+
+# Nie zwei Migrationsläufe gleichzeitig
+concurrency:
+  group: db-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Ausstehende Migrationen anwenden
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ixxmxzwkuassekwumyth
+        run: node .github/scripts/apply-migrations.mjs

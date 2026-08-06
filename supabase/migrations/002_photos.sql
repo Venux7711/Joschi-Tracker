@@ -14,11 +14,20 @@ CREATE TABLE IF NOT EXISTS photos (
 
 ALTER TABLE photos ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Auth users read photos" ON photos
-  FOR SELECT USING (auth.role() = 'authenticated');
+DO $$ BEGIN
+  CREATE POLICY "Auth users read photos" ON photos
+    FOR SELECT USING (auth.role() = 'authenticated');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Auth users insert photos" ON photos
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "Auth users insert photos" ON photos
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Auth users delete photos" ON photos
-  FOR DELETE USING (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "Auth users delete photos" ON photos
+    FOR DELETE USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
