@@ -12,11 +12,15 @@ const REF = process.env.PROJECT_REF
 // Secret noch nicht hinterlegt → sauber überspringen (kein rotes X beim Setup),
 // statt hart zu scheitern. Sobald SUPABASE_ACCESS_TOKEN als GitHub-Secret
 // existiert, läuft die Migration echt durch.
+// Früher wurde hier still mit exit 0 übersprungen. Das ist gefährlich: der
+// Workflow meldet grün, die Migration läuft aber nie – und der Code geht live
+// gegen eine Datenbank, der die neue Spalte fehlt. Genau so ist Migration 008
+// durchgerutscht. Fehlt das Secret, muss der Lauf rot werden.
 if (!TOKEN) {
-  console.log('⏭  SUPABASE_ACCESS_TOKEN ist nicht gesetzt – übersprungen.')
-  console.log('   Secret in GitHub hinterlegen (Repo → Settings → Secrets → Actions),')
-  console.log('   damit Migrationen bei jedem Push automatisch laufen.')
-  process.exit(0)
+  console.error('✗ SUPABASE_ACCESS_TOKEN ist nicht gesetzt – Migrationen wurden NICHT angewendet.')
+  console.error('  Secret hinterlegen (Repo → Settings → Secrets and variables → Actions),')
+  console.error('  Token aus https://supabase.com/dashboard/account/tokens.')
+  process.exit(1)
 }
 if (!REF) {
   console.error('Fehlt: PROJECT_REF muss gesetzt sein (im Workflow hinterlegt).')

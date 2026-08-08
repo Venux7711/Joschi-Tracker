@@ -85,15 +85,21 @@ export default function FotosPage() {
     })
     setSavingTags(false)
 
+    const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
       setTagError(data.error ?? 'Markierung konnte nicht gespeichert werden')
       return
     }
 
-    const updated = { ...photo, cat_ids: next, cat_id: next[0] ?? null }
-    setPhotos(prev => prev.map(p => (p.id === photo.id ? updated : p)))
-    setSelected(updated)
+    // Die gespeicherte Zeile übernehmen, nicht die Wunschvorstellung: solange
+    // Migration 008 fehlt, kann die DB nur eine Katze pro Foto festhalten.
+    const saved: Photo = data.photo ?? { ...photo, cat_ids: next, cat_id: next[0] ?? null }
+    setPhotos(prev => prev.map(p => (p.id === photo.id ? saved : p)))
+    setSelected(saved)
+
+    if (next.length > 1 && catTags(saved).length < next.length) {
+      setTagError('Aktuell ist nur eine Katze pro Foto möglich – die Datenbank-Migration steht noch aus.')
+    }
   }
 
   const loadPhotos = async () => {

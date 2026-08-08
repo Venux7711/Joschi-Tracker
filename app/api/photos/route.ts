@@ -14,6 +14,22 @@ function makeSupabase() {
 }
 
 /**
+ * Die Spalte cat_ids kommt erst mit Migration 008. Solange die noch nicht auf
+ * der Datenbank liegt, arbeitet die Route auf der alten Einzelspalte cat_id
+ * weiter – sonst schlagen Hochladen und Markieren fehl. Nur der Positiv-Fall
+ * wird gecacht, damit die App die Spalte ohne Redeploy übernimmt, sobald die
+ * Migration eingespielt ist.
+ */
+let catIdsColumnReady = false
+
+async function hasCatIdsColumn(supabase: ReturnType<typeof makeSupabase>): Promise<boolean> {
+  if (catIdsColumnReady) return true
+  const { error } = await supabase.from('photos').select('cat_ids').limit(1)
+  catIdsColumnReady = !error
+  return catIdsColumnReady
+}
+
+/**
  * Liest die Katzen-Markierung aus dem Request. Akzeptiert cat_ids (neu, mehrere
  * Katzen) und cat_id (alt, eine Katze), gibt null zurück wenn beides fehlt.
  */
@@ -47,7 +63,11 @@ export async function GET(req: NextRequest) {
     .order('taken_at', { ascending: false })
     .limit(limit)
 
-  if (catFilter) query = query.contains('cat_ids', [catFilter])
+  if (catFilter) {
+    query = (await hasCatIdsColumn(supabase))
+      ? query.contains('cat_ids', [catFilter])
+      : query.eq('cat_id', catFilter)
+  }
   if (mood) query = query.eq('mood_tag', mood)
   // Tagesgrenzen in Berliner Zeit auflösen – ein nacktes "2026-08-08T00:00:00"
   // würde Postgres als UTC lesen und den Tag um 2 Stunden verschieben.
@@ -80,7 +100,7 @@ export async function POST(req: NextRequest) {
     ?? [(await getActiveCat(supabase))?.id].filter((id): id is string => !!id)
 
   const { data, error } = await supabase.from('photos').insert({
-    cat_ids: catIds,
+    ...((await hasCatIdsColumn(supabase)) ? { cat_ids: catIds } : {}),
     cat_id: catIds[0] ?? null,
     user_id: user.id,
     storage_path,
@@ -107,7 +127,8 @@ export async function PATCH(req: NextRequest) {
   const patch: Record<string, unknown> = {}
   const catIds = normalizeCatIds(body)
   if (catIds !== null) {
-    patch.cat_ids = catIds
+    // Ohne Migration 008 kann nur eine Katze markiert werden – die erste gewinnt
+    if (await hasCatIdsColumn(supabase)) patch.cat_ids = catIds
     patch.cat_id = catIds[0] ?? null
   }
   if (mood_tag !== undefined) patch.mood_tag = mood_tag
