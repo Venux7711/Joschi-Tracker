@@ -14,6 +14,25 @@ function makeSupabase() {
 }
 
 /**
+ * Client OHNE Nutzer-Session: Weil makeSupabase() das Session-Cookie mitschickt,
+ * greift dort RLS als angemeldeter Nutzer – und photos hat gar keine
+ * UPDATE-Policy (002 legt nur SELECT/INSERT/DELETE an), Löschen ist zudem auf
+ * den Uploader beschränkt. Markieren/Löschen lief deshalb ins Leere.
+ *
+ * Die Autorisierung passiert in der Route selbst: ohne angemeldeten Nutzer 401,
+ * und die App hat keinen öffentlichen Signup – alle eingeladenen Nutzer teilen
+ * denselben Haushalt und dieselbe Fotobibliothek. Damit funktionieren Schreib-
+ * zugriffe unabhängig davon, ob die Haushalts-Policies schon eingespielt sind.
+ */
+function makeAdminSupabase() {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { cookies: { getAll: () => [], setAll: () => {} } }
+  )
+}
+
+/**
  * Die Spalte cat_ids kommt erst mit Migration 008. Solange die noch nicht auf
  * der Datenbank liegt, arbeitet die Route auf der alten Einzelspalte cat_id
  * weiter – sonst schlagen Hochladen und Markieren fehl. Nur der Positiv-Fall
@@ -138,11 +157,13 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Nichts zu ändern' }, { status: 400 })
   }
 
-  // Gemeinsame Bibliothek: jeder eingeladene Nutzer darf jedes Foto markieren
-  const { data, error } = await supabase.from('photos').update(patch).eq('id', id).select().single()
+  // Gemeinsame Bibliothek: jeder eingeladene Nutzer darf jedes Foto markieren.
+  // Kein .single(): das wirft bei 0 Treffern einen kryptischen PostgREST-Fehler
+  // ("Cannot coerce the result to a single JSON object") statt einer klaren Meldung.
+  const { data, error } = await makeAdminSupabase().from('photos').update(patch).eq('id', id).select()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!data) return NextResponse.json({ error: 'Foto nicht gefunden' }, { status: 404 })
-  return NextResponse.json({ photo: data })
+  if (!data?.length) return NextResponse.json({ error: 'Foto nicht gefunden' }, { status: 404 })
+  return NextResponse.json({ photo: data[0] })
 }
 
 export async function DELETE(req: NextRequest) {
@@ -151,15 +172,16 @@ export async function DELETE(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id, storage_path } = await req.json()
+  const admin = makeAdminSupabase()
 
   if (storage_path) {
-    await supabase.storage.from('joschi-photos').remove([storage_path])
+    await admin.storage.from('joschi-photos').remove([storage_path])
   }
 
-  // Kein user_id-Filter: gemeinsame Bibliothek, jeder eingeladene Nutzer darf
-  // auch Fotos des anderen löschen (RLS: Migration 007).
-  const { data, error } = await supabase.from('photos').delete().eq('id', id).select()
+  // Gemeinsame Bibliothek: jeder eingeladene Nutzer darf auch Fotos des anderen
+  // löschen – ohne Admin-Client verhindert das die Uploader-Policy aus 002.
+  const { data, error } = await admin.from('photos').delete().eq('id', id).select()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!data?.length) return NextResponse.json({ error: 'Foto nicht gefunden oder keine Berechtigung' }, { status: 404 })
+  if (!data?.length) return NextResponse.json({ error: 'Foto nicht gefunden' }, { status: 404 })
   return NextResponse.json({ ok: true })
 }
