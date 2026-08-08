@@ -3,19 +3,18 @@
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import { ANIFIT_FOODS, getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
+import { berlinDaysBetween, formatBerlin } from '@/lib/time'
 import type { PantryItem, NutritionData } from '@/lib/types'
 
 type AddMode = 'anifit' | 'other'
 
 function RestockLabel({ date }: { date: string | null }) {
   if (!date) return null
-  const d = new Date(date)
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const diff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  const diff = berlinDaysBetween(new Date(), date)
   if (diff < 0) return <span className="text-xs text-gray-400">Nachschub überfällig</span>
   if (diff === 0) return <span className="text-xs text-green-600 font-medium">Nachschub heute</span>
   if (diff <= 3) return <span className="text-xs text-amber-600">Nachschub in {diff} Tag{diff > 1 ? 'en' : ''}</span>
-  return <span className="text-xs text-gray-400">Nachschub {d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}</span>
+  return <span className="text-xs text-gray-400">Nachschub {formatBerlin(date, { day: 'numeric', month: 'short' })}</span>
 }
 
 function NutritionBar({ nutrition }: { nutrition: NutritionData }) {

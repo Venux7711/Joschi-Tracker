@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Header from '@/components/Header'
+import { formatBerlinDate } from '@/lib/time'
 
 interface Medication {
   id: string; name: string; dosage: string | null; frequency: string | null
@@ -72,8 +73,8 @@ export default function MedikamentePage() {
           {med.frequency && <p className="text-sm text-gray-500">{med.frequency}</p>}
           {med.start_date && (
             <p className="text-xs text-gray-400 mt-1">
-              Ab {new Date(med.start_date).toLocaleDateString('de-DE')}
-              {med.end_date && ` bis ${new Date(med.end_date).toLocaleDateString('de-DE')}`}
+              Ab {formatBerlinDate(med.start_date)}
+              {med.end_date && ` bis ${formatBerlinDate(med.end_date)}`}
             </p>
           )}
           {med.notes && <p className="text-xs text-gray-400 mt-1 italic">{med.notes}</p>}

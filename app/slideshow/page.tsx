@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { formatBerlin } from '@/lib/time'
 
 interface Photo {
   id: string
@@ -86,7 +87,7 @@ export default function SlideshowPage() {
   )
 
   const photo = photos[current]
-  const dateStr = new Date(photo.taken_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })
+  const dateStr = formatBerlin(photo.taken_at, { day: 'numeric', month: 'long', year: 'numeric' })
   const moodColor = MOOD_COLORS[photo.mood_tag] ?? '#9ca3af'
   const moodLabel = MOOD_LABELS[photo.mood_tag] ?? photo.mood_tag
   const progress = ((current + 1) / photos.length) * 100

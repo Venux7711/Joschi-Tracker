@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
+import { berlinDateKey, berlinYear, formatBerlin } from '@/lib/time'
 
 interface Photo {
   id: string
@@ -23,10 +24,9 @@ export default function MemoryOfTheDay() {
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    const today = new Date()
-    const lastYear = new Date(today)
-    lastYear.setFullYear(today.getFullYear() - 1)
-    const dateStr = lastYear.toISOString().slice(0, 10)
+    // Heute vor einem Jahr, nach Berliner Kalender
+    const now = new Date()
+    const dateStr = `${berlinYear(now) - 1}-${berlinDateKey(now).slice(5)}`
 
     fetch(`/api/photos?date=${dateStr}&limit=1`)
       .then(r => r.json())
@@ -38,7 +38,7 @@ export default function MemoryOfTheDay() {
 
   if (!photo) return null
 
-  const dateStr = new Date(photo.taken_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })
+  const dateStr = formatBerlin(photo.taken_at, { day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
     <>

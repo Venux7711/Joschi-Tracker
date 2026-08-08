@@ -1,4 +1,12 @@
 import type { StoolConsistency, Appetite, Activity } from './types'
+import {
+  berlinDateKey,
+  berlinDayStart,
+  berlinDayEnd,
+  formatBerlin,
+  isSameBerlinDay,
+  toBerlinInputValue,
+} from './time'
 
 // Eine gemeinsame Mahlzeit erzeugt eine Zeile pro Katze (gleiche Sorte, gleicher
 // Zeitpunkt). Für Anzeigen/Statistiken auf Haushaltsebene zählt sie nur einmal.
@@ -12,58 +20,50 @@ export function dedupeSharedFeedings<T extends { food_brand: string; food_type: 
   })
 }
 
-export function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('de-DE', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
+// Für "wie oft gab es diese Sorte?"-Statistiken zählt eine Futtersorte pro Tag
+// nur einmal – dreimal Truthahn an einem Tag ist ein Truthahn-Tag, nicht drei.
+// Deckt gemeinsame Mahlzeiten (eine Zeile pro Katze) gleich mit ab.
+export function dedupeFeedingsPerDay<T extends { food_brand: string; food_type: string; logged_at: string }>(logs: T[]): T[] {
+  const seen = new Set<string>()
+  return logs.filter((f) => {
+    const key = `${f.food_brand}||${f.food_type}||${berlinDateKey(f.logged_at)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
   })
 }
 
+export function formatDate(dateStr: string): string {
+  return formatBerlin(dateStr, { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
 export function formatTime(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+  return formatBerlin(dateStr, { hour: '2-digit', minute: '2-digit' })
 }
 
 export function formatDateTime(dateStr: string): string {
   return `${formatDate(dateStr)}, ${formatTime(dateStr)}`
 }
 
+/** Wert für <input type="datetime-local"> – Berliner Wanduhr-Zeit */
 export function toLocalISOString(date: Date = new Date()): string {
-  const offset = date.getTimezoneOffset()
-  const local = new Date(date.getTime() - offset * 60000)
-  return local.toISOString().slice(0, 16)
+  return toBerlinInputValue(date)
 }
 
 export function getDayStart(date: Date = new Date()): string {
-  const d = new Date(date)
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString()
+  return berlinDayStart(date).toISOString()
 }
 
 export function getDayEnd(date: Date = new Date()): string {
-  const d = new Date(date)
-  d.setHours(23, 59, 59, 999)
-  return d.toISOString()
+  return berlinDayEnd(date).toISOString()
 }
 
 export function isToday(dateStr: string): boolean {
-  const date = new Date(dateStr)
-  const today = new Date()
-  return (
-    date.getDate() === today.getDate() &&
-    date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear()
-  )
+  return isSameBerlinDay(dateStr, new Date())
 }
 
 export function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getDate() === b.getDate() &&
-    a.getMonth() === b.getMonth() &&
-    a.getFullYear() === b.getFullYear()
-  )
+  return isSameBerlinDay(a, b)
 }
 
 export function getStoolLabel(value: StoolConsistency): string {

@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { getActiveCat, getCats } from '@/lib/active-cat.server'
 import { dedupeSharedFeedings } from '@/lib/utils'
+import { addBerlinDays, berlinDateKey, formatBerlin } from '@/lib/time'
 import type { AiMemory, Cat, ChatMessage, StoolConsistency, Appetite, Activity } from '@/lib/types'
 
 // Vercel: mehr Zeitbudget, damit Retry + Fallback-Modell nicht ins Funktions-Timeout laufen
@@ -50,7 +51,7 @@ const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(mi
 function formatWhen(iso: string): string {
   const diffMs = Math.abs(Date.now() - new Date(iso).getTime())
   if (diffMs < 5 * 60 * 1000) return ''
-  return ` – ${new Date(iso).toLocaleString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+  return ` – ${formatBerlin(iso, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
 }
 
 type MemoryItem = { kind: 'fact' | 'instruction'; content: string }
@@ -197,7 +198,7 @@ async function callGemini(
 function buildSystemPrompt(
   cat: Cat, memories: AiMemory[], feedingLines: string, healthLines: string, pantryLines: string, medsLines: string, weightLines: string, now: Date,
 ): string {
-  const nowLabel = now.toLocaleString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+  const nowLabel = formatBerlin(now, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
   const instructions = memories.filter((m) => m.kind === 'instruction')
   const facts = memories.filter((m) => m.kind === 'fact')
   const description = cat.description_accusative || cat.name
@@ -354,8 +355,8 @@ export async function POST(req: NextRequest) {
     const catId = cat.id
     const allCatIds = (await getCats(supabase)).map((c) => c.id)
 
-    const fourteenDaysAgo = new Date()
-    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+    // Ab Beginn des Berliner Kalendertags vor 14 Tagen
+    const fourteenDaysAgo = addBerlinDays(new Date(), -14)
 
     const serviceSupabase = createServiceClient()
 
@@ -375,13 +376,13 @@ export async function POST(req: NextRequest) {
     ])
 
     const feedingLines = dedupeSharedFeedings(feedings ?? []).map((f) => {
-      let line = `${f.logged_at.slice(0, 10)}: ${f.food_brand} – ${f.food_type}`
+      let line = `${berlinDateKey(f.logged_at)}: ${f.food_brand} – ${f.food_type}`
       if (f.amount_grams) line += ` (${f.amount_grams}g)`
       return line
     }).join('\n')
 
     const healthLines = (health ?? []).map((h) => {
-      let line = `${h.logged_at.slice(0, 10)}: Stuhl: ${STOOL[h.stool_consistency] ?? h.stool_consistency}, Appetit: ${APPETITE[h.appetite] ?? h.appetite}, Aktivität: ${ACTIVITY[h.activity] ?? h.activity}`
+      let line = `${berlinDateKey(h.logged_at)}: Stuhl: ${STOOL[h.stool_consistency] ?? h.stool_consistency}, Appetit: ${APPETITE[h.appetite] ?? h.appetite}, Aktivität: ${ACTIVITY[h.activity] ?? h.activity}`
       if (h.vomiting) line += ' ⚠ ERBROCHEN'
       if (h.fur_issue) line += ' ⚠ KOT IM FELL'
       if (h.notes) line += ` | Notiz: "${h.notes}"`

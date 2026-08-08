@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
-import { toLocalISOString } from '@/lib/utils'
+import { toBerlinInputValue, fromBerlinInputValue } from '@/lib/time'
 import type { Cat } from '@/lib/types'
 
 const ANIFIT_SORTEN = [
@@ -81,7 +81,7 @@ function NewFeedingForm() {
   const isAnifit = foodBrand.trim().toLowerCase() === 'anifit'
 
   useEffect(() => {
-    setLoggedAt(dateParam ? `${dateParam}T12:00` : toLocalISOString())
+    setLoggedAt(dateParam ? `${dateParam}T12:00` : toBerlinInputValue())
 
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -175,7 +175,7 @@ function NewFeedingForm() {
     const { error: insertError } = await supabase.from('feeding_logs').insert(catIds.map((cid) => ({
       cat_id: cid,
       user_id: user.id,
-      logged_at: new Date(loggedAt).toISOString(),
+      logged_at: fromBerlinInputValue(loggedAt).toISOString(),
       food_brand: foodBrand.trim(),
       food_type: foodType.trim(),
       amount_grams: amountGrams ? parseInt(amountGrams, 10) : null,

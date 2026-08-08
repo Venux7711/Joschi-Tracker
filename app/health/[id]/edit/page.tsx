@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
-import { toLocalISOString } from '@/lib/utils'
+import { toBerlinInputValue, fromBerlinInputValue } from '@/lib/time'
 import type { StoolConsistency, Appetite, Activity } from '@/lib/types'
 
 interface ToggleGroupProps<T extends string> {
@@ -74,7 +74,7 @@ export default function EditHealthPage() {
 
       if (!entry) { setNotFound(true); return }
 
-      setLoggedAt(toLocalISOString(new Date(entry.logged_at)))
+      setLoggedAt(toBerlinInputValue(entry.logged_at))
       setStool(entry.stool_consistency ?? 'not_observed')
       setVomiting(entry.vomiting ?? false)
       setAppetite(entry.appetite ?? 'good')
@@ -93,7 +93,7 @@ export default function EditHealthPage() {
     const { error: updateError } = await supabase
       .from('health_logs')
       .update({
-        logged_at: new Date(loggedAt).toISOString(),
+        logged_at: fromBerlinInputValue(loggedAt).toISOString(),
         stool_consistency: stool,
         vomiting,
         appetite,

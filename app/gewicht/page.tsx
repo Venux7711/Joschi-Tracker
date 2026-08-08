@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Header from '@/components/Header'
+import { formatBerlin } from '@/lib/time'
 
 interface Weight { id: string; weight_grams: number; notes: string | null; measured_at: string }
 
@@ -105,7 +106,7 @@ export default function GewichtPage() {
               <div>
                 <p className="text-xs text-amber-600 font-semibold uppercase tracking-wide mb-1">Aktuelles Gewicht</p>
                 <p className="text-4xl font-black text-gray-800">{(latest.weight_grams / 1000).toFixed(2)} <span className="text-xl font-normal text-gray-500">kg</span></p>
-                <p className="text-sm text-gray-500 mt-1">{new Date(latest.measured_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                <p className="text-sm text-gray-500 mt-1">{formatBerlin(latest.measured_at, { day: 'numeric', month: 'long', year: 'numeric' })}</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-gray-500 mb-1">Trend (letzte 5)</p>
@@ -131,7 +132,7 @@ export default function GewichtPage() {
                       style={{ height: h }}
                     />
                     <span className="text-[8px] text-gray-400 rotate-0">
-                      {new Date(w.measured_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
+                      {formatBerlin(w.measured_at, { day: '2-digit', month: '2-digit' })}
                     </span>
                   </div>
                 )
@@ -160,7 +161,7 @@ export default function GewichtPage() {
                     {w.notes && <span className="text-xs text-gray-400 ml-2">{w.notes}</span>}
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400">{new Date(w.measured_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+                    <span className="text-xs text-gray-400">{formatBerlin(w.measured_at, { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
                     <button onClick={() => del(w.id)} className="text-gray-300 hover:text-red-400 text-sm transition-colors">✕</button>
                   </div>
                 </div>

@@ -5,7 +5,14 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { pickActiveCat } from '@/lib/active-cat-client'
-import { dedupeSharedFeedings } from '@/lib/utils'
+import { dedupeSharedFeedings, dedupeFeedingsPerDay } from '@/lib/utils'
+import {
+  addBerlinDays,
+  berlinDateKey,
+  berlinYear,
+  formatBerlin,
+  fromBerlinWallClock,
+} from '@/lib/time'
 import type { Cat } from '@/lib/types'
 
 interface HealthLog { logged_at: string; stool_consistency: string; appetite: string; activity: string; vomiting: boolean; fur_issue: boolean; notes: string | null }
@@ -34,9 +41,8 @@ export default function ReportPage() {
     setCat(activeCat)
     const allCatIds = (cats ?? []).map((c) => c.id)
 
-    const since = new Date()
-    since.setDate(since.getDate() - days)
-    const sinceStr = since.toISOString()
+    // Ab Beginn des Berliner Kalendertags vor `days` Tagen
+    const sinceStr = addBerlinDays(new Date(), -days).toISOString()
 
     // Befinden individuell (aktive Katze), Fütterung geteilt (Haushalt)
     const [hRes, fRes] = await Promise.all([
@@ -52,27 +58,29 @@ export default function ReportPage() {
   const handlePrint = () => window.print()
 
   // Stats
-  const diarrheaDays = new Set(health.filter(h => h.stool_consistency === 'diarrhea').map(h => h.logged_at.slice(0, 10))).size
+  const diarrheaDays = new Set(health.filter(h => h.stool_consistency === 'diarrhea').map(h => berlinDateKey(h.logged_at))).size
   const goodDays = days - diarrheaDays
   const vomitingCount = health.filter(h => h.vomiting).length
   const furCount = health.filter(h => h.fur_issue).length
 
+  // Wie im Dashboard: eine Sorte pro Tag einmal, nicht pro Portion
   const foodCounts: Record<string, number> = {}
-  feedings.forEach(f => { if (f.food_type) foodCounts[f.food_type] = (foodCounts[f.food_type] ?? 0) + 1 })
+  dedupeFeedingsPerDay(feedings).forEach(f => { if (f.food_type) foodCounts[f.food_type] = (foodCounts[f.food_type] ?? 0) + 1 })
   const topFoods = Object.entries(foodCounts).sort((a, b) => b[1] - a[1]).slice(0, 5)
 
-  const today = new Date().toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })
-  const since = new Date(); since.setDate(since.getDate() - days)
-  const sinceStr = since.toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })
+  const now = new Date()
+  const today = formatBerlin(now, { day: 'numeric', month: 'long', year: 'numeric' })
+  const sinceStr = formatBerlin(addBerlinDays(now, -days), { day: 'numeric', month: 'long', year: 'numeric' })
 
   // Group health by week for mini chart
   const weekBars: { label: string; good: number; bad: number }[] = []
   for (let w = Math.ceil(days / 7) - 1; w >= 0; w--) {
-    const wStart = new Date(); wStart.setDate(wStart.getDate() - (w + 1) * 7)
-    const wEnd = new Date(); wEnd.setDate(wEnd.getDate() - w * 7)
+    const wStart = addBerlinDays(now, -(w + 1) * 7)
+    const wEnd = addBerlinDays(now, -w * 7)
     const wLogs = health.filter(h => { const d = new Date(h.logged_at); return d >= wStart && d < wEnd })
     const bad = wLogs.filter(h => h.stool_consistency === 'diarrhea').length
-    weekBars.push({ label: `KW${Math.ceil((wEnd.getTime() - new Date(wEnd.getFullYear(), 0, 1).getTime()) / 604800000)}`, good: 7 - bad, bad })
+    const jan1 = fromBerlinWallClock(berlinYear(wEnd), 1, 1)
+    weekBars.push({ label: `KW${Math.ceil((wEnd.getTime() - jan1.getTime()) / 604800000)}`, good: 7 - bad, bad })
   }
 
   return (
@@ -215,7 +223,7 @@ export default function ReportPage() {
                     <tbody>
                       {health.slice(-30).map(h => (
                         <tr key={h.logged_at} className={`border-b border-gray-50 ${h.stool_consistency === 'diarrhea' ? 'bg-red-50' : ''}`}>
-                          <td className="py-1.5 text-gray-600 text-xs">{new Date(h.logged_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</td>
+                          <td className="py-1.5 text-gray-600 text-xs">{formatBerlin(h.logged_at, { day: '2-digit', month: '2-digit' })}</td>
                           <td className={`py-1.5 font-medium text-xs ${h.stool_consistency === 'diarrhea' ? 'text-red-600' : 'text-gray-700'}`}>{STOOL[h.stool_consistency] ?? h.stool_consistency}</td>
                           <td className="py-1.5 text-gray-600 text-xs">{APPETITE[h.appetite] ?? h.appetite}</td>
                           <td className="py-1.5 text-gray-400 text-xs truncate max-w-[120px]">{h.notes ?? (h.vomiting ? 'Erbrochen' : '')}</td>
