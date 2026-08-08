@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
-import { toLocalISOString } from '@/lib/utils'
+import { toBerlinInputValue, fromBerlinInputValue } from '@/lib/time'
 import { pickActiveCat } from '@/lib/active-cat-client'
 import type { Cat, StoolConsistency, Appetite, Activity } from '@/lib/types'
 
@@ -96,7 +96,7 @@ function NewHealthForm() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
 
   useEffect(() => {
-    setLoggedAt(dateParam ? `${dateParam}T12:00` : toLocalISOString())
+    setLoggedAt(dateParam ? `${dateParam}T12:00` : toBerlinInputValue())
 
     const init = async () => {
       const {
@@ -134,7 +134,7 @@ function NewHealthForm() {
     const { data: insertData, error: insertError } = await supabase.from('health_logs').insert({
       cat_id: catId,
       user_id: user.id,
-      logged_at: new Date(loggedAt).toISOString(),
+      logged_at: fromBerlinInputValue(loggedAt).toISOString(),
       stool_consistency: stool,
       vomiting,
       appetite,
@@ -157,7 +157,7 @@ function NewHealthForm() {
       if (uploadData) {
         const { data: { publicUrl } } = supabase.storage.from('joschi-photos').getPublicUrl(uploadData.path)
         const moodTag = stool === 'diarrhea' ? 'bad' : stool === 'normal' ? 'good' : 'normal'
-        await fetch('/api/photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storage_path: uploadData.path, public_url: publicUrl, mood_tag: moodTag, health_log_id: insertData.id, taken_at: new Date(loggedAt).toISOString(), cat_id: catId }) })
+        await fetch('/api/photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storage_path: uploadData.path, public_url: publicUrl, mood_tag: moodTag, health_log_id: insertData.id, taken_at: fromBerlinInputValue(loggedAt).toISOString(), cat_id: catId }) })
       }
     }
 

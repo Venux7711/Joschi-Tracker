@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { pickActiveCat } from '@/lib/active-cat-client'
+import { berlinYear } from '@/lib/time'
 import type { Cat } from '@/lib/types'
 
 interface WrappedStats {
@@ -54,11 +55,11 @@ export default function WrappedPage() {
   const [loading, setLoading] = useState(true)
   const [current, setCurrent] = useState(0)
   const [visible, setVisible] = useState(true)
-  const [year, setYear] = useState(String(new Date().getFullYear()))
+  const [year, setYear] = useState(String(berlinYear()))
   const [cat, setCat] = useState<Cat | null>(null)
   const [photoError, setPhotoError] = useState(false)
 
-  const currentYear = new Date().getFullYear()
+  const currentYear = berlinYear()
   const years = Array.from({ length: 3 }, (_, i) => String(currentYear - i))
   const catName = cat?.name ?? 'deine Katze'
 

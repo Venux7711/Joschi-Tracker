@@ -12,30 +12,18 @@ import {
 } from '@/lib/utils'
 import type { FeedingLog, HealthLog } from '@/lib/types'
 import { getActiveCat, getCats } from '@/lib/active-cat.server'
+import {
+  addBerlinDays,
+  berlinDateKey,
+  formatBerlin,
+  pastBerlinDays,
+} from '@/lib/time'
 
-function formatDayFull(date: Date): string {
-  const today = new Date()
-  const yesterday = new Date()
-  yesterday.setDate(today.getDate() - 1)
+function formatDayFull(date: Date, now: Date): string {
+  if (isSameDay(date, now)) return 'Heute'
+  if (isSameDay(date, addBerlinDays(now, -1))) return 'Gestern'
 
-  if (isSameDay(date, today)) return 'Heute'
-  if (isSameDay(date, yesterday)) return 'Gestern'
-
-  return date.toLocaleDateString('de-DE', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'long',
-  })
-}
-
-function getPast30Days(): Date[] {
-  const days: Date[] = []
-  for (let i = 0; i < 30; i++) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    days.push(d)
-  }
-  return days
+  return formatBerlin(date, { weekday: 'short', day: 'numeric', month: 'long' })
 }
 
 export default async function HistoryPage() {
@@ -66,9 +54,9 @@ export default async function HistoryPage() {
   // Befinden individuell → nur die aktive Katze
   const allCatIds = (await getCats(supabase)).map((c) => c.id)
 
-  const thirtyDaysAgo = new Date()
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29)
-  thirtyDaysAgo.setHours(0, 0, 0, 0)
+  // Tagesgrenzen in Berliner Zeit, nicht in Serverzeit (UTC)
+  const now = new Date()
+  const thirtyDaysAgo = addBerlinDays(now, -29)
 
   const [{ data: allHealth }, { data: allFeedings }] = await Promise.all([
     supabase
@@ -89,7 +77,8 @@ export default async function HistoryPage() {
   // Geteilte Mahlzeiten (eine Zeile pro Katze) nur einmal anzeigen
   const feedings = dedupeSharedFeedings((allFeedings ?? []) as FeedingLog[])
 
-  const days = getPast30Days()
+  // Neueste zuerst
+  const days = pastBerlinDays(30, now).reverse()
 
   type DayEntry = {
     date: Date
@@ -147,10 +136,7 @@ export default async function HistoryPage() {
         <div className="space-y-3">
           {dayEntries.map(({ date, healthLogs, feedingLogs, hasDiarrhea, hasIssues }) => {
             const isEmpty = healthLogs.length === 0 && feedingLogs.length === 0
-            const y = date.getFullYear()
-            const m = String(date.getMonth() + 1).padStart(2, '0')
-            const d = String(date.getDate()).padStart(2, '0')
-            const dateStr = `${y}-${m}-${d}`
+            const dateStr = berlinDateKey(date)
 
             return (
               <div
@@ -160,7 +146,7 @@ export default async function HistoryPage() {
                 {/* Tages-Header */}
                 <div className={`flex items-center justify-between px-4 py-2.5 border-b ${hasDiarrhea ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
                   <span className={`font-medium text-sm ${hasDiarrhea ? 'text-red-700' : 'text-gray-700'}`}>
-                    {formatDayFull(date)}{hasDiarrhea && ' ⚠'}
+                    {formatDayFull(date, now)}{hasDiarrhea && ' ⚠'}
                   </span>
                   <div className="flex items-center gap-2">
                     <Link href={`/feeding/new?date=${dateStr}`} className="text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full hover:bg-amber-100 transition-colors font-medium">
@@ -188,7 +174,7 @@ export default async function HistoryPage() {
                                 {h.fur_issue && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Fell</span>}
                               </div>
                               <p className="text-xs text-gray-400 mt-0.5">
-                                Appetit: {getAppetiteLabel(h.appetite)} · {getActivityLabel(h.activity)} · {new Date(h.logged_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                                Appetit: {getAppetiteLabel(h.appetite)} · {getActivityLabel(h.activity)} · {formatBerlin(h.logged_at, { hour: '2-digit', minute: '2-digit' })}
                               </p>
                             </div>
                             <Link
@@ -209,7 +195,7 @@ export default async function HistoryPage() {
                               <p className="text-sm text-gray-700 truncate">{f.food_brand} – {f.food_type}</p>
                               <p className="text-xs text-gray-400">
                                 {f.amount_grams ? `${f.amount_grams}g · ` : ''}
-                                {new Date(f.logged_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                                {formatBerlin(f.logged_at, { hour: '2-digit', minute: '2-digit' })}
                               </p>
                             </div>
                             <Link

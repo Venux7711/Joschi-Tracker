@@ -7,6 +7,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { pickActiveCat } from '@/lib/active-cat-client'
 import { dedupeSharedFeedings } from '@/lib/utils'
+import { berlinDateKey, berlinDayEnd, berlinDayStart, formatBerlin, pastBerlinDays } from '@/lib/time'
 import type { Cat } from '@/lib/types'
 
 interface Photo { id: string; public_url: string; mood_tag: string; taken_at: string }
@@ -26,7 +27,6 @@ const STOOL_INFO: Record<string, { emoji: string; color: string; label: string }
   not_observed: { emoji: '—', color: '#9ca3af', label: 'N/A' },
 }
 
-const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 
 export default function CollagePage() {
   const supabase = createClient()
@@ -42,54 +42,50 @@ export default function CollagePage() {
       if (!catId) { setLoading(false); return }
       const allCatIds = (cats ?? []).map((c) => c.id)
 
-      const today = new Date()
-      const since = new Date(today)
-      since.setDate(today.getDate() - 6)
-      const sinceStr = since.toISOString().slice(0, 10)
-      const todayStr = today.toISOString().slice(0, 10)
+      // Die 7 Berliner Kalendertage bis heute
+      const week = pastBerlinDays(7)
+      const sinceStr = berlinDateKey(week[0])
+      const todayStr = berlinDateKey(week[week.length - 1])
 
       // Befinden individuell (aktive Katze), Fütterung geteilt (Haushalt)
       const [healthRes, feedRes, photoRes] = await Promise.all([
         supabase.from('health_logs').select('stool_consistency, logged_at')
           .eq('cat_id', catId)
-          .gte('logged_at', `${sinceStr}T00:00:00`)
-          .lte('logged_at', `${todayStr}T23:59:59`),
+          .gte('logged_at', berlinDayStart(week[0]).toISOString())
+          .lte('logged_at', berlinDayEnd(week[week.length - 1]).toISOString()),
         supabase.from('feeding_logs').select('logged_at, food_brand, food_type')
           .in('cat_id', allCatIds)
-          .gte('logged_at', `${sinceStr}T00:00:00`)
-          .lte('logged_at', `${todayStr}T23:59:59`),
+          .gte('logged_at', berlinDayStart(week[0]).toISOString())
+          .lte('logged_at', berlinDayEnd(week[week.length - 1]).toISOString()),
         fetch(`/api/photos?startDate=${sinceStr}&endDate=${todayStr}&limit=7`).then(r => r.json()),
       ])
 
-      // Group by date
+      // Nach Berliner Kalendertag gruppieren
       const stoolByDate: Record<string, string> = {}
-      healthRes.data?.forEach(h => { stoolByDate[h.logged_at.slice(0, 10)] = h.stool_consistency })
+      healthRes.data?.forEach(h => { stoolByDate[berlinDateKey(h.logged_at)] = h.stool_consistency })
 
       const feedsByDate: Record<string, number> = {}
       dedupeSharedFeedings(feedRes.data ?? []).forEach(f => {
-        const d = f.logged_at.slice(0, 10)
+        const d = berlinDateKey(f.logged_at)
         feedsByDate[d] = (feedsByDate[d] ?? 0) + 1
       })
 
       const photoByDate: Record<string, Photo> = {}
       ;(photoRes.photos ?? []).forEach((p: Photo) => {
-        const d = p.taken_at.slice(0, 10)
+        const d = berlinDateKey(p.taken_at)
         if (!photoByDate[d]) photoByDate[d] = p
       })
 
-      const result: DayData[] = []
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(today)
-        d.setDate(today.getDate() - i)
-        const dateStr = d.toISOString().slice(0, 10)
-        result.push({
+      const result: DayData[] = week.map(d => {
+        const dateStr = berlinDateKey(d)
+        return {
           date: dateStr,
-          label: `${WEEKDAYS[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`,
+          label: formatBerlin(d, { weekday: 'short', day: 'numeric', month: 'numeric' }),
           stool: stoolByDate[dateStr] ?? null,
           feedings: feedsByDate[dateStr] ?? 0,
           photo: photoByDate[dateStr] ?? null,
-        })
-      }
+        }
+      })
 
       setDays(result)
       setLoading(false)

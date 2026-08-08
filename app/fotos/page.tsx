@@ -6,6 +6,7 @@ import Image from 'next/image'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { pickActiveCat } from '@/lib/active-cat-client'
+import { formatBerlin } from '@/lib/time'
 import type { Cat } from '@/lib/types'
 
 interface Photo {
@@ -18,6 +19,8 @@ interface Photo {
   health_log_id: string | null
   /** Markierung, wer auf dem Bild ist – die Bibliothek selbst ist gemeinsam. */
   cat_id: string | null
+  /** Mehrere Katzen möglich (z.B. beide auf einem Bild), jederzeit änderbar. */
+  cat_ids: string[] | null
 }
 
 const MOOD_LABELS: Record<string, { label: string; color: string }> = {
@@ -42,6 +45,8 @@ export default function FotosPage() {
   const [catFilter, setCatFilter] = useState<string>('all')
   const [cats, setCats] = useState<Cat[]>([])
   const [catId, setCatId] = useState<string | null>(null)
+  const [savingTags, setSavingTags] = useState(false)
+  const [tagError, setTagError] = useState<string | null>(null)
 
   useEffect(() => {
     const init = async () => {
@@ -58,6 +63,38 @@ export default function FotosPage() {
   }, [])
 
   const catName = (id: string | null) => cats.find(c => c.id === id)?.name ?? null
+
+  // Ältere Fotos haben nur die alte Einzelspalte – beide Quellen zusammenführen
+  const catTags = (photo: Photo): string[] =>
+    photo.cat_ids?.length ? photo.cat_ids : photo.cat_id ? [photo.cat_id] : []
+
+  const tagNames = (photo: Photo) =>
+    catTags(photo).map(id => catName(id)).filter((n): n is string => !!n)
+
+  /** Katze auf dem Foto an-/abwählen – speichert sofort. */
+  const toggleCatTag = async (photo: Photo, id: string) => {
+    const current = catTags(photo)
+    const next = current.includes(id) ? current.filter(c => c !== id) : [...current, id]
+
+    setSavingTags(true)
+    setTagError(null)
+    const res = await fetch('/api/photos', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: photo.id, cat_ids: next }),
+    })
+    setSavingTags(false)
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setTagError(data.error ?? 'Markierung konnte nicht gespeichert werden')
+      return
+    }
+
+    const updated = { ...photo, cat_ids: next, cat_id: next[0] ?? null }
+    setPhotos(prev => prev.map(p => (p.id === photo.id ? updated : p)))
+    setSelected(updated)
+  }
 
   const loadPhotos = async () => {
     setLoading(true)
@@ -98,8 +135,9 @@ export default function FotosPage() {
       body: JSON.stringify({
         storage_path: uploadData.path, public_url: publicUrl, mood_tag: 'normal',
         taken_at: new Date().toISOString(),
-        // Beim Filtern nach einer Katze wird das Foto auch für diese markiert
-        cat_id: catFilter !== 'all' ? catFilter : catId,
+        // Beim Filtern nach einer Katze wird das Foto auch für diese markiert.
+        // Die Markierung lässt sich danach jederzeit im Lightbox ändern.
+        cat_ids: [catFilter !== 'all' ? catFilter : catId].filter(Boolean),
       }),
     })
 
@@ -122,7 +160,7 @@ export default function FotosPage() {
 
   const filtered = photos
     .filter(p => filter === 'all' || p.mood_tag === filter)
-    .filter(p => catFilter === 'all' || p.cat_id === catFilter)
+    .filter(p => catFilter === 'all' || catTags(p).includes(catFilter))
 
   const grouped: Record<string, Photo[]> = {}
   filtered.forEach(p => {
@@ -187,7 +225,7 @@ export default function FotosPage() {
                   catFilter === c.id ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
                 }`}
               >
-                🐾 {c.name} ({photos.filter(p => p.cat_id === c.id).length})
+                🐾 {c.name} ({photos.filter(p => catTags(p).includes(c.id)).length})
               </button>
             ))}
           </div>
@@ -238,7 +276,7 @@ export default function FotosPage() {
                   {mphotos.map(photo => (
                     <button
                       key={photo.id}
-                      onClick={() => setSelected(photo)}
+                      onClick={() => { setTagError(null); setSelected(photo) }}
                       className="aspect-square relative rounded-xl overflow-hidden group"
                     >
                       <Image src={photo.public_url} alt="" fill className="object-cover transition-transform group-hover:scale-105" sizes="33vw" />
@@ -247,9 +285,9 @@ export default function FotosPage() {
                           {MOOD_LABELS[photo.mood_tag]?.label}
                         </div>
                       )}
-                      {cats.length > 1 && catName(photo.cat_id) && (
+                      {cats.length > 1 && tagNames(photo).length > 0 && (
                         <div className="absolute bottom-1 left-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-black/55 text-white">
-                          {catName(photo.cat_id)}
+                          {tagNames(photo).join(' & ')}
                         </div>
                       )}
                     </button>
@@ -271,18 +309,47 @@ export default function FotosPage() {
             <div className="relative aspect-square w-full rounded-2xl overflow-hidden">
               <Image src={selected.public_url} alt="" fill className="object-contain" sizes="100vw" />
             </div>
+            {/* Wer ist auf dem Bild? Antippen zum Ändern – mehrere möglich */}
+            {cats.length > 0 && (
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] uppercase tracking-wide text-white/40 font-semibold">
+                  Wer ist drauf?
+                </span>
+                {cats.map(c => {
+                  const active = catTags(selected).includes(c.id)
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => toggleCatTag(selected, c.id)}
+                      disabled={savingTags}
+                      className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors disabled:opacity-50 ${
+                        active
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-white/10 text-white/60 hover:bg-white/20'
+                      }`}
+                    >
+                      {active ? '✓' : '🐾'} {c.name}
+                    </button>
+                  )
+                })}
+                {catTags(selected).length === 0 && (
+                  <span className="text-xs text-white/40">niemand markiert</span>
+                )}
+                {savingTags && <span className="text-xs text-white/40">speichert…</span>}
+              </div>
+            )}
+
+            {tagError && (
+              <p className="mt-2 text-xs text-red-300">⚠ {tagError}</p>
+            )}
+
             <div className="flex items-center justify-between mt-3">
               <div>
                 <span className={`text-xs px-2 py-1 rounded-full ${MOOD_LABELS[selected.mood_tag]?.color ?? 'bg-gray-100 text-gray-600'}`}>
                   {MOOD_LABELS[selected.mood_tag]?.label ?? selected.mood_tag}
                 </span>
-                {cats.length > 1 && catName(selected.cat_id) && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-white/15 text-white ml-1.5">
-                    🐾 {catName(selected.cat_id)}
-                  </span>
-                )}
                 <p className="text-gray-400 text-sm mt-1">
-                  {new Date(selected.taken_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  {formatBerlin(selected.taken_at, { day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
               </div>
               <button

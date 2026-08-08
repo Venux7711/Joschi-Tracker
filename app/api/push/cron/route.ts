@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import webpush from 'web-push'
+import { addBerlinDays, berlinDayEnd, berlinDayStart } from '@/lib/time'
 
 webpush.setVapidDetails(
   process.env.VAPID_EMAIL!,
@@ -28,25 +29,26 @@ export async function GET(req: NextRequest) {
   const { data: cats } = await supabase.from('cats').select('id, name').order('created_at', { ascending: true })
   if (!cats?.length) return NextResponse.json({ ok: true, sent: 0 })
 
-  // Yesterday's health data
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-  const dayStr = yesterday.toISOString().slice(0, 10)
+  // Gestern nach Berliner Kalender – der Cron läuft um 7 Uhr, in UTC wäre das
+  // je nach Sommerzeit ein anderer Tag
+  const yesterday = addBerlinDays(new Date(), -1)
+  const dayFrom = berlinDayStart(yesterday).toISOString()
+  const dayTo = berlinDayEnd(yesterday).toISOString()
 
   const catSummaries = await Promise.all(cats.map(async (cat) => {
     const { data: healthLogs } = await supabase
       .from('health_logs')
       .select('stool_consistency, appetite')
       .eq('cat_id', cat.id)
-      .gte('logged_at', `${dayStr}T00:00:00`)
-      .lte('logged_at', `${dayStr}T23:59:59`)
+      .gte('logged_at', dayFrom)
+      .lte('logged_at', dayTo)
 
     const { data: feedLogs } = await supabase
       .from('feeding_logs')
       .select('food_type')
       .eq('cat_id', cat.id)
-      .gte('logged_at', `${dayStr}T00:00:00`)
-      .lte('logged_at', `${dayStr}T23:59:59`)
+      .gte('logged_at', dayFrom)
+      .lte('logged_at', dayTo)
 
     const stool = healthLogs?.[0]?.stool_consistency
     let statusEmoji = '✅'

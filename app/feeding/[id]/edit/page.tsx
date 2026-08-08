@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
-import { toLocalISOString } from '@/lib/utils'
+import { toBerlinInputValue, fromBerlinInputValue } from '@/lib/time'
 
 const ANIFIT_SORTEN = [
   'Puterichs Delight (Truthahn)',
@@ -60,6 +60,11 @@ export default function EditFeedingPage() {
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notFound, setNotFound] = useState(false)
+  // Eine gemeinsame Mahlzeit liegt als eine Zeile pro Katze in der DB. Ändern
+  // oder Löschen muss alle Zeilen mitnehmen, sonst passen sie nicht mehr
+  // zusammen und die Mahlzeit wird überall doppelt gezählt.
+  const [mealRowIds, setMealRowIds] = useState<string[]>([])
+  const [mealCatNames, setMealCatNames] = useState<string[]>([])
 
   const isAnifit = foodBrand.trim().toLowerCase() === 'anifit'
 
@@ -80,11 +85,26 @@ export default function EditFeedingPage() {
       setFoodBrand(entry.food_brand ?? 'Anifit')
       setFoodType(entry.food_type ?? '')
       setAmountGrams(entry.amount_grams ? String(entry.amount_grams) : '')
-      setLoggedAt(toLocalISOString(new Date(entry.logged_at)))
+      setLoggedAt(toBerlinInputValue(entry.logged_at))
       setNotes(entry.notes ?? '')
       setTreatAmount(entry.treat_amount ?? 0)
       setDryFoodAmount(entry.dry_food_amount ?? 0)
       setExtras(entry.extras ?? '')
+
+      // Geschwister-Zeilen derselben Mahlzeit: gleiche Sorte, gleicher Zeitpunkt
+      const { data: siblings } = await supabase
+        .from('feeding_logs')
+        .select('id, cat_id')
+        .eq('food_brand', entry.food_brand)
+        .eq('food_type', entry.food_type)
+        .eq('logged_at', entry.logged_at)
+
+      const mealRows = siblings?.length ? siblings : [{ id: entry.id, cat_id: entry.cat_id }]
+      setMealRowIds(mealRows.map((r) => r.id))
+
+      const { data: catRows } = await supabase.from('cats').select('id, name')
+      const nameById = new Map((catRows ?? []).map((c) => [c.id, c.name as string]))
+      setMealCatNames(mealRows.map((r) => nameById.get(r.cat_id)).filter((n): n is string => !!n))
 
       const { data: logs } = await supabase
         .from('feeding_logs')
@@ -115,7 +135,7 @@ export default function EditFeedingPage() {
     const { error: updateError } = await supabase
       .from('feeding_logs')
       .update({
-        logged_at: new Date(loggedAt).toISOString(),
+        logged_at: fromBerlinInputValue(loggedAt).toISOString(),
         food_brand: foodBrand.trim(),
         food_type: foodType.trim(),
         amount_grams: amountGrams ? parseInt(amountGrams, 10) : null,
@@ -124,7 +144,9 @@ export default function EditFeedingPage() {
         dry_food_amount: dryFoodAmount > 0 ? dryFoodAmount : null,
         extras: extras.trim() || null,
       })
-      .eq('id', id)
+      // Alle Zeilen der Mahlzeit gemeinsam ändern – sonst behält die andere
+      // Katze die alte Sorte/Uhrzeit und die Mahlzeit zählt doppelt
+      .in('id', mealRowIds.length ? mealRowIds : [id])
 
     if (updateError) {
       setError('Fehler beim Speichern.')
@@ -135,9 +157,23 @@ export default function EditFeedingPage() {
   }
 
   const handleDelete = async () => {
-    if (!confirm('Eintrag wirklich löschen?')) return
+    const shared = mealCatNames.length > 1
+    const question = shared
+      ? `Gemeinsame Mahlzeit von ${mealCatNames.join(' & ')} wirklich löschen?`
+      : 'Eintrag wirklich löschen?'
+    if (!confirm(question)) return
     setDeleting(true)
-    await supabase.from('feeding_logs').delete().eq('id', id)
+    // Auch hier alle Zeilen, sonst bleibt für die andere Katze ein Geisteintrag übrig
+    const { error: deleteError } = await supabase
+      .from('feeding_logs')
+      .delete()
+      .in('id', mealRowIds.length ? mealRowIds : [id])
+
+    if (deleteError) {
+      setError('Fehler beim Löschen.')
+      setDeleting(false)
+      return
+    }
     router.back()
   }
 
@@ -189,6 +225,12 @@ export default function EditFeedingPage() {
             {deleting ? 'Löschen…' : 'Löschen'}
           </button>
         </div>
+
+        {mealCatNames.length > 1 && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50 text-amber-800 text-sm">
+            🐾 Gemeinsame Mahlzeit von {mealCatNames.join(' & ')} – Änderungen gelten für beide.
+          </div>
+        )}
 
         <div className="card p-5">
           <form onSubmit={handleSubmit} className="space-y-5">

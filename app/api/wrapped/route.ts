@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { getActiveCat, getCats } from '@/lib/active-cat.server'
 import { dedupeSharedFeedings } from '@/lib/utils'
+import { addBerlinDays, berlinDateKey, berlinDaysBetween, berlinYear, fromBerlinWallClock } from '@/lib/time'
 
 function makeSupabase() {
   const cookieStore = cookies()
@@ -20,9 +21,10 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const year = req.nextUrl.searchParams.get('year') ?? String(new Date().getFullYear() - 1)
-  const start = `${year}-01-01T00:00:00`
-  const end = `${year}-12-31T23:59:59`
+  const year = req.nextUrl.searchParams.get('year') ?? String(berlinYear() - 1)
+  // Jahresgrenzen in Berliner Zeit – Silvester 23:30 gehört noch ins alte Jahr
+  const start = fromBerlinWallClock(Number(year), 1, 1).toISOString()
+  const end = fromBerlinWallClock(Number(year), 12, 31, 23, 59, 59, 999).toISOString()
 
   const cat = await getActiveCat(supabase)
   if (!cat) return NextResponse.json({ error: 'Keine Katze' }, { status: 404 })
@@ -70,14 +72,14 @@ export async function GET(req: NextRequest) {
 
   // Streak calculation (longest run without diarrhea)
   const diarrheaDays = new Set(
-    healthLogs.filter(h => h.stool_consistency === 'diarrhea').map(h => h.logged_at.slice(0, 10))
+    healthLogs.filter(h => h.stool_consistency === 'diarrhea').map(h => berlinDateKey(h.logged_at))
   )
   let longestStreak = 0
   let currentStreak = 0
-  const startDate = new Date(`${year}-01-01`)
-  const endDate = new Date(`${year}-12-31`)
-  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-    const key = d.toISOString().slice(0, 10)
+  const startDate = fromBerlinWallClock(Number(year), 1, 1)
+  const endDate = fromBerlinWallClock(Number(year), 12, 31)
+  for (let d = startDate; d <= endDate; d = addBerlinDays(d, 1)) {
+    const key = berlinDateKey(d)
     if (!diarrheaDays.has(key)) {
       currentStreak++
       longestStreak = Math.max(longestStreak, currentStreak)
@@ -87,7 +89,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Good days percent
-  const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1
+  const totalDays = berlinDaysBetween(startDate, endDate) + 1
   const goodDays = totalDays - diarrheaDays.size
   const goodDaysPercent = Math.round((goodDays / totalDays) * 100)
 

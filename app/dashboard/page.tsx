@@ -10,7 +10,18 @@ import {
   getAppetiteLabel,
   getActivityLabel,
   dedupeSharedFeedings,
+  dedupeFeedingsPerDay,
 } from '@/lib/utils'
+import {
+  addBerlinDays,
+  berlinDayEnd,
+  berlinDayStart,
+  berlinDaysBetween,
+  formatBerlin,
+  formatBerlinDate,
+  berlinHour,
+  pastBerlinDays,
+} from '@/lib/time'
 import type { Cat, FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@/lib/types'
 import AiInsights from '@/components/AiInsights'
 import CatPhoto from '@/components/CatPhoto'
@@ -22,16 +33,8 @@ import { ANIFIT_FOODS, getFoodInfo, getProteinLabel, getProteinBadgeColor } from
 import { getActiveCat, getCats } from '@/lib/active-cat.server'
 import { getCatTheme } from '@/lib/cat-theme'
 
-function getPastNDays(n: number): Date[] {
-  return Array.from({ length: n }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (n - 1 - i))
-    return d
-  })
-}
-
 function dayLabel(date: Date): string {
-  return date.toLocaleDateString('de-DE', { weekday: 'short' }).slice(0, 2)
+  return formatBerlin(date, { weekday: 'short' }).slice(0, 2)
 }
 
 function stoolDotBg(v: StoolConsistency | undefined): string {
@@ -74,14 +77,13 @@ export default async function DashboardPage() {
   const householdNames = allCats.map((c) => c.name).join(' & ')
   const multiCat = allCats.length > 1
 
-  // Datumsrahmen
-  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
-  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999)
-  const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29); thirtyDaysAgo.setHours(0, 0, 0, 0)
-
-  // Alle Daten auf einmal holen
-  const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); sevenDaysAgo.setHours(0, 0, 0, 0)
-  const threeDaysAgo = new Date(); threeDaysAgo.setDate(threeDaysAgo.getDate() - 2); threeDaysAgo.setHours(0, 0, 0, 0)
+  // Datumsrahmen – alle Tagesgrenzen in Berliner Zeit, nicht in Serverzeit (UTC)
+  const now = new Date()
+  const todayStart = berlinDayStart(now)
+  const todayEnd = berlinDayEnd(now)
+  const thirtyDaysAgo = addBerlinDays(now, -29)
+  const sevenDaysAgo = addBerlinDays(now, -6)
+  const threeDaysAgo = addBerlinDays(now, -2)
 
   const [
     { data: todayFeedingsRaw },
@@ -122,12 +124,15 @@ export default async function DashboardPage() {
   const health30Household = (allHealth30 ?? []) as HealthLog[]
   const health30 = health30Household.filter(h => h.cat_id === cat.id)
   const feedings30 = dedupeSharedFeedings((allFeedings30 ?? []) as FeedingLog[])
+  // Für Häufigkeits-/Verträglichkeits-Statistiken zählt eine Sorte pro Tag einmal:
+  // 3× dieselbe Dose an einem Tag ist ein Tag mit dieser Sorte, nicht drei.
+  const feedingDays30 = dedupeFeedingsPerDay(feedings30)
   const pantry = (pantryRaw ?? []) as PantryItem[]
 
   // === Statistiken berechnen ===
 
-  const past30 = getPastNDays(30)
-  const past14 = getPastNDays(14)
+  const past30 = pastBerlinDays(30, now)
+  const past14 = pastBerlinDays(14, now)
 
   // 30-Tage Durchfall-Tage
   const diarrhea30Days = past30.filter(day =>
@@ -160,20 +165,21 @@ export default async function DashboardPage() {
   const latestStool = health30.length > 0 ? health30[0].stool_consistency : undefined
 
   // Erbrech-Tage in letzten 7 Tagen
-  const past7 = getPastNDays(7)
+  const past7 = pastBerlinDays(7, now)
   const vomiting7Days = past7.filter(day =>
     health30.some(h => isSameDay(new Date(h.logged_at), day) && h.vomiting)
   ).length
 
   // === Futter-Diarrhoe-Korrelation ===
-  // Für jede Futter-Sorte: wie oft gegessen, wie oft am gleichen/nächsten Tag Durchfall
+  // Für jede Futter-Sorte: an wie vielen Tagen gegessen, an wie vielen davon am
+  // gleichen/nächsten Tag Durchfall
   type FoodStat = { brand: string; type: string; total: number; diarrhea: number }
   const foodMap = new Map<string, FoodStat>()
 
-  for (const f of feedings30) {
+  for (const f of feedingDays30) {
     const key = `${f.food_brand}||${f.food_type}`
     const fDay = new Date(f.logged_at)
-    const nextDay = new Date(fDay); nextDay.setDate(nextDay.getDate() + 1)
+    const nextDay = addBerlinDays(fDay, 1)
 
     // Haushaltsweit: Durchfall bei irgendeiner Katze nach diesem Futter zählt
     const hasDiarrhea = health30Household.some(h => {
@@ -221,6 +227,13 @@ export default async function DashboardPage() {
     info: ReturnType<typeof getFoodInfo>; score: number; reasons: string[]; warnings: string[]
   }
 
+  // Vorrat gleichmäßig aufbrauchen: Wer über dem Schnitt liegt, kommt zuerst
+  // dran, knappe Sorten werden geschont. Sonst ist am Ende eine Sorte leer,
+  // während von den anderen noch volle Stapel im Regal stehen.
+  const avgCans = pantry.length > 0
+    ? pantry.reduce((sum, p) => sum + p.quantity, 0) / pantry.length
+    : 0
+
   // Kandidaten: Vorrat zuerst, dann alle Anifit-Sorten als Ergänzung
   const pantryKeys = new Set(pantry.map(p => `${p.brand}||${p.type}`))
   const candidates: Array<{ brand: string; type: string; inPantry: boolean; quantity?: number }> = [
@@ -244,6 +257,20 @@ export default async function DashboardPage() {
 
     // Vorrat bevorzugen
     if (c.inPantry) score += 15
+
+    // …und innerhalb des Vorrats den größten Stapel zuerst, damit alle Sorten
+    // ungefähr gleichzeitig leer werden. −1 (fast leer) bis +1 (deutlich über
+    // dem Schnitt), auf ±10 Punkte skaliert – stark genug zum Ausgleichen,
+    // schwach genug, dass Verträglichkeit und Rotation weiter den Ton angeben.
+    if (c.inPantry && c.quantity !== undefined && avgCans > 0 && pantry.length > 1) {
+      const relative = Math.max(-1, Math.min(1, (c.quantity - avgCans) / avgCans))
+      score += Math.round(relative * 10)
+      if (relative > 0.25) {
+        reasons.push(`Größter Vorrat (${c.quantity} Dosen) – zuerst aufbrauchen`)
+      } else if (relative < -0.25) {
+        warnings.push(`Nur noch ${c.quantity} Dose${c.quantity !== 1 ? 'n' : ''} – für später aufheben`)
+      }
+    }
 
     // Protein-Rotation (Neuheit) NUR belohnen, wenn der Bauch stabil ist.
     // Bei Durchfall/weichem Stuhl ist Abwechslung riskant → keine Neuheits-Boni.
@@ -286,10 +313,10 @@ export default async function DashboardPage() {
     if (diarrheaRate !== null && corr) {
       if (diarrheaRate === 0 && corr.total >= 3) {
         score += digestiveSensitive ? 16 : 8
-        reasons.push(`Sehr gute Verträglichkeit (${corr.total}× gegeben, 0% Durchfall)`)
+        reasons.push(`Sehr gute Verträglichkeit (an ${corr.total} Tagen gegeben, 0% Durchfall)`)
       } else if (diarrheaRate === 0 && corr.total >= 1) {
         score += digestiveSensitive ? 8 : 3
-        reasons.push(`Bisher verträglich (${corr.total}× gegeben)`)
+        reasons.push(`Bisher verträglich (an ${corr.total} ${corr.total === 1 ? 'Tag' : 'Tagen'} gegeben)`)
       } else if (diarrheaRate > 0.6) {
         score -= 12
         warnings.push(`Schlechte Verträglichkeit: ${Math.round(diarrheaRate * 100)}% Durchfall-Rate`)
@@ -327,7 +354,7 @@ export default async function DashboardPage() {
 
   // Daten für KI aufbereiten
   const aiFeedings = feedings30.map(f => ({
-    date: new Date(f.logged_at).toLocaleDateString('de-DE'),
+    date: formatBerlinDate(f.logged_at),
     brand: f.food_brand,
     type: f.food_type,
     grams: f.amount_grams ?? undefined,
@@ -337,7 +364,7 @@ export default async function DashboardPage() {
   }))
 
   const aiHealth = health30.map(h => ({
-    date: new Date(h.logged_at).toLocaleDateString('de-DE'),
+    date: formatBerlinDate(h.logged_at),
     stool: h.stool_consistency,
     appetite: h.appetite,
     activity: h.activity,
@@ -346,10 +373,10 @@ export default async function DashboardPage() {
     notes: h.notes ?? undefined,
   }))
 
-  // === Fütterungs-Statistik: Sorten der letzten 30 Tage ===
+  // === Fütterungs-Statistik: Sorten der letzten 30 Tage (Tage, nicht Portionen) ===
   type FoodFreq = { brand: string; type: string; count: number; lastDate: Date }
   const freqMap = new Map<string, FoodFreq>()
-  for (const f of feedings30) {
+  for (const f of feedingDays30) {
     const key = `${f.food_brand}||${f.food_type}`
     const d = new Date(f.logged_at)
     if (!freqMap.has(key)) freqMap.set(key, { brand: f.food_brand, type: f.food_type, count: 0, lastDate: d })
@@ -360,8 +387,8 @@ export default async function DashboardPage() {
   const foodFrequency = Array.from(freqMap.values())
     .sort((a, b) => b.lastDate.getTime() - a.lastDate.getTime())
 
-  const today = new Date()
-  const greeting = today.getHours() < 12 ? 'Guten Morgen' : today.getHours() < 17 ? 'Guten Tag' : 'Guten Abend'
+  const hour = berlinHour(now)
+  const greeting = hour < 12 ? 'Guten Morgen' : hour < 17 ? 'Guten Tag' : 'Guten Abend'
 
   return (
     <div className="min-h-screen">
@@ -406,7 +433,7 @@ export default async function DashboardPage() {
                 {cat.name}
               </h1>
               <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: 12, marginTop: 4, letterSpacing: '-0.01em' }}>
-                {today.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {formatBerlin(now, { weekday: 'long', day: 'numeric', month: 'long' })}
               </p>
             </div>
 
@@ -534,7 +561,7 @@ export default async function DashboardPage() {
                       </span>
                       {rec.inPantry && (
                         <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--am-600)', background: 'rgba(var(--am-600-rgb), 0.08)', padding: '2px 7px', borderRadius: 999, flexShrink: 0 }}>
-                          Vorrat
+                          {rec.quantity !== undefined ? `Vorrat: ${rec.quantity}` : 'Vorrat'}
                         </span>
                       )}
                     </div>
@@ -577,7 +604,7 @@ export default async function DashboardPage() {
                 </span>
                 <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(60,60,67,0.55)', marginTop: 10, letterSpacing: '-0.01em', lineHeight: 1.3 }}>
                   Letzter Stuhlgang<br />
-                  {new Date(health30[0]?.logged_at ?? '').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
+                  {formatBerlin(health30[0]?.logged_at ?? '', { day: 'numeric', month: 'short' })}
                 </div>
               </>
             ) : (
@@ -785,7 +812,7 @@ export default async function DashboardPage() {
                 const info = getFoodInfo(f.brand, f.type)
                 const maxCount = Math.max(...foodFrequency.map(x => x.count))
                 const barWidth = Math.round((f.count / maxCount) * 100)
-                const daysSince = Math.floor((today.getTime() - f.lastDate.getTime()) / (1000 * 60 * 60 * 24))
+                const daysSince = berlinDaysBetween(f.lastDate, now)
                 return (
                   <div
                     key={`${f.brand}||${f.type}`}
@@ -803,7 +830,9 @@ export default async function DashboardPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2.5 flex-shrink-0">
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#1C1C1E' }}>{f.count}×</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#1C1C1E' }}>
+                          {f.count} {f.count === 1 ? 'Tag' : 'Tage'}
+                        </span>
                         <span style={{ fontSize: 11, color: 'rgba(60,60,67,0.35)' }}>
                           {daysSince === 0 ? 'heute' : daysSince === 1 ? 'gestern' : `vor ${daysSince}d`}
                         </span>
@@ -823,7 +852,8 @@ export default async function DashboardPage() {
         {foodCorrelation.length >= 2 && (
           <div className="card overflow-hidden">
             <div style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
-              <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Futter & Durchfall</h3>
+              <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Futter &amp; Durchfall</h3>
+              <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', marginTop: 2 }}>Anteil der Fütterungs-Tage mit Durchfall</p>
             </div>
             <div style={{ padding: '4px 20px 16px' }}>
               {foodCorrelation.map((s, i) => {
