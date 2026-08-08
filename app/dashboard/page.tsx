@@ -47,7 +47,25 @@ function stoolDotBg(v: StoolConsistency | undefined): string {
   }[v]
 }
 
-export default async function DashboardPage() {
+// Zeitraum für die beiden Futter-Statistiken. Die Gesundheits-Kacheln bleiben
+// fest bei 30/14/7 Tagen – die sind so beschriftet und sollen vergleichbar
+// bleiben. Auch die Empfehlung rechnet unverändert auf 30 Tagen, damit sie sich
+// nicht ändert, nur weil man eine Anzeige umschaltet.
+const FOOD_RANGES = [
+  { key: '30', label: '30 Tage', days: 30 },
+  { key: '90', label: '90 Tage', days: 90 },
+  { key: '365', label: '1 Jahr', days: 365 },
+  { key: 'alle', label: 'Alles', days: null },
+] as const
+
+const DEFAULT_FOOD_RANGE = FOOD_RANGES[0]
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: { futter?: string }
+}) {
+  const foodRange = FOOD_RANGES.find(r => r.key === searchParams?.futter) ?? DEFAULT_FOOD_RANGE
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -84,12 +102,15 @@ export default async function DashboardPage() {
   const thirtyDaysAgo = addBerlinDays(now, -29)
   const sevenDaysAgo = addBerlinDays(now, -6)
   const threeDaysAgo = addBerlinDays(now, -2)
+  // Fenster für die Futter-Statistiken: mindestens die 30 Tage, die Empfehlung
+  // und Gesundheits-Kacheln ohnehin brauchen – bei "Alles" ohne Untergrenze
+  const rangeStart = foodRange.days === null ? null : addBerlinDays(now, -(foodRange.days - 1))
 
   const [
     { data: todayFeedingsRaw },
     { data: todayHealthRaw },
-    { data: allHealth30 },
-    { data: allFeedings30 },
+    { data: allHealthRange },
+    { data: allFeedingsRange },
     { data: pantryRaw },
   ] = await Promise.all([
     // Fütterung ist Haushalts-Sache (zusammen gefüttert) → über alle Katzen
@@ -100,15 +121,17 @@ export default async function DashboardPage() {
     supabase.from('health_logs').select('*').eq('cat_id', cat.id)
       .gte('logged_at', todayStart.toISOString()).lte('logged_at', todayEnd.toISOString())
       .order('logged_at', { ascending: false }),
-    // 30 Tage über ALLE Katzen: die Futterempfehlung ist eine Haushalts-
-    // Entscheidung (gefüttert wird gemeinsam) – Statistiken filtern unten
-    // wieder auf die aktive Katze
-    supabase.from('health_logs').select('*')
-      .in('cat_id', allCatIds).gte('logged_at', thirtyDaysAgo.toISOString())
-      .order('logged_at', { ascending: false }),
-    supabase.from('feeding_logs').select('*')
-      .in('cat_id', allCatIds).gte('logged_at', thirtyDaysAgo.toISOString())
-      .order('logged_at', { ascending: true }),
+    // Über ALLE Katzen: die Futterempfehlung ist eine Haushalts-Entscheidung
+    // (gefüttert wird gemeinsam) – Statistiken filtern unten wieder auf die
+    // aktive Katze bzw. auf die festen 30 Tage
+    (rangeStart
+      ? supabase.from('health_logs').select('*').in('cat_id', allCatIds).gte('logged_at', rangeStart.toISOString())
+      : supabase.from('health_logs').select('*').in('cat_id', allCatIds)
+    ).order('logged_at', { ascending: false }),
+    (rangeStart
+      ? supabase.from('feeding_logs').select('*').in('cat_id', allCatIds).gte('logged_at', rangeStart.toISOString())
+      : supabase.from('feeding_logs').select('*').in('cat_id', allCatIds)
+    ).order('logged_at', { ascending: true }),
     supabase.from('pantry_items').select('*').in('cat_id', allCatIds).gt('quantity', 0),
   ])
 
@@ -120,13 +143,20 @@ export default async function DashboardPage() {
   const distinctMealsToday = new Set(
     feedings.map(f => `${f.food_brand}||${f.food_type}`)
   ).size
-  // Haushaltsweit (für Empfehlung/Korrelation) vs. nur aktive Katze (für Statistiken)
-  const health30Household = (allHealth30 ?? []) as HealthLog[]
-  const health30 = health30Household.filter(h => h.cat_id === cat.id)
-  const feedings30 = dedupeSharedFeedings((allFeedings30 ?? []) as FeedingLog[])
+  // Der gewählte Zeitraum (mindestens 30 Tage) – speist die beiden Futter-Karten
+  const healthRangeHousehold = (allHealthRange ?? []) as HealthLog[]
+  const feedingsRange = dedupeSharedFeedings((allFeedingsRange ?? []) as FeedingLog[])
   // Für Häufigkeits-/Verträglichkeits-Statistiken zählt eine Sorte pro Tag einmal:
   // 3× dieselbe Dose an einem Tag ist ein Tag mit dieser Sorte, nicht drei.
-  const feedingDays30 = dedupeFeedingsPerDay(feedings30)
+  const feedingDaysRange = dedupeFeedingsPerDay(feedingsRange)
+
+  // Die festen 30 Tage als Teilmenge – für Gesundheits-Kacheln und Empfehlung,
+  // die sich durch den Anzeige-Filter nicht verändern dürfen
+  const inLast30 = (iso: string) => new Date(iso) >= thirtyDaysAgo
+  const health30Household = healthRangeHousehold.filter(h => inLast30(h.logged_at))
+  const health30 = health30Household.filter(h => h.cat_id === cat.id)
+  const feedings30 = feedingsRange.filter(f => inLast30(f.logged_at))
+  const feedingDays30 = feedingDaysRange.filter(f => inLast30(f.logged_at))
   const pantry = (pantryRaw ?? []) as PantryItem[]
 
   // === Statistiken berechnen ===
@@ -172,28 +202,35 @@ export default async function DashboardPage() {
 
   // === Futter-Diarrhoe-Korrelation ===
   // Für jede Futter-Sorte: an wie vielen Tagen gegessen, an wie vielen davon am
-  // gleichen/nächsten Tag Durchfall
+  // gleichen/nächsten Tag Durchfall. Wird zweimal gebraucht – einmal fest auf
+  // 30 Tagen für die Empfehlung, einmal auf dem gewählten Zeitraum für die Karte.
   type FoodStat = { brand: string; type: string; total: number; diarrhea: number }
-  const foodMap = new Map<string, FoodStat>()
 
-  for (const f of feedingDays30) {
-    const key = `${f.food_brand}||${f.food_type}`
-    const fDay = new Date(f.logged_at)
-    const nextDay = addBerlinDays(fDay, 1)
+  const buildFoodMap = (feedingDays: FeedingLog[], health: HealthLog[]) => {
+    const map = new Map<string, FoodStat>()
+    for (const f of feedingDays) {
+      const key = `${f.food_brand}||${f.food_type}`
+      const fDay = new Date(f.logged_at)
+      const nextDay = addBerlinDays(fDay, 1)
 
-    // Haushaltsweit: Durchfall bei irgendeiner Katze nach diesem Futter zählt
-    const hasDiarrhea = health30Household.some(h => {
-      const hDay = new Date(h.logged_at)
-      return (isSameDay(hDay, fDay) || isSameDay(hDay, nextDay)) && h.stool_consistency === 'diarrhea'
-    })
+      // Haushaltsweit: Durchfall bei irgendeiner Katze nach diesem Futter zählt
+      const hasDiarrhea = health.some(h => {
+        const hDay = new Date(h.logged_at)
+        return (isSameDay(hDay, fDay) || isSameDay(hDay, nextDay)) && h.stool_consistency === 'diarrhea'
+      })
 
-    if (!foodMap.has(key)) foodMap.set(key, { brand: f.food_brand, type: f.food_type, total: 0, diarrhea: 0 })
-    const stat = foodMap.get(key)!
-    stat.total++
-    if (hasDiarrhea) stat.diarrhea++
+      if (!map.has(key)) map.set(key, { brand: f.food_brand, type: f.food_type, total: 0, diarrhea: 0 })
+      const stat = map.get(key)!
+      stat.total++
+      if (hasDiarrhea) stat.diarrhea++
+    }
+    return map
   }
 
-  const foodCorrelation = Array.from(foodMap.values())
+  // Empfehlung: unveränderte 30-Tage-Basis, damit sie nicht am Anzeige-Filter hängt
+  const foodMap = buildFoodMap(feedingDays30, health30Household)
+  // Karte: folgt dem gewählten Zeitraum
+  const foodCorrelation = Array.from(buildFoodMap(feedingDaysRange, healthRangeHousehold).values())
     .filter(s => s.total >= 2)
     .sort((a, b) => (b.diarrhea / b.total) - (a.diarrhea / a.total))
     .slice(0, 6)
@@ -373,10 +410,10 @@ export default async function DashboardPage() {
     notes: h.notes ?? undefined,
   }))
 
-  // === Fütterungs-Statistik: Sorten der letzten 30 Tage (Tage, nicht Portionen) ===
+  // === Fütterungs-Statistik: Sorten im gewählten Zeitraum (Tage, nicht Portionen) ===
   type FoodFreq = { brand: string; type: string; count: number; lastDate: Date }
   const freqMap = new Map<string, FoodFreq>()
-  for (const f of feedingDays30) {
+  for (const f of feedingDaysRange) {
     const key = `${f.food_brand}||${f.food_type}`
     const d = new Date(f.logged_at)
     if (!freqMap.has(key)) freqMap.set(key, { brand: f.food_brand, type: f.food_type, count: 0, lastDate: d })
@@ -801,11 +838,37 @@ export default async function DashboardPage() {
           )}
         </div>
 
+        {/* ── ZEITRAUM FÜR DIE FUTTER-STATISTIKEN ── */}
+        <div className="flex gap-2 flex-wrap">
+          {FOOD_RANGES.map(r => (
+            <Link
+              key={r.key}
+              href={r.key === DEFAULT_FOOD_RANGE.key ? '/dashboard' : `/dashboard?futter=${r.key}`}
+              scroll={false}
+              className="pressable"
+              style={{
+                fontSize: 13, fontWeight: 600, padding: '7px 15px', borderRadius: 999,
+                textDecoration: 'none',
+                ...(r.key === foodRange.key
+                  ? { background: '#1C1C1E', color: 'white' }
+                  : { background: 'white', color: 'rgba(60,60,67,0.6)', border: '0.5px solid rgba(60,60,67,0.14)' }),
+              }}
+            >
+              {r.label}
+            </Link>
+          ))}
+        </div>
+
         {/* ── FÜTTERUNGS-STATISTIK ── */}
         {foodFrequency.length > 0 && (
           <div className="card overflow-hidden">
             <div style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
-              <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Futter · 30 Tage</h3>
+              <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>
+                Futter · {foodRange.label}
+              </h3>
+              <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', marginTop: 2 }}>
+                {foodRange.days === null ? 'gesamter Verlauf' : 'an wie vielen Tagen gefüttert'}
+              </p>
             </div>
             <div>
               {foodFrequency.map((f, i) => {
@@ -853,7 +916,9 @@ export default async function DashboardPage() {
           <div className="card overflow-hidden">
             <div style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
               <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Futter &amp; Durchfall</h3>
-              <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', marginTop: 2 }}>Anteil der Fütterungs-Tage mit Durchfall</p>
+              <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', marginTop: 2 }}>
+                Anteil der Fütterungs-Tage mit Durchfall · {foodRange.label}
+              </p>
             </div>
             <div style={{ padding: '4px 20px 16px' }}>
               {foodCorrelation.map((s, i) => {
