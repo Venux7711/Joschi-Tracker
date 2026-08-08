@@ -22,10 +22,12 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # v4 lief intern noch auf Node.js 20; GitHub schob das übergangsweise auf
+      # Node.js 24 und warnte. v7 bringt Node.js 24 selbst mit.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Ausstehende Migrationen anwenden
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
