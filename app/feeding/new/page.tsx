@@ -66,6 +66,7 @@ function NewFeedingForm() {
   const [foodType, setFoodType] = useState('')
   const [amountGrams, setAmountGrams] = useState('')
   const [loggedAt, setLoggedAt] = useState('')
+  const [showDetails, setShowDetails] = useState(false)
   const [notes, setNotes] = useState('')
   const [treatAmount, setTreatAmount] = useState(0)
   const [dryFoodAmount, setDryFoodAmount] = useState(0)
@@ -123,6 +124,12 @@ function NewFeedingForm() {
   // (nicht beim programmatischen Setzen durch den Dosenscan)
   const changeBrand = (b: string) => { setFoodBrand(b); setFoodType('') }
 
+  // Zeigt am eingeklappten Bereich an, dass dort etwas drinsteht
+  const filledDetails =
+    [amountGrams, extras, notes].filter((v) => v.trim() !== '').length +
+    (treatAmount > 0 ? 1 : 0) +
+    (dryFoodAmount > 0 ? 1 : 0)
+
   const toggleCat = (id: string) => {
     setSelectedCatIds((prev) => {
       const next = new Set(prev)
@@ -147,7 +154,12 @@ function NewFeedingForm() {
 
       if (data.brand) setFoodBrand(data.brand)
       if (data.type) setFoodType(data.type)
-      if (data.amount_grams) setAmountGrams(String(data.amount_grams))
+      // Menge liegt hinter "Mehr Details" – aufklappen, sonst ist der
+      // erkannte Wert unsichtbar und wirkt, als hätte der Scan nichts gefunden
+      if (data.amount_grams) {
+        setAmountGrams(String(data.amount_grams))
+        setShowDetails(true)
+      }
       setScanSuccess(true)
     } catch {
       setError('Dosenscan fehlgeschlagen. Bitte manuell eingeben.')
@@ -375,23 +387,6 @@ function NewFeedingForm() {
               )}
             </div>
 
-            {/* Menge */}
-            <div>
-              <label htmlFor="amountGrams" className="label">
-                Menge in Gramm <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <input
-                id="amountGrams"
-                type="number"
-                min="1"
-                max="999"
-                value={amountGrams}
-                onChange={(e) => setAmountGrams(e.target.value)}
-                className="input-field"
-                placeholder="z.B. 800"
-              />
-            </div>
-
             {/* Uhrzeit */}
             <div>
               <label htmlFor="loggedAt" className="label">Uhrzeit *</label>
@@ -407,49 +402,87 @@ function NewFeedingForm() {
 
             <hr className="border-gray-100" />
 
-            {/* Leckerli */}
-            <MengeSlider
-              label="🍖 Leckerli"
-              value={treatAmount}
-              onChange={setTreatAmount}
-            />
+            {/* Selten genutzte Felder eingeklappt: In 50 Tagen wurde die Menge
+                kein einziges Mal erfasst, die Regler zweimal. Sie sind weiter
+                da, stehen aber nicht mehr zwischen Sorte und Speichern. */}
+            <button
+              type="button"
+              onClick={() => setShowDetails(v => !v)}
+              className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-700"
+            >
+              <span style={{ display: 'inline-block', transform: showDetails ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>›</span>
+              Mehr Details
+              {!showDetails && filledDetails > 0 && (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  {filledDetails} ausgefüllt
+                </span>
+              )}
+            </button>
 
-            {/* Trockenfutter */}
-            <MengeSlider
-              label="🥣 Trockenfutter"
-              value={dryFoodAmount}
-              onChange={setDryFoodAmount}
-            />
+            {showDetails && (
+              <div className="space-y-5">
+                {/* Menge */}
+                <div>
+                  <label htmlFor="amountGrams" className="label">
+                    Menge in Gramm <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    id="amountGrams"
+                    type="number"
+                    min="1"
+                    max="999"
+                    value={amountGrams}
+                    onChange={(e) => setAmountGrams(e.target.value)}
+                    className="input-field"
+                    placeholder="z.B. 800"
+                  />
+                </div>
 
-            {/* Sonstiges */}
-            <div>
-              <label htmlFor="extras" className="label">
-                Sonstiges bekommen <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <input
-                id="extras"
-                type="text"
-                value={extras}
-                onChange={(e) => setExtras(e.target.value)}
-                className="input-field"
-                placeholder="z.B. Thunfisch, Hühnchen gekocht …"
-              />
-            </div>
+                {/* Leckerli */}
+                <MengeSlider
+                  label="🍖 Leckerli"
+                  value={treatAmount}
+                  onChange={setTreatAmount}
+                />
 
-            {/* Notiz */}
-            <div>
-              <label htmlFor="notes" className="label">
-                Notiz <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <textarea
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="input-field resize-none"
-                rows={2}
-                placeholder="z.B. hat alles aufgefressen"
-              />
-            </div>
+                {/* Trockenfutter */}
+                <MengeSlider
+                  label="🥣 Trockenfutter"
+                  value={dryFoodAmount}
+                  onChange={setDryFoodAmount}
+                />
+
+                {/* Sonstiges */}
+                <div>
+                  <label htmlFor="extras" className="label">
+                    Sonstiges bekommen <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    id="extras"
+                    type="text"
+                    value={extras}
+                    onChange={(e) => setExtras(e.target.value)}
+                    className="input-field"
+                    placeholder="z.B. Thunfisch, Hühnchen gekocht …"
+                  />
+                </div>
+
+                {/* Notiz */}
+                <div>
+                  <label htmlFor="notes" className="label">
+                    Notiz <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="input-field resize-none"
+                    rows={2}
+                    placeholder="z.B. hat alles aufgefressen"
+                  />
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
