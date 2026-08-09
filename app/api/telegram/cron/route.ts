@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { sendTelegram, escapeHtml, type TelegramTopic } from '@/lib/telegram'
 import { dedupeSharedFeedings } from '@/lib/utils'
 import { addBerlinDays, berlinDateKey, berlinDayStart, berlinDayEnd, berlinHour, berlinDaysBetween, formatBerlin } from '@/lib/time'
@@ -25,11 +26,21 @@ const STOOL: Record<string, string> = {
  * entscheidet die Berliner Uhrzeit; telegram_sent verhindert Doppelungen.
  */
 export async function GET(req: NextRequest) {
+  // Die Route ist von der Middleware ausgenommen (sonst käme der Cron gar nicht
+  // an), also hier selbst autorisieren: entweder Vercels Cron, oder ein
+  // angemeldeter Nutzer, der von Hand auslöst.
   const isVercelCron = req.headers.get('x-vercel-cron') === '1'
   const isLocalDev = process.env.NODE_ENV !== 'production'
   const manual = req.nextUrl.searchParams.get('topic')
-  if (!isVercelCron && !isLocalDev && !manual) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  if (!isVercelCron && !isLocalDev) {
+    const sessionClient = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { cookies: { getAll: () => cookies().getAll(), setAll: () => {} } }
+    )
+    const { data: { user } } = await sessionClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const admin = makeAdmin()

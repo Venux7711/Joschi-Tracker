@@ -32,6 +32,12 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isPublicPage = pathname.startsWith('/login') || pathname.startsWith('/auth/')
 
+  // Cron-Routen müssen ohne Session erreichbar sein: Vercel ruft sie von außen
+  // auf und schickt keine Cookies mit. Ohne diese Ausnahme landet der Aufruf
+  // auf /login und die Route läuft nie. Autorisiert wird in der Route selbst
+  // über den x-vercel-cron-Header.
+  if (pathname.endsWith('/cron')) return supabaseResponse
+
   if (!user && !isPublicPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
