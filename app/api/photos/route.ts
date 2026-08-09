@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { getActiveCat } from '@/lib/active-cat.server'
 import { berlinDayStart, berlinDayEnd, fromBerlinInputValue } from '@/lib/time'
+import { notifyNewPhoto } from '@/lib/notifications'
 
 function makeSupabase() {
   const cookieStore = cookies()
@@ -131,6 +132,16 @@ export async function POST(req: NextRequest) {
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Die anderen im Haushalt über das neue Bild informieren. Bewusst awaited:
+  // In einer Serverless-Funktion würde ein nicht abgewarteter Aufruf mit dem
+  // Ende der Antwort abgebrochen. Fehler dürfen den Upload nicht kippen –
+  // das Foto liegt zu diesem Zeitpunkt bereits in der Datenbank.
+  try {
+    await notifyNewPhoto(user.id)
+  } catch (e) {
+    console.error('Foto-Benachrichtigung fehlgeschlagen:', e)
+  }
+
   return NextResponse.json({ photo: data })
 }
 

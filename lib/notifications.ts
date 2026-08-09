@@ -227,3 +227,68 @@ export async function runNotifications(now: Date = new Date()): Promise<RunResul
 
   return { ok: true, hour: berlinHour(now), prepared: entries.map(([t]) => t), push, telegram }
 }
+
+/**
+ * Meldung über ein neues Foto.
+ *
+ * Anders als die übrigen Themen hängt diese nicht am Cron, sondern wird beim
+ * Hochladen ausgelöst. Zwei Eigenheiten:
+ *
+ * - Wer das Foto hochlädt, bekommt keine Meldung darüber. Eine Benachrichtigung
+ *   über das eigene, gerade geschossene Foto wäre nur Lärm.
+ * - Kurze Sperrfrist statt der sonst üblichen Tagesgrenze: Wer zehn Bilder auf
+ *   einmal hochlädt, soll nicht zehn Meldungen auslösen – eine Meldung pro Tag
+ *   wäre umgekehrt zu wenig für ein Ereignis.
+ */
+const PHOTO_COOLDOWN_MINUTES = 10
+
+export async function notifyNewPhoto(uploaderUserId: string | null): Promise<{ sent: number }> {
+  const admin = makeAdmin()
+  const now = new Date()
+  const today = berlinDateKey(now)
+  const cutoff = new Date(now.getTime() - PHOTO_COOLDOWN_MINUTES * 60_000).toISOString()
+
+  if (!process.env.VAPID_EMAIL || !process.env.VAPID_PRIVATE_KEY) return { sent: 0 }
+  webpush.setVapidDetails(
+    process.env.VAPID_EMAIL,
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY,
+  )
+
+  const { data: subs } = await admin
+    .from('push_subscriptions')
+    .select('id, endpoint, subscription, topics, user_id')
+  let sent = 0
+
+  for (const sub of subs ?? []) {
+    if (!(sub.topics ?? []).includes('photo')) continue
+    if (uploaderUserId && sub.user_id === uploaderUserId) continue
+
+    const { data: last } = await admin
+      .from('notifications_sent')
+      .select('sent_at')
+      .eq('channel', 'push').eq('recipient', sub.endpoint).eq('topic', 'photo')
+      .order('sent_at', { ascending: false }).limit(1)
+    if (last?.[0] && last[0].sent_at > cutoff) continue
+
+    try {
+      await webpush.sendNotification(
+        sub.subscription as webpush.PushSubscription,
+        JSON.stringify({ title: '📸 Neues Foto', body: 'Es gibt ein neues Bild im Album.', url: '/fotos' }),
+      )
+      sent++
+      // Zeitstempel fortschreiben; der Tageseintrag existiert eventuell schon
+      await admin.from('notifications_sent').upsert(
+        { channel: 'push', recipient: sub.endpoint, topic: 'photo', day: today, sent_at: new Date().toISOString() },
+        { onConflict: 'channel,recipient,topic,day' },
+      )
+    } catch (e) {
+      const status = (e as { statusCode?: number })?.statusCode
+      if (status === 404 || status === 410) {
+        await admin.from('push_subscriptions').delete().eq('id', sub.id)
+      }
+    }
+  }
+
+  return { sent }
+}

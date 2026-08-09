@@ -15,6 +15,7 @@ export const NOTIFICATION_TOPICS = [
   { key: 'pantry', label: 'Vorrat wird knapp', hint: 'ab 4 Dosen im Haus' },
   { key: 'diarrhea', label: 'Durchfall-Warnung', hint: 'bei zwei Tagen in Folge' },
   { key: 'birthday', label: 'Geburtstag', hint: 'Gruß am Morgen' },
+  { key: 'photo', label: 'Neues Foto', hint: 'sobald jemand ein Foto hinzufügt' },
 ] as const
 
 export type NotificationTopic = (typeof NOTIFICATION_TOPICS)[number]['key']
