@@ -57,7 +57,7 @@ export default function LoginPage() {
           🐾
         </div>
         <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em', color: '#1C1C1E' }}>
-          Tracker
+          Joschi &amp; Bella
         </h1>
         <p style={{ fontSize: 14, color: 'rgba(60,60,67,0.5)', marginTop: 4, letterSpacing: '-0.01em' }}>
           Gesundheitstracker

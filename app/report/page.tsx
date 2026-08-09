@@ -235,7 +235,7 @@ export default function ReportPage() {
               )}
             </div>
 
-            <p className="text-xs text-gray-400 text-center pb-4">Erstellt mit Joschi Tracker · {today}</p>
+            <p className="text-xs text-gray-400 text-center pb-4">Erstellt mit Joschi &amp; Bella Tracker · {today}</p>
           </div>
         )}
       </main>

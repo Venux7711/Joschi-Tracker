@@ -48,7 +48,7 @@ export default function Header() {
             🐾
           </div>
           <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em', color: '#1C1C1E' }}>
-            Tracker
+            Joschi &amp; Bella
           </span>
         </Link>
 

@@ -7,13 +7,13 @@ import BottomNav from '@/components/BottomNav'
 const inter = Inter({ subsets: ['latin', 'latin-ext'] })
 
 export const metadata: Metadata = {
-  title: 'Joschi und Bella Tracker',
-  description: 'Gesundheitstracker für Joschi und Bella',
+  title: 'Joschi & Bella Tracker',
+  description: 'Gesundheitstracker für Joschi & Bella',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Joschi und Bella',
+    title: 'Joschi & Bella',
   },
   icons: {
     icon: '/joschi.jpg',
