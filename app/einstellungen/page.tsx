@@ -6,6 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { birthdayInfo } from '@/lib/birthday'
 import { formatBerlin } from '@/lib/time'
+import PushSettings from '@/components/PushSettings'
 import TelegramSettings from '@/components/TelegramSettings'
 import type { Cat } from '@/lib/types'
 
@@ -118,7 +119,16 @@ export default function EinstellungenPage() {
           )}
         </div>
 
-        <TelegramSettings />
+        <PushSettings />
+
+        <details>
+          <summary style={{ fontSize: 13, color: 'rgba(60,60,67,0.45)', cursor: 'pointer', padding: '4px 2px' }}>
+            Telegram als zusätzlicher Weg (optional)
+          </summary>
+          <div className="mt-3">
+            <TelegramSettings />
+          </div>
+        </details>
       </main>
     </div>
   )

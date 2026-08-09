@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { getBotInfo, getRecentChats, sendTelegram, isTopic, TOPIC_KEYS, escapeHtml } from '@/lib/telegram'
+import { getBotInfo, getRecentChats, sendTelegram, escapeHtml } from '@/lib/telegram'
+import { isTopic, TOPIC_KEYS } from '@/lib/notification-topics'
 
 /** Mit Session – für die Authentifizierung des Aufrufers */
 function makeSupabase() {

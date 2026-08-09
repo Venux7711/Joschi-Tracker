@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { runTelegramCron } from '@/lib/telegram-cron'
+import { runNotifications } from '@/lib/notifications'
 
 /**
- * Abend-Lauf: Erinnerungen, wenn für heute nichts erfasst wurde.
+ * Abend-Slot: Erinnerungen, wenn für heute nichts erfasst wurde.
  *
- * Der Vercel-Hobby-Tarif erlaubt pro Cron-Job nur einen Lauf am Tag, deshalb
- * gibt es zwei Pfade statt eines Jobs mit zwei Zeiten. Was tatsächlich
- * verschickt wird, entscheidet die Berliner Uhrzeit in runTelegramCron().
+ * Der Pfad heißt aus historischen Gründen "telegram", verschickt aber über
+ * alle Kanäle – Push und, falls verknüpft, Telegram. Zwei Slots statt eines
+ * mehrfach laufenden Jobs, weil der Vercel-Hobby-Tarif pro Cron-Job nur einen
+ * Lauf am Tag zulässt. Der Morgen-Slot hängt an /api/push/cron.
  */
 export async function GET(req: NextRequest) {
-  // Die Route ist von der Middleware ausgenommen (sonst käme Vercels Aufruf gar
-  // nicht an), also hier selbst autorisieren.
+  // Von der Middleware ausgenommen, damit Vercels Aufruf ankommt – also hier
+  // selbst autorisieren.
   const isVercelCron = req.headers.get('x-vercel-cron') === '1'
   const isLocalDev = process.env.NODE_ENV !== 'production'
 
@@ -26,5 +27,5 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  return NextResponse.json(await runTelegramCron())
+  return NextResponse.json(await runNotifications())
 }

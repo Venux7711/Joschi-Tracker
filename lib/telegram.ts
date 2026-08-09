@@ -1,35 +1,3 @@
-/**
- * Telegram-Anbindung: ein Bot, mehrere Chats.
- *
- * Welche Meldungen es gibt und warum – abgeleitet aus dem tatsächlichen
- * Nutzungsverhalten, nicht geraten:
- *
- * - reminder  Abends, NUR wenn für heute noch kein Futter eingetragen ist.
- *             Bei 98 % Abdeckung wäre eine stumpfe Tageserinnerung Lärm.
- * - health    Erinnerung ans Befinden, wenn seit Tagen nichts erfasst wurde.
- *             Genau hier klafft die Lücke: Futter 98 %, Befinden ~25 %.
- * - morning   Was gab es gestern, wie war das Befinden.
- * - pantry    Vorrat wird knapp – bei ~400 g/Tag ist das vorhersagbar.
- * - diarrhea  Warnung, wenn zwei Tage in Folge Durchfall eingetragen ist.
- * - birthday  Geburtstagsgruß am Morgen.
- */
-export const TELEGRAM_TOPICS = [
-  { key: 'reminder', label: 'Erinnerung abends', hint: 'nur wenn heute noch kein Futter erfasst ist' },
-  { key: 'health', label: 'Befinden-Erinnerung', hint: 'wenn mehrere Tage kein Eintrag kam' },
-  { key: 'morning', label: 'Morgenmeldung', hint: 'was es gestern gab und wie es ging' },
-  { key: 'pantry', label: 'Vorrat wird knapp', hint: 'rechtzeitig vor der letzten Dose' },
-  { key: 'diarrhea', label: 'Durchfall-Warnung', hint: 'bei zwei Tagen in Folge' },
-  { key: 'birthday', label: 'Geburtstag', hint: 'Gruß am Morgen des Geburtstags' },
-] as const
-
-export type TelegramTopic = (typeof TELEGRAM_TOPICS)[number]['key']
-
-export const TOPIC_KEYS: TelegramTopic[] = TELEGRAM_TOPICS.map(t => t.key)
-
-export function isTopic(value: unknown): value is TelegramTopic {
-  return typeof value === 'string' && (TOPIC_KEYS as string[]).includes(value)
-}
-
 export type SendResult = { ok: true } | { ok: false; error: string }
 
 /**

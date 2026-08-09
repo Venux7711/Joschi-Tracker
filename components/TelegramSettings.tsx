@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { TELEGRAM_TOPICS, type TelegramTopic } from '@/lib/telegram'
+import { NOTIFICATION_TOPICS as TELEGRAM_TOPICS, type NotificationTopic as TelegramTopic } from '@/lib/notification-topics'
 
 type Chat = {
   id: string
