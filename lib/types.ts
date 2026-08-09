@@ -16,6 +16,8 @@ export interface Cat {
   breed_label: string | null
   theme: CatTheme
   photo_url: string | null
+  /** Kalendertag der Geburt, "YYYY-MM-DD" – ohne Zeitzone */
+  birthday: string | null
 }
 
 export interface FeedingLog {

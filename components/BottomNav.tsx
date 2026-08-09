@@ -18,6 +18,8 @@ const MORE = [
   { href: '/medikamente', emoji: '💊', label: 'Medis' },
   { href: '/report', emoji: '📊', label: 'Report' },
   { href: '/wrapped', emoji: '🎁', label: 'Wrapped' },
+  { href: '/geburtstag', emoji: '🎂', label: 'Geburtstag' },
+  { href: '/einstellungen', emoji: '⚙️', label: 'Einstellungen' },
 ]
 
 export default function BottomNav() {

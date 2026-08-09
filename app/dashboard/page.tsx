@@ -27,6 +27,8 @@ import AiInsights from '@/components/AiInsights'
 import CatPhoto from '@/components/CatPhoto'
 import MemoryOfTheDay from '@/components/MemoryOfTheDay'
 import QuickFeed from '@/components/QuickFeed'
+import BirthdayCard from '@/components/BirthdayCard'
+import { birthdayInfo } from '@/lib/birthday'
 import PushNotification from '@/components/PushNotification'
 import WeightWidget from '@/components/WeightWidget'
 import MedicationsWidget from '@/components/MedicationsWidget'
@@ -464,6 +466,28 @@ export default async function DashboardPage({
   const hour = berlinHour(now)
   const greeting = hour < 12 ? 'Guten Morgen' : hour < 17 ? 'Guten Tag' : 'Guten Abend'
 
+  // === Geburtstag ===
+  // Am Tag selbst und am Tag danach bekommt die Karte den Platz ganz oben.
+  // Gefeiert wird über den ganzen Haushalt, nicht nur für die aktive Katze.
+  const birthdayCat = allCats
+    .map(c => ({ cat: c, info: birthdayInfo(c.birthday, now) }))
+    .find(x => x.info?.isToday || x.info?.wasYesterday)
+
+  let birthdayPhotos: { id: string; public_url: string }[] = []
+  if (birthdayCat) {
+    const day = birthdayCat.info!.isToday ? now : addBerlinDays(now, -1)
+    const { data: bdPhotos } = await supabase
+      .from('photos')
+      .select('id, public_url, cat_ids, cat_id')
+      .gte('taken_at', berlinDayStart(day).toISOString())
+      .lte('taken_at', berlinDayEnd(day).toISOString())
+      .order('taken_at', { ascending: false })
+    birthdayPhotos = (bdPhotos ?? [])
+      .filter((p: { cat_ids: string[] | null; cat_id: string | null }) =>
+        p.cat_ids?.length ? p.cat_ids.includes(birthdayCat.cat.id) : p.cat_id === birthdayCat.cat.id)
+      .map((p: { id: string; public_url: string }) => ({ id: p.id, public_url: p.public_url }))
+  }
+
   // === Sorten für die Ein-Tipp-Erfassung ===
   // Zuletzt gefütterte zuerst (in 38 von 64 Fällen wiederholt sich die Sorte),
   // danach der restliche Vorrat nach Bestand. Höchstens vier, sonst wird die
@@ -486,6 +510,22 @@ export default async function DashboardPage({
       <Header />
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+
+        {/* ── GEBURTSTAG ── */}
+        {birthdayCat && (
+          <BirthdayCard
+            cat={{
+              id: birthdayCat.cat.id,
+              name: birthdayCat.cat.name,
+              age: birthdayCat.info!.age,
+              isToday: birthdayCat.info!.isToday,
+              photoUrl: birthdayCat.cat.photo_url,
+              gradient: getCatTheme(birthdayCat.cat.theme).heroGradient,
+              accent: getCatTheme(birthdayCat.cat.theme).heroAccent,
+            }}
+            photos={birthdayPhotos}
+          />
+        )}
 
         {/* ── HERO ── */}
         <div

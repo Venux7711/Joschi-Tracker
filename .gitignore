@@ -41,3 +41,5 @@ next-env.d.ts
 
 # Claude Code (lokale Werkzeug-Einstellungen, maschinenspezifisch)
 .claude/
+
+.env*
