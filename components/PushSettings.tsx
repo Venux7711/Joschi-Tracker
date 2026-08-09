@@ -3,6 +3,14 @@
 import { useEffect, useState } from 'react'
 import { NOTIFICATION_TOPICS, type NotificationTopic } from '@/lib/notification-topics'
 
+/** VAPID-Schlüssel liegt base64url vor, die Push-API will ein Uint8Array. */
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = window.atob(base64)
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
+}
+
 type Device = {
   id: string
   endpoint: string
@@ -47,6 +55,59 @@ export default function PushSettings() {
     init()
   }, [])
 
+  /**
+   * Dieses Gerät anmelden. Früher lag der Knopf unten auf dem Dashboard – er
+   * gehört zu den übrigen Benachrichtigungs-Einstellungen, nicht dorthin.
+   */
+  const subscribe = async () => {
+    setBusy('subscribe'); setError(null); setNotice(null)
+    try {
+      const permission = await Notification.requestPermission()
+      setPermission(permission)
+      if (permission !== 'granted') {
+        setError('Benachrichtigungen wurden abgelehnt.')
+        setBusy(null)
+        return
+      }
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
+      })
+      const res = await fetch('/api/push/subscribe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub),
+      })
+      if (!res.ok) { setError('Konnte nicht angemeldet werden.'); setBusy(null); return }
+      setMyEndpoint(sub.endpoint)
+      setNotice('Dieses Gerät bekommt jetzt Benachrichtigungen.')
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Anmeldung fehlgeschlagen')
+    }
+    setBusy(null)
+  }
+
+  const unsubscribe = async () => {
+    if (!confirm('Dieses Gerät abmelden? Es bekommt dann gar keine Benachrichtigungen mehr.')) return
+    setBusy('subscribe'); setError(null); setNotice(null)
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        await fetch('/api/push/subscribe', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        })
+        await sub.unsubscribe()
+      }
+      setMyEndpoint(null)
+      await load()
+    } catch {
+      setError('Abmelden fehlgeschlagen')
+    }
+    setBusy(null)
+  }
+
   const patch = async (device: Device, body: Partial<Device>) => {
     setDevices(prev => prev.map(d => (d.id === device.id ? { ...d, ...body } : d)))
     const res = await fetch('/api/push/settings', {
@@ -85,6 +146,32 @@ export default function PushSettings() {
         </p>
       </div>
 
+      {/* Status dieses Geräts – hier wird an- und abgemeldet */}
+      {supported && permission !== 'denied' && (
+        <div style={{ padding: '14px 20px', borderBottom: '0.5px solid rgba(60,60,67,0.07)' }} className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p style={{ fontSize: 14, fontWeight: 600, color: '#1C1C1E' }}>
+              {myEndpoint ? '✅ Dieses Gerät ist angemeldet' : '🔕 Dieses Gerät bekommt nichts'}
+            </p>
+            <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.4)', marginTop: 2 }}>
+              {myEndpoint
+                ? 'Welche Meldungen, stellst du unten ein'
+                : 'Einmal erlauben, dann kommen die Meldungen auch bei geschlossener App'}
+            </p>
+          </div>
+          <button
+            onClick={myEndpoint ? unsubscribe : subscribe}
+            disabled={busy === 'subscribe'}
+            className={myEndpoint ? '' : 'pressable'}
+            style={myEndpoint
+              ? { fontSize: 12, color: 'rgba(60,60,67,0.45)', fontWeight: 600, flexShrink: 0 }
+              : { fontSize: 13, fontWeight: 700, padding: '9px 15px', borderRadius: 12, background: 'var(--am-500, #f59e0b)', color: 'white', border: 'none', flexShrink: 0 }}
+          >
+            {busy === 'subscribe' ? '…' : myEndpoint ? 'Abmelden' : '🔔 Aktivieren'}
+          </button>
+        </div>
+      )}
+
       {!supported && (
         <div style={{ padding: '16px 20px' }}>
           <p style={{ fontSize: 13, color: 'rgba(60,60,67,0.6)' }}>
@@ -108,8 +195,8 @@ export default function PushSettings() {
       ) : devices.length === 0 ? (
         <div style={{ padding: '16px 20px' }}>
           <p style={{ fontSize: 13, color: 'rgba(60,60,67,0.5)' }}>
-            Noch kein Gerät angemeldet. Auf dem Dashboard ganz unten auf „Aktivieren" tippen –
-            danach erscheint das Gerät hier und lässt sich einstellen.
+            Noch kein Gerät angemeldet. Oben auf „Aktivieren" tippen – danach erscheint
+            das Gerät hier und die einzelnen Meldungen lassen sich ein- und ausschalten.
           </p>
         </div>
       ) : (

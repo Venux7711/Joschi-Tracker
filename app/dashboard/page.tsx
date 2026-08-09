@@ -30,7 +30,6 @@ import QuickFeed from '@/components/QuickFeed'
 import BirthdayCard from '@/components/BirthdayCard'
 import QuickHealth from '@/components/QuickHealth'
 import { birthdayInfo } from '@/lib/birthday'
-import PushNotification from '@/components/PushNotification'
 import WeightWidget from '@/components/WeightWidget'
 import MedicationsWidget from '@/components/MedicationsWidget'
 import { ANIFIT_FOODS, getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
@@ -1154,9 +1153,6 @@ export default async function DashboardPage({
 
         {/* ── MEDIKAMENTE ── */}
         <MedicationsWidget />
-
-        {/* ── PUSH-BENACHRICHTIGUNG ── */}
-        <PushNotification />
 
         {/* ── ERINNERUNG – VOR EINEM JAHR ── */}
         <MemoryOfTheDay />
