@@ -26,6 +26,7 @@ import type { Cat, FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@
 import AiInsights from '@/components/AiInsights'
 import CatPhoto from '@/components/CatPhoto'
 import MemoryOfTheDay from '@/components/MemoryOfTheDay'
+import QuickFeed from '@/components/QuickFeed'
 import PushNotification from '@/components/PushNotification'
 import WeightWidget from '@/components/WeightWidget'
 import MedicationsWidget from '@/components/MedicationsWidget'
@@ -427,6 +428,23 @@ export default async function DashboardPage({
   const hour = berlinHour(now)
   const greeting = hour < 12 ? 'Guten Morgen' : hour < 17 ? 'Guten Tag' : 'Guten Abend'
 
+  // === Sorten für die Ein-Tipp-Erfassung ===
+  // Zuletzt gefütterte zuerst (in 38 von 64 Fällen wiederholt sich die Sorte),
+  // danach der restliche Vorrat nach Bestand. Höchstens vier, sonst wird die
+  // Karte zur zweiten Sortenliste.
+  const lastFedKey = feedingsRange.length
+    ? `${feedingsRange[feedingsRange.length - 1].food_brand}||${feedingsRange[feedingsRange.length - 1].food_type}`
+    : null
+  const quickSorts = [...pantry]
+    .sort((a, b) => {
+      const aLast = `${a.brand}||${a.type}` === lastFedKey
+      const bLast = `${b.brand}||${b.type}` === lastFedKey
+      if (aLast !== bLast) return aLast ? -1 : 1
+      return b.quantity - a.quantity
+    })
+    .slice(0, 4)
+    .map(p => ({ brand: p.brand, type: p.type, quantity: p.quantity }))
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -745,6 +763,8 @@ export default async function DashboardPage({
               + Eintrag
             </Link>
           </div>
+
+          <QuickFeed sorts={quickSorts} catIds={allCatIds} householdNames={householdNames} />
 
           {feedings.length === 0 ? (
             <div style={{ padding: '28px 20px', textAlign: 'center' }}>
