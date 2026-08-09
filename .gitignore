@@ -43,3 +43,6 @@ next-env.d.ts
 .claude/
 
 .env*
+
+# Zwischenstand des Testlaufs
+.test-build/
