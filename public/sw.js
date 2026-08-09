@@ -3,8 +3,8 @@ self.addEventListener('push', function (event) {
   const title = data.title || 'Joschi & Bella Tracker'
   const options = {
     body: data.body || '',
-    icon: '/joschi.jpg',
-    badge: '/joschi.jpg',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
     data: { url: data.url || '/dashboard' },
     vibrate: [200, 100, 200],
   }

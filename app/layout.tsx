@@ -16,8 +16,8 @@ export const metadata: Metadata = {
     title: 'Joschi & Bella',
   },
   icons: {
-    icon: '/joschi.jpg',
-    apple: '/joschi.jpg',
+    icon: '/icon-192.png',
+    apple: '/icon-512.png',
   },
 }
 
