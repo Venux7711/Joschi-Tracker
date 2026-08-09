@@ -6,6 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { birthdayInfo } from '@/lib/birthday'
 import { formatBerlin } from '@/lib/time'
+import TelegramSettings from '@/components/TelegramSettings'
 import type { Cat } from '@/lib/types'
 
 export default function EinstellungenPage() {
@@ -116,6 +117,8 @@ export default function EinstellungenPage() {
             </div>
           )}
         </div>
+
+        <TelegramSettings />
       </main>
     </div>
   )

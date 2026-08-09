@@ -28,6 +28,7 @@ import CatPhoto from '@/components/CatPhoto'
 import MemoryOfTheDay from '@/components/MemoryOfTheDay'
 import QuickFeed from '@/components/QuickFeed'
 import BirthdayCard from '@/components/BirthdayCard'
+import QuickHealth from '@/components/QuickHealth'
 import { birthdayInfo } from '@/lib/birthday'
 import PushNotification from '@/components/PushNotification'
 import WeightWidget from '@/components/WeightWidget'
@@ -196,6 +197,23 @@ export default async function DashboardPage({
 
   // Aktuellster Stuhlgang
   const latestStool = health30.length > 0 ? health30[0].stool_consistency : undefined
+
+  // Wann war der letzte Durchfall? Bewusst ohne Zeitgrenze abgefragt – liegt er
+  // länger als 30 Tage zurück, ist genau das die interessante Auskunft.
+  const { data: lastDiarrheaRow } = await supabase
+    .from('health_logs')
+    .select('logged_at')
+    .eq('cat_id', cat.id)
+    .eq('stool_consistency', 'diarrhea')
+    .order('logged_at', { ascending: false })
+    .limit(1)
+  const lastDiarrhea = lastDiarrheaRow?.[0]?.logged_at as string | undefined
+  const daysSinceDiarrhea = lastDiarrhea ? berlinDaysBetween(lastDiarrhea, now) : null
+
+  // Durchfall-Tage innerhalb der 14-Tage-Kurve, für die Beschriftung darunter
+  const diarrheaDatesIn14 = trend14
+    .filter(d => d.stool === 'diarrhea')
+    .map(d => formatBerlin(d.day, { day: 'numeric', month: 'short' }))
 
   // Erbrech-Tage in letzten 7 Tagen
   const past7 = pastBerlinDays(7, now)
@@ -790,8 +808,18 @@ export default async function DashboardPage({
                 : stool === 'soft' ? 'var(--am-300)'
                 : stool === 'diarrhea' ? '#F87171'
                 : undefined
+              const label = stool === 'diarrhea' ? 'Durchfall'
+                : stool === 'soft' ? 'weich'
+                : stool === 'normal' ? 'normal'
+                : stool === 'not_observed' ? 'nicht gesehen'
+                : 'kein Eintrag'
               return (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                <div
+                  key={i}
+                  style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}
+                  // Antippen/Überfahren verrät den genauen Tag – sonst muss man Punkte abzählen
+                  title={`${formatBerlin(day, { weekday: 'long', day: 'numeric', month: 'long' })}: ${label}`}
+                >
                   <div style={{
                     width: '100%',
                     aspectRatio: '1',
@@ -799,13 +827,43 @@ export default async function DashboardPage({
                     borderRadius: 5,
                     background: bg ?? 'rgba(120,120,128,0.1)',
                     border: !bg ? '1.5px dashed rgba(120,120,128,0.22)' : 'none',
+                    // Durchfall-Tage hervorheben, damit sie ins Auge springen
+                    boxShadow: stool === 'diarrhea' ? '0 0 0 2px rgba(248,113,113,0.35)' : 'none',
                   }} />
-                  <span style={{ fontSize: 9, color: 'rgba(60,60,67,0.35)', lineHeight: 1, letterSpacing: '0.01em' }}>
+                  {/* Tageszahl statt Wochentag: damit lässt sich ein Vorfall direkt datieren */}
+                  <span style={{
+                    fontSize: 9, lineHeight: 1, letterSpacing: '0.01em',
+                    color: stool === 'diarrhea' ? '#DC2626' : 'rgba(60,60,67,0.35)',
+                    fontWeight: stool === 'diarrhea' ? 700 : 400,
+                  }}>
+                    {formatBerlin(day, { day: 'numeric' })}
+                  </span>
+                  <span style={{ fontSize: 8, color: 'rgba(60,60,67,0.25)', lineHeight: 1 }}>
                     {i % 2 === 0 ? dayLabel(day) : ''}
                   </span>
                 </div>
               )
             })}
+          </div>
+
+          {/* Wann war Durchfall? Ohne diese Zeile muss man Punkte abzählen –
+              und liegt der letzte Vorfall länger als 14 Tage zurück, ist er in
+              der Kurve gar nicht zu sehen. */}
+          <div style={{ paddingTop: 2, paddingBottom: 10 }}>
+            {diarrheaDatesIn14.length > 0 ? (
+              <p style={{ fontSize: 12, color: '#DC2626', fontWeight: 600 }}>
+                Durchfall am {diarrheaDatesIn14.join(', ')}
+              </p>
+            ) : lastDiarrhea && daysSinceDiarrhea !== null ? (
+              <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.5)' }}>
+                Letzter Durchfall: {formatBerlin(lastDiarrhea, { day: 'numeric', month: 'long', year: 'numeric' })}
+                {' · vor '}{daysSinceDiarrhea} {daysSinceDiarrhea === 1 ? 'Tag' : 'Tagen'}
+              </p>
+            ) : (
+              <p style={{ fontSize: 12, color: '#16A34A', fontWeight: 600 }}>
+                Noch nie Durchfall erfasst
+              </p>
+            )}
           </div>
 
           {/* Inline legend */}
@@ -892,6 +950,8 @@ export default async function DashboardPage({
               + Eintrag
             </Link>
           </div>
+
+          <QuickHealth catId={cat.id} catName={cat.name} />
 
           {healthLogs.length === 0 ? (
             <div style={{ padding: '28px 20px', textAlign: 'center' }}>
