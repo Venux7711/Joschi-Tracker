@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { toBerlinInputValue, fromBerlinInputValue } from '@/lib/time'
+import TimeChoice from '@/components/TimeChoice'
 import { consumePreviousCan } from '@/lib/pantry'
 import type { Cat } from '@/lib/types'
 
@@ -82,7 +83,11 @@ function NewFeedingForm() {
   const isAnifit = foodBrand.trim().toLowerCase() === 'anifit'
 
   useEffect(() => {
-    setLoggedAt(dateParam ? `${dateParam}T12:00` : toBerlinInputValue())
+    // Beim Nachtragen aus dem Verlauf: 18:00 statt 12:00. Die alte Vorgabe hat
+    // 35 von 63 Mahlzeiten einen Mittagszeitpunkt verpasst, den es nie gab –
+    // tatsächlich wird überwiegend abends gefüttert. Der Chip zeigt die Wahl
+    // jetzt sichtbar an und lässt sich mit einem Tipp ändern.
+    setLoggedAt(dateParam ? `${dateParam}T18:00` : toBerlinInputValue())
 
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -361,17 +366,7 @@ function NewFeedingForm() {
             </div>
 
             {/* Uhrzeit */}
-            <div>
-              <label htmlFor="loggedAt" className="label">Uhrzeit *</label>
-              <input
-                id="loggedAt"
-                type="datetime-local"
-                value={loggedAt}
-                onChange={(e) => setLoggedAt(e.target.value)}
-                className="input-field"
-                required
-              />
-            </div>
+            <TimeChoice value={loggedAt} onChange={setLoggedAt} label="Wann gefüttert?" />
 
             <hr className="border-gray-100" />
 

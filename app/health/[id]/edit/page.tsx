@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { toBerlinInputValue, fromBerlinInputValue } from '@/lib/time'
+import TimeChoice from '@/components/TimeChoice'
 import type { StoolConsistency, Appetite, Activity } from '@/lib/types'
 
 interface ToggleGroupProps<T extends string> {
@@ -161,10 +162,7 @@ export default function EditHealthPage() {
 
         <div className="card p-5">
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="loggedAt" className="label">Uhrzeit</label>
-              <input id="loggedAt" type="datetime-local" value={loggedAt} onChange={(e) => setLoggedAt(e.target.value)} className="input-field" required />
-            </div>
+            <TimeChoice value={loggedAt} onChange={setLoggedAt} label="Wann?" />
 
             <div>
               <label className="label">Stuhlgang</label>

@@ -13,5 +13,29 @@
       "type": "image/jpeg",
       "purpose": "any"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Futter eintragen",
+      "short_name": "Futter",
+      "url": "/feeding/new",
+      "icons": [
+        {
+          "src": "/joschi.jpg",
+          "sizes": "512x512"
+        }
+      ]
+    },
+    {
+      "name": "Befinden eintragen",
+      "short_name": "Befinden",
+      "url": "/health/new",
+      "icons": [
+        {
+          "src": "/joschi.jpg",
+          "sizes": "512x512"
+        }
+      ]
+    }
   ]
 }

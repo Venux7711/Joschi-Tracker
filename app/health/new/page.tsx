@@ -7,6 +7,7 @@ import Image from 'next/image'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { toBerlinInputValue, fromBerlinInputValue } from '@/lib/time'
+import TimeChoice from '@/components/TimeChoice'
 import { pickActiveCat } from '@/lib/active-cat-client'
 import type { Cat, StoolConsistency, Appetite, Activity } from '@/lib/types'
 
@@ -96,7 +97,11 @@ function NewHealthForm() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
 
   useEffect(() => {
-    setLoggedAt(dateParam ? `${dateParam}T12:00` : toBerlinInputValue())
+    // Beim Nachtragen aus dem Verlauf: 18:00 statt 12:00. Die alte Vorgabe hat
+    // 35 von 63 Mahlzeiten einen Mittagszeitpunkt verpasst, den es nie gab –
+    // tatsächlich wird überwiegend abends gefüttert. Der Chip zeigt die Wahl
+    // jetzt sichtbar an und lässt sich mit einem Tipp ändern.
+    setLoggedAt(dateParam ? `${dateParam}T18:00` : toBerlinInputValue())
 
     const init = async () => {
       const {
@@ -224,19 +229,7 @@ function NewHealthForm() {
         <div className="card p-5">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Uhrzeit */}
-            <div>
-              <label htmlFor="loggedAt" className="label">
-                Uhrzeit
-              </label>
-              <input
-                id="loggedAt"
-                type="datetime-local"
-                value={loggedAt}
-                onChange={(e) => setLoggedAt(e.target.value)}
-                className="input-field"
-                required
-              />
-            </div>
+            <TimeChoice value={loggedAt} onChange={setLoggedAt} label="Wann?" />
 
             {/* Stuhlgang */}
             <div>

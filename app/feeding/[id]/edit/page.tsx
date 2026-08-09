@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { toBerlinInputValue, fromBerlinInputValue } from '@/lib/time'
+import TimeChoice from '@/components/TimeChoice'
 
 const ANIFIT_SORTEN = [
   'Puterichs Delight (Truthahn)',
@@ -261,10 +262,7 @@ export default function EditFeedingPage() {
               <input id="amountGrams" type="number" min="1" max="999" value={amountGrams} onChange={(e) => setAmountGrams(e.target.value)} className="input-field" placeholder="z.B. 800" />
             </div>
 
-            <div>
-              <label htmlFor="loggedAt" className="label">Uhrzeit *</label>
-              <input id="loggedAt" type="datetime-local" value={loggedAt} onChange={(e) => setLoggedAt(e.target.value)} className="input-field" required />
-            </div>
+            <TimeChoice value={loggedAt} onChange={setLoggedAt} label="Wann gefüttert?" />
 
             <hr className="border-gray-100" />
             <MengeSlider label="🍖 Leckerli" value={treatAmount} onChange={setTreatAmount} />
