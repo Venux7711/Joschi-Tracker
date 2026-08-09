@@ -411,6 +411,42 @@ export default async function DashboardPage({
     notes: h.notes ?? undefined,
   }))
 
+  // === Tatsächlicher Verbrauch ===
+  // Eine Dose gilt als leer, sobald auf eine andere Sorte gewechselt wird
+  // (gleiche Regel wie lib/pantry.ts). Aus den Wechseln und der Dosengröße
+  // ergibt sich, wie viel wirklich weggeht – die Grammangabe pro Fütterung
+  // wäre bei einer Dose, die mehrere Tage für beide Katzen reicht, geraten.
+  const sizeByKey = new Map<string, number>()
+  const sizeByBrand = new Map<string, number>()
+  for (const p of pantry) {
+    if (!p.size_grams) continue
+    sizeByKey.set(`${p.brand}||${p.type}`.toLowerCase(), p.size_grams)
+    if (!sizeByBrand.has(p.brand.toLowerCase())) sizeByBrand.set(p.brand.toLowerCase(), p.size_grams)
+  }
+  const canSize = (brand: string, type: string) =>
+    sizeByKey.get(`${brand}||${type}`.toLowerCase()) ?? sizeByBrand.get(brand.toLowerCase()) ?? null
+
+  let consumedCans = 0
+  let consumedGrams = 0
+  let cansWithoutSize = 0
+  for (let i = 1; i < feedingsRange.length; i++) {
+    const prev = feedingsRange[i - 1]
+    const curr = feedingsRange[i]
+    if (prev.food_type === curr.food_type && prev.food_brand === curr.food_brand) continue
+    consumedCans++
+    const size = canSize(prev.food_brand, prev.food_type)
+    if (size) consumedGrams += size
+    else cansWithoutSize++
+  }
+
+  // Zeitbasis: vom ersten Eintrag im Zeitraum bis heute
+  const consumptionDays = feedingsRange.length
+    ? Math.max(1, berlinDaysBetween(feedingsRange[0].logged_at, now) + 1)
+    : 0
+  const gramsPerDay = consumptionDays > 0 ? Math.round(consumedGrams / consumptionDays) : 0
+  const gramsPerCatDay = allCats.length > 0 ? Math.round(gramsPerDay / allCats.length) : 0
+  const showConsumption = consumedGrams > 0 && consumptionDays > 0
+
   // === Fütterungs-Statistik: Sorten im gewählten Zeitraum (Tage, nicht Portionen) ===
   type FoodFreq = { brand: string; type: string; count: number; lastDate: Date }
   const freqMap = new Map<string, FoodFreq>()
@@ -435,7 +471,8 @@ export default async function DashboardPage({
   const lastFedKey = feedingsRange.length
     ? `${feedingsRange[feedingsRange.length - 1].food_brand}||${feedingsRange[feedingsRange.length - 1].food_type}`
     : null
-  const quickSorts = [...pantry]
+  const quickPantry = pantry.map(p => ({ id: p.id, brand: p.brand, type: p.type, quantity: p.quantity }))
+  const quickSorts = [...quickPantry]
     .sort((a, b) => {
       const aLast = `${a.brand}||${a.type}` === lastFedKey
       const bLast = `${b.brand}||${b.type}` === lastFedKey
@@ -443,7 +480,6 @@ export default async function DashboardPage({
       return b.quantity - a.quantity
     })
     .slice(0, 4)
-    .map(p => ({ brand: p.brand, type: p.type, quantity: p.quantity }))
 
   return (
     <div className="min-h-screen">
@@ -764,7 +800,7 @@ export default async function DashboardPage({
             </Link>
           </div>
 
-          <QuickFeed sorts={quickSorts} catIds={allCatIds} householdNames={householdNames} />
+          <QuickFeed sorts={quickSorts} pantry={quickPantry} catIds={allCatIds} householdNames={householdNames} />
 
           {feedings.length === 0 ? (
             <div style={{ padding: '28px 20px', textAlign: 'center' }}>
@@ -878,6 +914,54 @@ export default async function DashboardPage({
             </Link>
           ))}
         </div>
+
+        {/* ── VERBRAUCH ── */}
+        {showConsumption && (
+          <div className="card overflow-hidden">
+            <div style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>
+                Verbrauch · {foodRange.label}
+              </h3>
+              <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', marginTop: 2 }}>
+                aus verbrauchten Dosen und Dosengröße
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2">
+              <div style={{ padding: '18px 20px', borderRight: '0.5px solid rgba(60,60,67,0.07)' }}>
+                <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1, color: 'var(--am-600)' }}>
+                  {gramsPerDay}<span style={{ fontSize: 17, fontWeight: 700 }}> g</span>
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(60,60,67,0.5)', marginTop: 6 }}>
+                  pro Tag · {householdNames}
+                </div>
+              </div>
+              <div style={{ padding: '18px 20px' }}>
+                <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1, color: '#1C1C1E' }}>
+                  {gramsPerCatDay}<span style={{ fontSize: 17, fontWeight: 700 }}> g</span>
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(60,60,67,0.5)', marginTop: 6 }}>
+                  je Katze und Tag
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '12px 20px 14px', borderTop: '0.5px solid rgba(60,60,67,0.07)' }}>
+              <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.45)' }}>
+                {consumedCans} Dosen · {(consumedGrams / 1000).toFixed(1).replace('.', ',')} kg in {consumptionDays} Tagen
+              </p>
+              {cansWithoutSize > 0 && (
+                <p style={{ fontSize: 11, color: 'var(--am-600)', marginTop: 4 }}>
+                  {cansWithoutSize} {cansWithoutSize === 1 ? 'Dose' : 'Dosen'} ohne hinterlegte Größe – nicht mitgerechnet.{' '}
+                  <Link href="/pantry" style={{ fontWeight: 600 }}>Im Vorrat ergänzen</Link>
+                </p>
+              )}
+              <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.3)', marginTop: 4 }}>
+                Zählt eine Dose als leer, sobald die Sorte wechselt. Die aktuell angebrochene ist nicht dabei.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ── FÜTTERUNGS-STATISTIK ── */}
         {foodFrequency.length > 0 && (
