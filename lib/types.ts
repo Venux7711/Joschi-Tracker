@@ -53,6 +53,8 @@ export interface PantryItem {
   brand: string
   type: string
   quantity: number
+  /** Füllmenge einer Dose in Gramm – Verbrauch = verbrauchte Dosen × Größe */
+  size_grams: number | null
   restock_date: string | null
   notes: string | null
   product_url: string | null

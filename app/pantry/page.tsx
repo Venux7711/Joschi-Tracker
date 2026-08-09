@@ -106,6 +106,7 @@ export default function PantryPage() {
   const [addMode, setAddMode] = useState<AddMode>('anifit')
   const [addQty, setAddQty] = useState(1)
   const [addRestock, setAddRestock] = useState('')
+  const [addSize, setAddSize] = useState('')
   const [saving, setSaving] = useState(false)
 
   // Anifit mode
@@ -124,6 +125,8 @@ export default function PantryPage() {
   // Restock edit
   const [editRestockId, setEditRestockId] = useState<string | null>(null)
   const [editRestockDate, setEditRestockDate] = useState('')
+  const [editSizeId, setEditSizeId] = useState<string | null>(null)
+  const [editSizeValue, setEditSizeValue] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -198,6 +201,31 @@ export default function PantryPage() {
     setEditRestockId(null)
   }
 
+  /**
+   * Dosengröße statt Gramm pro Fütterung: Eine Dose reicht über mehrere Tage
+   * und wird von beiden Katzen gemeinsam gefressen – die Menge einer einzelnen
+   * Mahlzeit wäre geraten. Verbrauch = verbrauchte Dosen × Größe.
+   */
+  const saveSize = async (id: string) => {
+    const parsed = editSizeValue.trim() === '' ? null : parseInt(editSizeValue, 10)
+    const size = parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null
+
+    const prevItems = items
+    setItems(prev => prev.map(i => i.id === id ? { ...i, size_grams: size } : i))
+    try {
+      const res = await fetch('/api/pantry', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, size_grams: size }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.item) failSave(prevItems, data.error)
+    } catch {
+      failSave(prevItems)
+    }
+    setEditSizeId(null)
+  }
+
   const scrapeUrl = async () => {
     if (!otherUrl.trim()) return
     setScraping(true)
@@ -244,6 +272,7 @@ export default function PantryPage() {
       type,
       quantity: addQty,
       restock_date: addRestock || null,
+      size_grams: addSize.trim() === '' ? null : parseInt(addSize, 10) || null,
     }
 
     if (addMode === 'other') {
@@ -268,6 +297,7 @@ export default function PantryPage() {
     setAddType('')
     setAddQty(1)
     setAddRestock('')
+    setAddSize('')
     setOtherBrand('')
     setOtherType('')
     setOtherUrl('')
@@ -357,6 +387,47 @@ export default function PantryPage() {
                         <p className="text-xs text-gray-400 mt-0.5">{info.notes}</p>
                       )}
                       {item.nutrition && <NutritionBar nutrition={item.nutrition} />}
+                      {/* Dosengröße – ersetzt die Grammangabe pro Fütterung */}
+                      <div className="flex items-center gap-2 mt-1">
+                        {editSizeId === item.id ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {[200, 400, 800].map(g => (
+                              <button
+                                key={g}
+                                onClick={() => setEditSizeValue(String(g))}
+                                className={`text-xs px-2 py-1 rounded-lg border ${
+                                  editSizeValue === String(g)
+                                    ? 'bg-amber-500 text-white border-amber-500'
+                                    : 'bg-white text-gray-600 border-gray-200'
+                                }`}
+                              >
+                                {g}g
+                              </button>
+                            ))}
+                            <input
+                              type="number"
+                              min="1"
+                              max="5000"
+                              value={editSizeValue}
+                              onChange={e => setEditSizeValue(e.target.value)}
+                              placeholder="g"
+                              className="text-xs border border-gray-200 rounded-lg px-2 py-1 w-16"
+                            />
+                            <button onClick={() => saveSize(item.id)} className="text-xs text-amber-600 font-medium">OK</button>
+                            <button onClick={() => setEditSizeId(null)} className="text-xs text-gray-400">✕</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setEditSizeId(item.id); setEditSizeValue(item.size_grams ? String(item.size_grams) : '') }}
+                          >
+                            {item.size_grams
+                              ? <span className="text-xs text-gray-500">{item.size_grams}g pro Dose</span>
+                              : <span className="text-xs text-gray-300 hover:text-gray-400">+ Dosengröße</span>
+                            }
+                          </button>
+                        )}
+                      </div>
+
                       <div className="flex items-center gap-2 mt-1">
                         {editRestockId === item.id ? (
                           <div className="flex items-center gap-1.5">
@@ -581,6 +652,40 @@ export default function PantryPage() {
                   <span className="text-2xl font-bold text-gray-800 w-8 text-center">{addQty}</span>
                   <button onClick={() => setAddQty(q => q + 1)} className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 text-xl font-medium flex items-center justify-center">+</button>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
+                  Dosengröße <span className="text-gray-300 normal-case font-normal">(optional)</span>
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[200, 400, 800].map(g => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setAddSize(addSize === String(g) ? '' : String(g))}
+                      className={`px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                        addSize === String(g)
+                          ? 'bg-amber-500 text-white border-amber-500'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-amber-300'
+                      }`}
+                    >
+                      {g}g
+                    </button>
+                  ))}
+                  <input
+                    type="number"
+                    min="1"
+                    max="5000"
+                    value={addSize}
+                    onChange={e => setAddSize(e.target.value)}
+                    placeholder="andere"
+                    className="w-24 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1.5">
+                  Ersetzt die Grammangabe pro Fütterung – eine Dose reicht ja über mehrere Tage.
+                </p>
               </div>
 
               <div>

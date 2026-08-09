@@ -4,8 +4,9 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { consumePreviousCan } from '@/lib/pantry'
 
-export type QuickFeedSort = { brand: string; type: string; quantity?: number }
+export type QuickFeedSort = { id: string; brand: string; type: string; quantity: number }
 
 /**
  * Ein-Tipp-Erfassung fürs Dashboard.
@@ -20,10 +21,15 @@ export type QuickFeedSort = { brand: string; type: string; quantity?: number }
  */
 export default function QuickFeed({
   sorts,
+  pantry,
   catIds,
   householdNames,
 }: {
+  /** Die angezeigten Knöpfe – bewusst gekürzt, damit die Karte lesbar bleibt */
   sorts: QuickFeedSort[]
+  /** Vollständiger Vorrat: Die aufzubrauchende Dose kann eine sein, die gerade
+      keinen Knopf hat */
+  pantry: QuickFeedSort[]
   catIds: string[]
   householdNames: string
 }) {
@@ -58,11 +64,22 @@ export default function QuickFeed({
       })),
     )
 
-    setSaving(null)
     if (insertError) {
+      setSaving(null)
       setError('Konnte nicht gespeichert werden. Nochmal versuchen?')
       return
     }
+
+    // Sortenwechsel = vorherige Dose war leer (gleiche Regel wie im Formular)
+    await consumePreviousCan(supabase, {
+      catId: catIds[0],
+      loggedAt,
+      newBrand: sort.brand,
+      newType: sort.type,
+      pantry,
+    })
+
+    setSaving(null)
     router.refresh()
   }
 
@@ -89,9 +106,7 @@ export default function QuickFeed({
               }}
             >
               {busy ? '⏳ ' : '🍽️ '}{s.type || s.brand}
-              {s.quantity !== undefined && (
-                <span style={{ fontWeight: 500, color: 'rgba(60,60,67,0.4)' }}> · {s.quantity}</span>
-              )}
+              <span style={{ fontWeight: 500, color: 'rgba(60,60,67,0.4)' }}> · {s.quantity}</span>
             </button>
           )
         })}

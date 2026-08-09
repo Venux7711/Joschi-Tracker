@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { toBerlinInputValue, fromBerlinInputValue } from '@/lib/time'
+import { consumePreviousCan } from '@/lib/pantry'
 import type { Cat } from '@/lib/types'
 
 const ANIFIT_SORTEN = [
@@ -64,7 +65,6 @@ function NewFeedingForm() {
   const [selectedCatIds, setSelectedCatIds] = useState<Set<string>>(new Set())
   const [foodBrand, setFoodBrand] = useState('Anifit')
   const [foodType, setFoodType] = useState('')
-  const [amountGrams, setAmountGrams] = useState('')
   const [loggedAt, setLoggedAt] = useState('')
   const [showDetails, setShowDetails] = useState(false)
   const [notes, setNotes] = useState('')
@@ -126,7 +126,7 @@ function NewFeedingForm() {
 
   // Zeigt am eingeklappten Bereich an, dass dort etwas drinsteht
   const filledDetails =
-    [amountGrams, extras, notes].filter((v) => v.trim() !== '').length +
+    [extras, notes].filter((v) => v.trim() !== '').length +
     (treatAmount > 0 ? 1 : 0) +
     (dryFoodAmount > 0 ? 1 : 0)
 
@@ -154,12 +154,8 @@ function NewFeedingForm() {
 
       if (data.brand) setFoodBrand(data.brand)
       if (data.type) setFoodType(data.type)
-      // Menge liegt hinter "Mehr Details" – aufklappen, sonst ist der
-      // erkannte Wert unsichtbar und wirkt, als hätte der Scan nichts gefunden
-      if (data.amount_grams) {
-        setAmountGrams(String(data.amount_grams))
-        setShowDetails(true)
-      }
+      // Eine erkannte Füllmenge wird hier nicht mehr übernommen: Die Dosengröße
+      // gehört an den Vorrat, nicht an die einzelne Fütterung.
       setScanSuccess(true)
     } catch {
       setError('Dosenscan fehlgeschlagen. Bitte manuell eingeben.')
@@ -182,15 +178,15 @@ function NewFeedingForm() {
     if (!user) return
 
     // Sie werden immer gemeinsam gefüttert → ein Eintrag pro ausgewählter Katze,
-    // gleiche Sorte/Uhrzeit/Menge
+    // gleiche Sorte und Uhrzeit
     const catIds = Array.from(selectedCatIds)
+    const loggedAtIso = fromBerlinInputValue(loggedAt).toISOString()
     const { error: insertError } = await supabase.from('feeding_logs').insert(catIds.map((cid) => ({
       cat_id: cid,
       user_id: user.id,
-      logged_at: fromBerlinInputValue(loggedAt).toISOString(),
+      logged_at: loggedAtIso,
       food_brand: foodBrand.trim(),
       food_type: foodType.trim(),
-      amount_grams: amountGrams ? parseInt(amountGrams, 10) : null,
       notes: notes.trim() || null,
       treat_amount: treatAmount > 0 ? treatAmount : null,
       dry_food_amount: dryFoodAmount > 0 ? dryFoodAmount : null,
@@ -203,38 +199,15 @@ function NewFeedingForm() {
       return
     }
 
-    // Vorrat automatisch reduzieren wenn Sorte wechselt (Vorrat ist geteilt, daher
-    // reicht die Historie einer der gefütterten Katzen als Referenz)
-    const anchorCatId = catIds[0]
-    const { data: lastLogs } = await supabase
-      .from('feeding_logs')
-      .select('food_brand, food_type')
-      .eq('cat_id', anchorCatId)
-      .order('logged_at', { ascending: false })
-      .limit(10)
-
-    if (lastLogs && lastLogs.length >= 2) {
-      // Letzter Eintrag vor dem gerade gespeicherten
-      const prev = lastLogs[1]
-      const newBrand = foodBrand.trim().toLowerCase()
-      const prevBrand = prev.food_brand?.toLowerCase()
-      const newType = foodType.trim()
-      const prevType = prev.food_type
-
-      // Sorte hat gewechselt → alte Dose ist leer
-      if (prevBrand === newBrand && prevType && prevType !== newType) {
-        const prevPantryItem = pantry.find(
-          p => p.brand.toLowerCase() === prevBrand && p.type === prevType && p.quantity > 0
-        )
-        if (prevPantryItem) {
-          await fetch('/api/pantry', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: prevPantryItem.id, quantity: prevPantryItem.quantity - 1 }),
-          })
-        }
-      }
-    }
+    // Sortenwechsel = vorherige Dose war leer. Gleiche Logik wie beim
+    // Schnell-Knopf im Dashboard, damit der Vorrat nicht auseinanderläuft.
+    await consumePreviousCan(supabase, {
+      catId: catIds[0],
+      loggedAt: loggedAtIso,
+      newBrand: foodBrand.trim(),
+      newType: foodType.trim(),
+      pantry,
+    })
 
     // Aus dem Verlauf eingetragen (?date=…) → dorthin zurück, sonst Dashboard
     router.refresh()
@@ -421,23 +394,6 @@ function NewFeedingForm() {
 
             {showDetails && (
               <div className="space-y-5">
-                {/* Menge */}
-                <div>
-                  <label htmlFor="amountGrams" className="label">
-                    Menge in Gramm <span className="text-gray-400 font-normal">(optional)</span>
-                  </label>
-                  <input
-                    id="amountGrams"
-                    type="number"
-                    min="1"
-                    max="999"
-                    value={amountGrams}
-                    onChange={(e) => setAmountGrams(e.target.value)}
-                    className="input-field"
-                    placeholder="z.B. 800"
-                  />
-                </div>
-
                 {/* Leckerli */}
                 <MengeSlider
                   label="🍖 Leckerli"

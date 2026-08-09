@@ -35,6 +35,8 @@ export async function POST(req: NextRequest) {
     brand: body.brand,
     type: body.type,
     quantity: body.quantity ?? 1,
+    // Füllmenge einer Dose – ersetzt die Grammangabe pro Fütterung
+    size_grams: body.size_grams ?? null,
     restock_date: body.restock_date ?? null,
     notes: body.notes ?? null,
     product_url: body.product_url ?? null,
