@@ -12,6 +12,7 @@ import {
 } from '@/lib/utils'
 import type { FeedingLog, HealthLog } from '@/lib/types'
 import { getActiveCat, getCats } from '@/lib/active-cat.server'
+import QuickAddDay from '@/components/QuickAddDay'
 import {
   addBerlinDays,
   berlinDateKey,
@@ -58,7 +59,7 @@ export default async function HistoryPage() {
   const now = new Date()
   const thirtyDaysAgo = addBerlinDays(now, -29)
 
-  const [{ data: allHealth }, { data: allFeedings }] = await Promise.all([
+  const [{ data: allHealth }, { data: allFeedings }, { data: pantryRaw }] = await Promise.all([
     supabase
       .from('health_logs')
       .select('*')
@@ -71,7 +72,17 @@ export default async function HistoryPage() {
       .in('cat_id', allCatIds)
       .gte('logged_at', thirtyDaysAgo.toISOString())
       .order('logged_at', { ascending: true }),
+    supabase.from('pantry_items').select('id, brand, type, quantity').in('cat_id', allCatIds),
   ])
+
+  // Vorrat für die Schnell-Erfassung in der Tageszeile. Die Knöpfe zeigen nur
+  // vorrätige Sorten; consumePreviousCan braucht daneben die vollständige
+  // Liste, weil die aufzubrauchende Dose gerade leer sein kann.
+  const pantryAll = (pantryRaw ?? []) as { id: string; brand: string; type: string; quantity: number }[]
+  const quickSorts = pantryAll
+    .filter((p) => p.quantity > 0)
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 4)
 
   const health = (allHealth ?? []) as HealthLog[]
   // Geteilte Mahlzeiten (eine Zeile pro Katze) nur einmal anzeigen
@@ -148,14 +159,13 @@ export default async function HistoryPage() {
                   <span className={`font-medium text-sm ${hasDiarrhea ? 'text-red-700' : 'text-gray-700'}`}>
                     {formatDayFull(date, now)}{hasDiarrhea && ' ⚠'}
                   </span>
-                  <div className="flex items-center gap-2">
-                    <Link href={`/feeding/new?date=${dateStr}`} className="text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full hover:bg-amber-100 transition-colors font-medium">
-                      + Futter
-                    </Link>
-                    <Link href={`/health/new?date=${dateStr}`} className="text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors font-medium">
-                      + Befinden
-                    </Link>
-                  </div>
+                  <QuickAddDay
+                      dateStr={dateStr}
+                      sorts={quickSorts}
+                      pantry={pantryAll}
+                      catIds={allCatIds}
+                      activeCatId={cat.id}
+                    />
                 </div>
 
                 {!isEmpty && (
