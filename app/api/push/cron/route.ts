@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import webpush from 'web-push'
 import { addBerlinDays, berlinDayEnd, berlinDayStart } from '@/lib/time'
+import { runTelegramCron } from '@/lib/telegram-cron'
 
 webpush.setVapidDetails(
   process.env.VAPID_EMAIL!,
@@ -83,5 +84,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, sent })
+  // Telegram-Morgenmeldungen laufen hier mit, statt einen eigenen Cron-Job zu
+  // belegen: Der Vercel-Hobby-Tarif begrenzt Anzahl und Häufigkeit der Jobs.
+  // Dieser Lauf ist der Morgen-Slot, /api/telegram/cron der Abend-Slot.
+  const telegram = await runTelegramCron()
+
+  return NextResponse.json({ ok: true, sent, telegram })
 }
