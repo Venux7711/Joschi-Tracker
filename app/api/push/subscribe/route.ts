@@ -11,6 +11,30 @@ function makeSupabase() {
   )
 }
 
+/**
+ * Vorschlag für den Gerätenamen, damit in den Einstellungen nicht mehrere
+ * namenlose Einträge stehen: Vorname aus der E-Mail plus Gerätetyp aus dem
+ * User-Agent. Frei änderbar – das hier ist nur die Vorbelegung.
+ */
+function guessLabel(displayName: string | undefined, email: string | undefined, userAgent: string): string {
+  // Bevorzugt der am Konto hinterlegte Anzeigename. Die E-Mail taugt nur
+  // begrenzt: aus "maiklutz" lässt sich "Maik" nicht zuverlässig herauslesen.
+  const local = (email ?? '').split('@')[0].replace(/[._-]?\d+$/, '')
+  const first = local.split(/[._-]/)[0]
+  const name = displayName?.trim()
+    || (first ? first.charAt(0).toUpperCase() + first.slice(1) : 'Gerät')
+
+  const ua = userAgent.toLowerCase()
+  const device = ua.includes('ipad') ? 'iPad'
+    : ua.includes('iphone') ? 'iPhone'
+    : ua.includes('android') ? 'Android'
+    : ua.includes('macintosh') ? 'Mac'
+    : ua.includes('windows') ? 'PC'
+    : null
+
+  return device ? `${name} – ${device}` : name
+}
+
 export async function POST(req: NextRequest) {
   const supabase = makeSupabase()
   const { data: { user } } = await supabase.auth.getUser()
