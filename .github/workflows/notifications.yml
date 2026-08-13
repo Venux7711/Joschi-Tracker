@@ -1,0 +1,53 @@
+name: Benachrichtigungen
+
+# Zeitgeber für die Push-Meldungen.
+#
+# Vercel übernimmt das auf dem Hobby-Tarif nicht zuverlässig: Die Cron-Jobs
+# waren registriert und aktiv, liefen aber tagelang kein einziges Mal – im
+# Protokoll fehlte jede Morgenmeldung, obwohl die keine Bedingung außer der
+# Uhrzeit hat. GitHub Actions ist hier der verlässlichere Auslöser und zeigt
+# außerdem, ob ein Lauf stattgefunden hat.
+#
+# Zeiten in UTC. Berlin ist im Sommer UTC+2, im Winter UTC+1 – die Meldung
+# entscheidet ohnehin selbst anhand der Berliner Uhrzeit, was fällig ist.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 08:00 Berliner Zeit (Sommer) – Morgenmeldung
+    - cron: '0 18 * * *'  # 20:00 Berliner Zeit (Sommer) – Erinnerungen
+  workflow_dispatch: {}
+
+concurrency:
+  group: notifications
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fällige Meldungen verschicken
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "✗ CRON_SECRET ist nicht gesetzt – es wurde nichts verschickt."
+            echo "  Secret in GitHub hinterlegen und in Vercel als Umgebungsvariable."
+            exit 1
+          fi
+
+          response=$(curl -sS --fail-with-body -m 120 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "https://joschi-tracker.vercel.app/api/telegram/cron")
+
+          echo "$response"
+
+          # Ehrlich scheitern, wenn einzelne Empfänger nicht erreicht wurden –
+          # sonst meldet der Lauf grün, obwohl nichts angekommen ist.
+          echo "$response" | node -e "
+            let d=''; process.stdin.on('data',c=>d+=c).on('end',()=>{
+              const r = JSON.parse(d)
+              const failed = [...(r.push?.failed ?? []), ...(r.telegram?.failed ?? [])]
+              console.log('vorbereitet:', (r.prepared ?? []).join(', ') || 'nichts fällig')
+              console.log('verschickt :', (r.push?.sent ?? []).join(', ') || 'nichts')
+              if (failed.length) { console.error('fehlgeschlagen:', failed.join(' | ')); process.exit(1) }
+            })"
