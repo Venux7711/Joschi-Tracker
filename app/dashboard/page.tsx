@@ -108,6 +108,10 @@ export default async function DashboardPage({
   // Fenster für die Futter-Statistiken: mindestens die 30 Tage, die Empfehlung
   // und Gesundheits-Kacheln ohnehin brauchen – bei "Alles" ohne Untergrenze
   const rangeStart = foodRange.days === null ? null : addBerlinDays(now, -(foodRange.days - 1))
+  // Verträglichkeit über ein halbes Jahr statt 30 Tage: Ein Futter, das
+  // wiederholt Beschwerden gemacht hat, soll nicht als bewährt gelten, nur
+  // weil die Vorfälle aus dem Anzeige-Fenster gerutscht sind.
+  const toleranceStart = addBerlinDays(now, -180)
 
   const [
     { data: todayFeedingsRaw },
@@ -115,6 +119,8 @@ export default async function DashboardPage({
     { data: allHealthRange },
     { data: allFeedingsRange },
     { data: pantryRaw },
+    { data: toleranceFeedRaw },
+    { data: toleranceHealthRaw },
   ] = await Promise.all([
     // Fütterung ist Haushalts-Sache (zusammen gefüttert) → über alle Katzen
     supabase.from('feeding_logs').select('*').in('cat_id', allCatIds)
@@ -136,6 +142,11 @@ export default async function DashboardPage({
       : supabase.from('feeding_logs').select('*').in('cat_id', allCatIds)
     ).order('logged_at', { ascending: true }),
     supabase.from('pantry_items').select('*').in('cat_id', allCatIds).gt('quantity', 0),
+    // Eigene, längere Basis für die Verträglichkeit (siehe unten)
+    supabase.from('feeding_logs').select('*').in('cat_id', allCatIds)
+      .gte('logged_at', toleranceStart.toISOString()).order('logged_at', { ascending: true }),
+    supabase.from('health_logs').select('*').in('cat_id', allCatIds)
+      .gte('logged_at', toleranceStart.toISOString()).order('logged_at', { ascending: false }),
   ])
 
   // Geteilte Mahlzeiten (eine Zeile pro Katze) nur einmal anzeigen/zählen
@@ -161,6 +172,12 @@ export default async function DashboardPage({
   const feedings30 = feedingsRange.filter(f => inLast30(f.logged_at))
   const feedingDays30 = feedingDaysRange.filter(f => inLast30(f.logged_at))
   const pantry = (pantryRaw ?? []) as PantryItem[]
+
+  // Basis der Verträglichkeits-Bewertung, unabhängig vom Anzeige-Zeitraum
+  const healthTolerance = (toleranceHealthRaw ?? []) as HealthLog[]
+  const feedingDaysTolerance = dedupeFeedingsPerDay(
+    dedupeSharedFeedings((toleranceFeedRaw ?? []) as FeedingLog[]),
+  )
 
   // === Statistiken berechnen ===
 
@@ -220,11 +237,23 @@ export default async function DashboardPage({
     health30.some(h => isSameDay(new Date(h.logged_at), day) && h.vomiting)
   ).length
 
-  // === Futter-Diarrhoe-Korrelation ===
-  // Für jede Futter-Sorte: an wie vielen Tagen gegessen, an wie vielen davon am
-  // gleichen/nächsten Tag Durchfall. Wird zweimal gebraucht – einmal fest auf
-  // 30 Tagen für die Empfehlung, einmal auf dem gewählten Zeitraum für die Karte.
-  type FoodStat = { brand: string; type: string; total: number; diarrhea: number }
+  // === Futter-Verträglichkeit ===
+  //
+  // Bewertet wird nicht nur Durchfall. Weicher Stuhl und Kot im Fell sind
+  // ebenfalls Warnzeichen – bei einer Langhaarkatze mit empfindlichem Darm
+  // sogar die häufigeren. Vorher zählte allein Durchfall, wodurch eine Sorte
+  // mit 3× weichem Stuhl und 5× Kot im Fell als "sehr gut verträglich" galt.
+  //
+  // Bezugsgröße sind Tage MIT Befinden-Eintrag, nicht alle Fütterungstage:
+  // Ein Tag ohne Eintrag ist keine Bestätigung, dass alles gut war.
+  type FoodStat = {
+    brand: string; type: string
+    total: number      // Fütterungstage insgesamt
+    rated: number      // davon mit Befinden am selben oder Folgetag
+    diarrhea: number
+    soft: number
+    fur: number
+  }
 
   const buildFoodMap = (feedingDays: FeedingLog[], health: HealthLog[]) => {
     const map = new Map<string, FoodStat>()
@@ -233,26 +262,58 @@ export default async function DashboardPage({
       const fDay = new Date(f.logged_at)
       const nextDay = addBerlinDays(fDay, 1)
 
-      // Haushaltsweit: Durchfall bei irgendeiner Katze nach diesem Futter zählt
-      const hasDiarrhea = health.some(h => {
+      // Haushaltsweit: Beschwerden bei irgendeiner Katze nach diesem Futter zählen
+      const window = health.filter(h => {
         const hDay = new Date(h.logged_at)
-        return (isSameDay(hDay, fDay) || isSameDay(hDay, nextDay)) && h.stool_consistency === 'diarrhea'
+        return isSameDay(hDay, fDay) || isSameDay(hDay, nextDay)
       })
 
-      if (!map.has(key)) map.set(key, { brand: f.food_brand, type: f.food_type, total: 0, diarrhea: 0 })
+      if (!map.has(key)) {
+        map.set(key, { brand: f.food_brand, type: f.food_type, total: 0, rated: 0, diarrhea: 0, soft: 0, fur: 0 })
+      }
       const stat = map.get(key)!
       stat.total++
-      if (hasDiarrhea) stat.diarrhea++
+      if (window.length === 0) continue
+
+      stat.rated++
+      if (window.some(h => h.stool_consistency === 'diarrhea')) stat.diarrhea++
+      if (window.some(h => h.stool_consistency === 'soft')) stat.soft++
+      if (window.some(h => h.fur_issue)) stat.fur++
     }
     return map
   }
 
-  // Empfehlung: unveränderte 30-Tage-Basis, damit sie nicht am Anzeige-Filter hängt
-  const foodMap = buildFoodMap(feedingDays30, health30Household)
+  /**
+   * Anteil auffälliger Tage, 0 bis 1. Durchfall wiegt am schwersten, weicher
+   * Stuhl und Kot im Fell zählen anteilig mit – ignorieren wäre falsch, gleich
+   * gewichten aber auch.
+   */
+  const troubleRate = (s: FoodStat): number | null => {
+    if (s.rated === 0) return null
+    const score = s.diarrhea * 1 + s.soft * 0.6 + s.fur * 0.5
+    return Math.min(1, score / s.rated)
+  }
+
+  // Wie viele Tage ist es her, dass es eine Sorte gab? Basis für die
+  // Abwertung von kürzlich Gefüttertem.
+  const lastFedDays = new Map<string, number>()
+  for (const f of feedingDaysTolerance) {
+    const key = `${f.food_brand}||${f.food_type}`
+    const days = berlinDaysBetween(f.logged_at, now)
+    const prev = lastFedDays.get(key)
+    if (prev === undefined || days < prev) lastFedDays.set(key, days)
+  }
+
+  // Empfehlung: eigene, längere Basis. Verträglichkeit altert nicht binnen
+  // 30 Tagen weg – sonst gilt eine Sorte als bewährt, nur weil ihre Vorfälle
+  // aus dem Fenster gerutscht sind.
+  const foodMap = buildFoodMap(feedingDaysTolerance, healthTolerance)
   // Karte: folgt dem gewählten Zeitraum
+  // Karte: folgt dem gewählten Zeitraum. Nur Sorten mit mindestens zwei
+  // bewerteten Tagen – ohne Befinden-Eintrag lässt sich nichts aussagen.
   const foodCorrelation = Array.from(buildFoodMap(feedingDaysRange, healthRangeHousehold).values())
-    .filter(s => s.total >= 2)
-    .sort((a, b) => (b.diarrhea / b.total) - (a.diarrhea / a.total))
+    .filter(s => s.rated >= 2)
+    .sort((a, b) => (troubleRate(b) ?? 0) - (troubleRate(a) ?? 0))
     .slice(0, 6)
 
   // === Futter-Empfehlung (Vorrat oder alle Anifit-Sorten) ===
@@ -305,7 +366,7 @@ export default async function DashboardPage({
     const families = info?.proteinFamily ?? []
     const corrKey = `${c.brand}||${c.type}`
     const corr = foodMap.get(corrKey)
-    const diarrheaRate = corr ? corr.diarrhea / corr.total : null
+    const rate = corr ? troubleRate(corr) : null
     const givenToday = todayFoodKeys.has(corrKey)
 
     const reasons: string[] = []
@@ -366,20 +427,40 @@ export default async function DashboardPage({
       }
     }
 
-    // Verträglichkeits-Historie – bewährte Sorten zählen bei empfindlichem Bauch doppelt
-    if (diarrheaRate !== null && corr) {
-      if (diarrheaRate === 0 && corr.total >= 3) {
+    // Verträglichkeit – bewährte Sorten zählen bei empfindlichem Bauch doppelt
+    if (rate !== null && corr) {
+      const pct = Math.round(rate * 100)
+      const belege = `${corr.rated} ${corr.rated === 1 ? 'bewerteter Tag' : 'bewertete Tage'}`
+      const details = [
+        corr.diarrhea > 0 ? `${corr.diarrhea}× Durchfall` : null,
+        corr.soft > 0 ? `${corr.soft}× weich` : null,
+        corr.fur > 0 ? `${corr.fur}× Kot im Fell` : null,
+      ].filter(Boolean).join(', ')
+
+      if (rate === 0 && corr.rated >= 3) {
         score += digestiveSensitive ? 16 : 8
-        reasons.push(`Sehr gute Verträglichkeit (an ${corr.total} Tagen gegeben, 0% Durchfall)`)
-      } else if (diarrheaRate === 0 && corr.total >= 1) {
+        reasons.push(`Sehr gut vertragen (${belege}, ohne Auffälligkeit)`)
+      } else if (rate === 0 && corr.rated >= 1) {
         score += digestiveSensitive ? 8 : 3
-        reasons.push(`Bisher verträglich (an ${corr.total} ${corr.total === 1 ? 'Tag' : 'Tagen'} gegeben)`)
-      } else if (diarrheaRate > 0.6) {
-        score -= 12
-        warnings.push(`Schlechte Verträglichkeit: ${Math.round(diarrheaRate * 100)}% Durchfall-Rate`)
-      } else if (diarrheaRate > 0.3) {
-        score -= 5
-        warnings.push(`Mäßige Verträglichkeit: ${Math.round(diarrheaRate * 100)}% Durchfall-Rate`)
+        reasons.push(`Bisher unauffällig (${belege})`)
+      } else if (rate > 0.5 && corr.rated >= 3) {
+        score -= 18
+        warnings.push(`Schlecht vertragen: ${details} bei ${belege}`)
+      } else if (rate > 0.25 && corr.rated >= 3) {
+        score -= 8
+        warnings.push(`Mäßig vertragen: ${details} bei ${belege}`)
+      } else if (details && corr.rated < 3) {
+        // Ein oder zwei auffällige Tage sind ein Hinweis, kein Urteil – sonst
+        // verurteilt eine einzelne Beobachtung eine Sorte dauerhaft.
+        score -= 4
+        warnings.push(`Einzelbeobachtung: ${details} bei ${belege}`)
+      } else if (details) {
+        score -= 3
+        warnings.push(`Vereinzelt auffällig: ${details} bei ${belege}`)
+      }
+      // Nur zur Einordnung, wenn es kaum Belege gibt
+      if (corr.rated < 2 && corr.total >= 3) {
+        reasons.push(`${corr.total}× gegeben, aber nur ${corr.rated}× Befinden erfasst`)
       }
     } else if (digestiveSensitive) {
       // Empfindlicher Bauch → neue, unerprobte Sorte ist jetzt keine gute Idee
@@ -395,6 +476,15 @@ export default async function DashboardPage({
     if (givenToday) {
       score -= 8
       warnings.push('Heute bereits gegeben')
+    }
+
+    // Kürzlich gefüttert → abwerten. Vorher wurde nur "heute" bestraft, wodurch
+    // eine Sorte, die es drei Tage am Stück gab, gleich wieder oben stand.
+    const lastFed = lastFedDays.get(corrKey)
+    if (lastFed !== undefined && !givenToday) {
+      if (lastFed <= 1) { score -= 14; warnings.push(lastFed === 0 ? 'Gerade erst gegeben' : 'Gestern gegeben') }
+      else if (lastFed <= 3) { score -= 8; warnings.push(`Vor ${lastFed} Tagen gegeben`) }
+      else if (lastFed <= 6) { score -= 3 }
     }
 
     return { ...c, info, score, reasons, warnings }
@@ -1118,14 +1208,14 @@ export default async function DashboardPage({
         {foodCorrelation.length >= 2 && (
           <div className="card overflow-hidden">
             <div style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
-              <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Futter &amp; Durchfall</h3>
+              <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Futter &amp; Verträglichkeit</h3>
               <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.4)', marginTop: 2 }}>
-                Anteil der Fütterungs-Tage mit Durchfall · {foodRange.label}
+                Durchfall, weicher Stuhl und Kot im Fell · {foodRange.label}
               </p>
             </div>
             <div style={{ padding: '4px 20px 16px' }}>
               {foodCorrelation.map((s, i) => {
-                const pct = Math.round((s.diarrhea / s.total) * 100)
+                const pct = Math.round((troubleRate(s) ?? 0) * 100)
                 const barBg = pct >= 60 ? '#F87171' : pct >= 30 ? 'var(--am-300)' : '#4ADE80'
                 const pctColor = pct >= 60 ? '#DC2626' : pct >= 30 ? 'var(--am-600)' : '#16A34A'
                 return (
