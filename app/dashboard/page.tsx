@@ -244,8 +244,11 @@ export default async function DashboardPage({
   // sogar die häufigeren. Vorher zählte allein Durchfall, wodurch eine Sorte
   // mit 3× weichem Stuhl und 5× Kot im Fell als "sehr gut verträglich" galt.
   //
-  // Bezugsgröße sind Tage MIT Befinden-Eintrag, nicht alle Fütterungstage:
-  // Ein Tag ohne Eintrag ist keine Bestätigung, dass alles gut war.
+  // Bezugsgröße sind ALLE Fütterungstage. Im Haushalt wird das Befinden nur
+  // erfasst, wenn etwas auffällig ist – ein Tag ohne Eintrag heißt also
+  // "alles in Ordnung", nicht "nicht beobachtet". Rechnet man nur über Tage
+  // mit Eintrag, überzeichnet das Problemsorten massiv: Bio Enten-Energie
+  // käme auf 90 % statt auf die tatsächlichen 35 %.
   type FoodStat = {
     brand: string; type: string
     total: number      // Fütterungstage insgesamt
@@ -289,9 +292,9 @@ export default async function DashboardPage({
    * gewichten aber auch.
    */
   const troubleRate = (s: FoodStat): number | null => {
-    if (s.rated === 0) return null
+    if (s.total === 0) return null
     const score = s.diarrhea * 1 + s.soft * 0.6 + s.fur * 0.5
-    return Math.min(1, score / s.rated)
+    return Math.min(1, score / s.total)
   }
 
   // Wie viele Tage ist es her, dass es eine Sorte gab? Basis für die
@@ -309,10 +312,9 @@ export default async function DashboardPage({
   // aus dem Fenster gerutscht sind.
   const foodMap = buildFoodMap(feedingDaysTolerance, healthTolerance)
   // Karte: folgt dem gewählten Zeitraum
-  // Karte: folgt dem gewählten Zeitraum. Nur Sorten mit mindestens zwei
-  // bewerteten Tagen – ohne Befinden-Eintrag lässt sich nichts aussagen.
+  // Karte: folgt dem gewählten Zeitraum, ab zwei Fütterungstagen
   const foodCorrelation = Array.from(buildFoodMap(feedingDaysRange, healthRangeHousehold).values())
-    .filter(s => s.rated >= 2)
+    .filter(s => s.total >= 2)
     .sort((a, b) => (troubleRate(b) ?? 0) - (troubleRate(a) ?? 0))
     .slice(0, 6)
 
@@ -430,26 +432,26 @@ export default async function DashboardPage({
     // Verträglichkeit – bewährte Sorten zählen bei empfindlichem Bauch doppelt
     if (rate !== null && corr) {
       const pct = Math.round(rate * 100)
-      const belege = `${corr.rated} ${corr.rated === 1 ? 'bewerteter Tag' : 'bewertete Tage'}`
+      const belege = `${corr.total} ${corr.total === 1 ? 'Fütterungstag' : 'Fütterungstagen'}`
       const details = [
         corr.diarrhea > 0 ? `${corr.diarrhea}× Durchfall` : null,
         corr.soft > 0 ? `${corr.soft}× weich` : null,
         corr.fur > 0 ? `${corr.fur}× Kot im Fell` : null,
       ].filter(Boolean).join(', ')
 
-      if (rate === 0 && corr.rated >= 3) {
+      if (rate === 0 && corr.total >= 3) {
         score += digestiveSensitive ? 16 : 8
         reasons.push(`Sehr gut vertragen (${belege}, ohne Auffälligkeit)`)
-      } else if (rate === 0 && corr.rated >= 1) {
+      } else if (rate === 0 && corr.total >= 1) {
         score += digestiveSensitive ? 8 : 3
         reasons.push(`Bisher unauffällig (${belege})`)
-      } else if (rate > 0.5 && corr.rated >= 3) {
+      } else if (rate > 0.5 && corr.total >= 3) {
         score -= 18
         warnings.push(`Schlecht vertragen: ${details} bei ${belege}`)
-      } else if (rate > 0.25 && corr.rated >= 3) {
+      } else if (rate > 0.25 && corr.total >= 3) {
         score -= 8
         warnings.push(`Mäßig vertragen: ${details} bei ${belege}`)
-      } else if (details && corr.rated < 3) {
+      } else if (details && corr.total < 3) {
         // Ein oder zwei auffällige Tage sind ein Hinweis, kein Urteil – sonst
         // verurteilt eine einzelne Beobachtung eine Sorte dauerhaft.
         score -= 4
@@ -459,8 +461,8 @@ export default async function DashboardPage({
         warnings.push(`Vereinzelt auffällig: ${details} bei ${belege}`)
       }
       // Nur zur Einordnung, wenn es kaum Belege gibt
-      if (corr.rated < 2 && corr.total >= 3) {
-        reasons.push(`${corr.total}× gegeben, aber nur ${corr.rated}× Befinden erfasst`)
+      if (rate === 0 && corr.total >= 3) {
+        reasons.push(`An ${corr.total} Tagen gegeben, nie beanstandet`)
       }
     } else if (digestiveSensitive) {
       // Empfindlicher Bauch → neue, unerprobte Sorte ist jetzt keine gute Idee
