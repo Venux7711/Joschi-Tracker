@@ -85,6 +85,8 @@ export async function POST(req: NextRequest) {
     await webpush.sendNotification(
       sub.subscription as webpush.PushSubscription,
       JSON.stringify({ title: '🐾 Test', body: 'Benachrichtigungen kommen an.', url: '/dashboard' }),
+      // Wie im echten Versand – sonst prüft der Test etwas anderes als den Alltag
+      { urgency: 'high', TTL: 3600 },
     )
     return NextResponse.json({ ok: true })
   } catch (e) {

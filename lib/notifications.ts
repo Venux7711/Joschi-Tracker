@@ -11,6 +11,32 @@ export { NOTIFICATION_TOPICS, TOPIC_KEYS, isTopic } from './notification-topics'
 
 export type Message = { title: string; body: string }
 
+/**
+ * Versand-Optionen für Apple & Co.
+ *
+ * urgency 'high': Ohne das schickt web-push "normal", und APNs darf solche
+ * Meldungen bündeln oder verzögern – auf dem iPhone kommen sie dann
+ * unregelmäßig oder gar nicht an. Diese Meldungen sind alle für den Nutzer
+ * bestimmt, also gehören sie in die hohe Stufe.
+ *
+ * TTL: Wie lange Apple eine Meldung aufhebt, falls das Gerät offline ist.
+ * Zeitgebundenes soll nicht Stunden später aufploppen – ein "Guten Morgen"
+ * um 20 Uhr ist nur noch Lärm. Ereignisse dürfen länger warten.
+ */
+const TTL_BY_TOPIC: Partial<Record<NotificationTopic, number>> = {
+  morning: 6 * 3600,
+  reminder: 6 * 3600,
+  health: 6 * 3600,
+  pantry: 12 * 3600,
+  photo: 24 * 3600,
+  diarrhea: 24 * 3600,
+  birthday: 20 * 3600,
+}
+
+function sendOptions(topic: NotificationTopic): { urgency: 'high'; TTL: number } {
+  return { urgency: 'high', TTL: TTL_BY_TOPIC[topic] ?? 6 * 3600 }
+}
+
 function makeAdmin() {
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -185,6 +211,7 @@ export async function runNotifications(now: Date = new Date()): Promise<RunResul
           await webpush.sendNotification(
             sub.subscription as webpush.PushSubscription,
             JSON.stringify({ title: msg.title, body: msg.body, url: '/dashboard' }),
+            sendOptions(topic),
           )
           push.sent.push(`${sub.label ?? 'Gerät'}/${topic}`)
         } catch (e) {
@@ -275,6 +302,7 @@ export async function notifyNewPhoto(uploaderUserId: string | null): Promise<{ s
       await webpush.sendNotification(
         sub.subscription as webpush.PushSubscription,
         JSON.stringify({ title: '📸 Neues Foto', body: 'Es gibt ein neues Bild im Album.', url: '/fotos' }),
+        sendOptions('photo'),
       )
       sent++
       // Zeitstempel fortschreiben; der Tageseintrag existiert eventuell schon
