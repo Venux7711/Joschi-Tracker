@@ -37,6 +37,39 @@ function sendOptions(topic: NotificationTopic): { urgency: 'high'; TTL: number }
   return { urgency: 'high', TTL: TTL_BY_TOPIC[topic] ?? 6 * 3600 }
 }
 
+/**
+ * Ab wie vielen Fehlschlägen in Folge ein Abo entfernt wird.
+ *
+ * Vorher flog es schon beim ersten 410 raus. Apple meldet das aber auch
+ * vorübergehend, während das Gerät seine Anmeldung weiter für gültig hält –
+ * der Nutzer musste dann grundlos neu aktivieren.
+ */
+const MAX_FAILURES = 3
+
+async function notePushSuccess(admin: ReturnType<typeof makeAdmin>, id: string) {
+  await admin.from('push_subscriptions')
+    .update({ fail_count: 0, last_success_at: new Date().toISOString() })
+    .eq('id', id)
+}
+
+/** Zählt den Fehlschlag und entfernt das Abo erst, wenn es dauerhaft tot ist. */
+async function notePushFailure(
+  admin: ReturnType<typeof makeAdmin>,
+  sub: { id: string; fail_count?: number | null },
+  status?: number,
+): Promise<'geloescht' | 'gezaehlt' | 'ignoriert'> {
+  // Nur "weg" heißt weg. Netzwerk- und Serverfehler zählen nicht mit.
+  if (status !== 404 && status !== 410) return 'ignoriert'
+
+  const next = (sub.fail_count ?? 0) + 1
+  if (next >= MAX_FAILURES) {
+    await admin.from('push_subscriptions').delete().eq('id', sub.id)
+    return 'geloescht'
+  }
+  await admin.from('push_subscriptions').update({ fail_count: next }).eq('id', sub.id)
+  return 'gezaehlt'
+}
+
 function makeAdmin() {
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -91,14 +124,25 @@ export async function buildDueMessages(now: Date = new Date()): Promise<Partial<
     }
   }
 
+  // Nicht mehr ans Eintragen erinnern, wenn länger nichts kam: Kein Eintrag
+  // heißt hier "alles gut". Stattdessen nachhaken, wenn der letzte Eintrag
+  // eine Auffälligkeit war und seitdem nichts nachgetragen wurde – dann ist
+  // offen, ob es sich gebessert hat.
   const lastHealth = health[0]
-  const daysSinceHealth = lastHealth ? berlinDaysBetween(lastHealth.logged_at, now) : null
-  if (isEvening && (daysSinceHealth === null || daysSinceHealth >= 3)) {
+  const letzteWarAuffaellig = lastHealth
+    && (lastHealth.stool_consistency === 'diarrhea'
+      || lastHealth.stool_consistency === 'soft'
+      || lastHealth.vomiting
+      || lastHealth.fur_issue)
+  const tageSeitdem = lastHealth ? berlinDaysBetween(lastHealth.logged_at, now) : null
+
+  if (isEvening && letzteWarAuffaellig && tageSeitdem !== null && tageSeitdem >= 2 && tageSeitdem <= 7) {
+    const was = lastHealth!.stool_consistency === 'diarrhea' ? 'Durchfall'
+      : lastHealth!.stool_consistency === 'soft' ? 'weicher Stuhl'
+      : lastHealth!.vomiting ? 'Erbrechen' : 'Kot im Fell'
     messages.health = {
-      title: '🩺 Wie geht es den beiden?',
-      body: daysSinceHealth === null
-        ? `Seit mindestens zwei Wochen kein Befinden erfasst.`
-        : `Seit ${daysSinceHealth} Tagen kein Befinden erfasst. Ein Tipp im Dashboard genügt.`,
+      title: '🩺 Hat sich das gebessert?',
+      body: `Vor ${tageSeitdem} Tagen war ${was} eingetragen, seitdem nichts mehr. Falls es weiter auffällig ist, kurz vermerken.`,
     }
   }
 
@@ -107,9 +151,18 @@ export async function buildDueMessages(now: Date = new Date()): Promise<Partial<
     const yKey = berlinDateKey(yesterday)
     // Befinden ist individuell – deshalb pro Katze auflisten, so wie es die
     // frühere Morgenmeldung schon tat
+    // Kein Eintrag heißt "alles in Ordnung" – im Haushalt wird das Befinden
+    // nur bei Auffälligkeiten erfasst. "Kein Befinden eingetragen" zu melden
+    // war schlicht falsch herum.
     const perCat = cats.map(c => {
-      const stool = health.find(h => h.cat_id === c.id && berlinDateKey(h.logged_at) === yKey)?.stool_consistency
-      return `${c.name}: ${stool ? STOOL[stool] ?? stool : 'kein Befinden eingetragen'}`
+      const h = health.find(x => x.cat_id === c.id && berlinDateKey(x.logged_at) === yKey)
+      if (!h) return `${c.name}: unauffällig`
+      const teile = [
+        STOOL[h.stool_consistency] ?? h.stool_consistency,
+        h.vomiting ? 'erbrochen' : null,
+        h.fur_issue ? 'Kot im Fell' : null,
+      ].filter(Boolean)
+      return `${c.name}: ${teile.join(', ')}`
     })
     messages.morning = {
       title: '☀️ Guten Morgen!',
@@ -201,7 +254,7 @@ export async function runNotifications(now: Date = new Date()): Promise<RunResul
       process.env.VAPID_PRIVATE_KEY,
     )
 
-    const { data: subs } = await admin.from('push_subscriptions').select('id, endpoint, subscription, topics, label')
+    const { data: subs } = await admin.from('push_subscriptions').select('id, endpoint, subscription, topics, label, fail_count')
     for (const sub of subs ?? []) {
       for (const [topic, msg] of entries) {
         if (!(sub.topics ?? []).includes(topic)) continue
@@ -214,15 +267,12 @@ export async function runNotifications(now: Date = new Date()): Promise<RunResul
             sendOptions(topic),
           )
           push.sent.push(`${sub.label ?? 'Gerät'}/${topic}`)
+          await notePushSuccess(admin, sub.id)
         } catch (e) {
           const status = (e as { statusCode?: number })?.statusCode
-          push.failed.push(`${sub.label ?? 'Gerät'}/${topic}: ${status ?? 'Fehler'}`)
           await release(admin, 'push', sub.endpoint, topic, today)
-          // Nur bei abgelaufenem Abo aufräumen – ein Netzwerkfehler darf das
-          // Abo nicht kosten, sonst verschwinden Empfänger stillschweigend
-          if (status === 404 || status === 410) {
-            await admin.from('push_subscriptions').delete().eq('id', sub.id)
-          }
+          const folge = await notePushFailure(admin, sub, status)
+          push.failed.push(`${sub.label ?? 'Gerät'}/${topic}: ${status ?? 'Fehler'} (${folge})`)
         }
       }
     }
@@ -284,7 +334,7 @@ export async function notifyNewPhoto(uploaderUserId: string | null): Promise<{ s
 
   const { data: subs } = await admin
     .from('push_subscriptions')
-    .select('id, endpoint, subscription, topics, user_id')
+    .select('id, endpoint, subscription, topics, user_id, fail_count')
   let sent = 0
 
   for (const sub of subs ?? []) {
@@ -311,10 +361,7 @@ export async function notifyNewPhoto(uploaderUserId: string | null): Promise<{ s
         { onConflict: 'channel,recipient,topic,day' },
       )
     } catch (e) {
-      const status = (e as { statusCode?: number })?.statusCode
-      if (status === 404 || status === 410) {
-        await admin.from('push_subscriptions').delete().eq('id', sub.id)
-      }
+      await notePushFailure(admin, sub, (e as { statusCode?: number })?.statusCode)
     }
   }
 

@@ -10,7 +10,7 @@
  */
 export const NOTIFICATION_TOPICS = [
   { key: 'reminder', label: 'Futter-Erinnerung', hint: 'abends, nur wenn heute nichts erfasst ist' },
-  { key: 'health', label: 'Befinden-Erinnerung', hint: 'nach 3 Tagen ohne Eintrag' },
+  { key: 'health', label: 'Nachhaken bei Auffälligkeit', hint: 'wenn nach Durchfall & Co. nichts mehr kam' },
   { key: 'morning', label: 'Morgenmeldung', hint: 'was es gestern gab und wie es ging' },
   { key: 'pantry', label: 'Vorrat wird knapp', hint: 'ab 4 Dosen im Haus' },
   { key: 'diarrhea', label: 'Durchfall-Warnung', hint: 'bei zwei Tagen in Folge' },
