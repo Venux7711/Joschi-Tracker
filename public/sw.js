@@ -14,10 +14,19 @@ self.addEventListener('push', function (event) {
 self.addEventListener('notificationclick', function (event) {
   event.notification.close()
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then(function (clientList) {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
       const url = event.notification.data?.url || '/dashboard'
+
+      // Ein offenes Fenster wiederverwenden und dorthin navigieren. Vorher
+      // wurde nur fokussiert, wenn die URL zufällig schon passte – sonst ging
+      // ein zweites Fenster auf und man landete nicht beim gemeinten Bild.
       for (const client of clientList) {
-        if (client.url.includes(url) && 'focus' in client) return client.focus()
+        if ('focus' in client) {
+          if ('navigate' in client) {
+            return client.navigate(url).then(function (c) { return (c || client).focus() })
+          }
+          return client.focus()
+        }
       }
       if (clients.openWindow) return clients.openWindow(url)
     })

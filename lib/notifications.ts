@@ -319,11 +319,29 @@ export async function runNotifications(now: Date = new Date()): Promise<RunResul
  */
 const PHOTO_COOLDOWN_MINUTES = 10
 
-export async function notifyNewPhoto(uploaderUserId: string | null): Promise<{ sent: number }> {
+/**
+ * Ereignis-Meldung an alle außer den Auslöser.
+ *
+ * Anders als die Cron-Themen hängt sie an einer Handlung, nicht an der
+ * Uhrzeit. Statt der Tagesgrenze gilt eine kurze Sperrfrist: Wer zehn Bilder
+ * am Stück hochlädt, soll nicht zehn Meldungen auslösen – eine pro Tag wäre
+ * für ein Ereignis aber zu wenig.
+ *
+ * Wer die Handlung ausgelöst hat, bekommt nichts: eine Meldung über die
+ * eigene Reaktion wäre nur Lärm.
+ */
+async function notifyEvent(opts: {
+  topic: NotificationTopic
+  actorUserId: string | null
+  title: string
+  body: string
+  url: string
+  cooldownMinutes: number
+}): Promise<{ sent: number }> {
   const admin = makeAdmin()
   const now = new Date()
   const today = berlinDateKey(now)
-  const cutoff = new Date(now.getTime() - PHOTO_COOLDOWN_MINUTES * 60_000).toISOString()
+  const cutoff = new Date(now.getTime() - opts.cooldownMinutes * 60_000).toISOString()
 
   if (!process.env.VAPID_EMAIL || !process.env.VAPID_PRIVATE_KEY) return { sent: 0 }
   webpush.setVapidDetails(
@@ -338,26 +356,26 @@ export async function notifyNewPhoto(uploaderUserId: string | null): Promise<{ s
   let sent = 0
 
   for (const sub of subs ?? []) {
-    if (!(sub.topics ?? []).includes('photo')) continue
-    if (uploaderUserId && sub.user_id === uploaderUserId) continue
+    if (!(sub.topics ?? []).includes(opts.topic)) continue
+    if (opts.actorUserId && sub.user_id === opts.actorUserId) continue
 
     const { data: last } = await admin
       .from('notifications_sent')
       .select('sent_at')
-      .eq('channel', 'push').eq('recipient', sub.endpoint).eq('topic', 'photo')
+      .eq('channel', 'push').eq('recipient', sub.endpoint).eq('topic', opts.topic)
       .order('sent_at', { ascending: false }).limit(1)
     if (last?.[0] && last[0].sent_at > cutoff) continue
 
     try {
       await webpush.sendNotification(
         sub.subscription as webpush.PushSubscription,
-        JSON.stringify({ title: '📸 Neues Foto', body: 'Es gibt ein neues Bild im Album.', url: '/fotos' }),
-        sendOptions('photo'),
+        JSON.stringify({ title: opts.title, body: opts.body, url: opts.url }),
+        sendOptions(opts.topic),
       )
       sent++
-      // Zeitstempel fortschreiben; der Tageseintrag existiert eventuell schon
+      await notePushSuccess(admin, sub.id)
       await admin.from('notifications_sent').upsert(
-        { channel: 'push', recipient: sub.endpoint, topic: 'photo', day: today, sent_at: new Date().toISOString() },
+        { channel: 'push', recipient: sub.endpoint, topic: opts.topic, day: today, sent_at: new Date().toISOString() },
         { onConflict: 'channel,recipient,topic,day' },
       )
     } catch (e) {
@@ -366,4 +384,45 @@ export async function notifyNewPhoto(uploaderUserId: string | null): Promise<{ s
   }
 
   return { sent }
+}
+
+/** Neues Foto im Album. */
+export function notifyNewPhoto(uploaderUserId: string | null, photoId?: string) {
+  return notifyEvent({
+    topic: 'photo',
+    actorUserId: uploaderUserId,
+    title: '📸 Neues Foto',
+    body: 'Es gibt ein neues Bild im Album.',
+    url: photoId ? `/fotos?photo=${photoId}` : '/fotos',
+    cooldownMinutes: 10,
+  })
+}
+
+/**
+ * Reaktion auf ein Foto. Absender und Emoji stehen in der Meldung, der Link
+ * führt direkt auf das Bild – sonst wüsste man nicht, worauf sich das bezieht.
+ */
+export function notifyReaction(actorUserId: string, actorName: string, emoji: string, photoId: string) {
+  return notifyEvent({
+    topic: 'reaction',
+    actorUserId,
+    title: `${emoji} ${actorName}`,
+    body: `${actorName} hat auf ein Foto reagiert.`,
+    url: `/fotos?photo=${photoId}`,
+    // Kurz, damit mehrere Reaktionen kurz nacheinander nicht mehrfach melden
+    cooldownMinutes: 3,
+  })
+}
+
+/** Kommentar zu einem Foto – der Text steht gekürzt in der Meldung. */
+export function notifyComment(actorUserId: string, actorName: string, text: string, photoId: string) {
+  const kurz = text.length > 120 ? `${text.slice(0, 119)}…` : text
+  return notifyEvent({
+    topic: 'comment',
+    actorUserId,
+    title: `💬 ${actorName}`,
+    body: kurz,
+    url: `/fotos?photo=${photoId}`,
+    cooldownMinutes: 0,
+  })
 }

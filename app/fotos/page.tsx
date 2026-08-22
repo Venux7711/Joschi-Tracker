@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { pickActiveCat } from '@/lib/active-cat-client'
 import { formatBerlin } from '@/lib/time'
 import { readGpsFromFile } from '@/lib/exif'
+import PhotoInteractions from '@/components/PhotoInteractions'
 import type { Cat } from '@/lib/types'
 
 interface Photo {
@@ -110,8 +111,17 @@ export default function FotosPage() {
     setLoading(true)
     const res = await fetch('/api/photos?limit=200')
     const data = await res.json()
-    setPhotos(data.photos ?? [])
+    const geladen: Photo[] = data.photos ?? []
+    setPhotos(geladen)
     setLoading(false)
+
+    // Aus einer Benachrichtigung heraus wird ?photo=… mitgegeben – dann
+    // direkt dieses Bild öffnen, sonst landet man nur irgendwo im Album.
+    const gesucht = new URLSearchParams(window.location.search).get('photo')
+    if (gesucht) {
+      const treffer = geladen.find(p => p.id === gesucht)
+      if (treffer) setSelected(treffer)
+    }
   }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -382,6 +392,8 @@ export default function FotosPage() {
                 Löschen
               </button>
             </div>
+            <PhotoInteractions photoId={selected.id} />
+
             <button
               onClick={() => setSelected(null)}
               className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-8 h-8 flex items-center justify-center text-lg"

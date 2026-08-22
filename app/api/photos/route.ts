@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
   // Ende der Antwort abgebrochen. Fehler dürfen den Upload nicht kippen –
   // das Foto liegt zu diesem Zeitpunkt bereits in der Datenbank.
   try {
-    await notifyNewPhoto(user.id)
+    await notifyNewPhoto(user.id, data?.id)
   } catch (e) {
     console.error('Foto-Benachrichtigung fehlgeschlagen:', e)
   }
