@@ -26,6 +26,8 @@ interface Photo {
   /** Aufnahmeort aus den EXIF-Daten – nur bei Bildern aus der Fotobibliothek. */
   lat: number | null
   lng: number | null
+  /** Aufgelöster Ortsname, z.B. "Hintermayrstraße, Nürnberg". */
+  place: string | null
 }
 
 const MOOD_LABELS: Record<string, { label: string; color: string }> = {
@@ -50,6 +52,7 @@ export default function FotosPage() {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [catFilter, setCatFilter] = useState<string>('all')
+  const [placeFilter, setPlaceFilter] = useState<string>('all')
   const [cats, setCats] = useState<Cat[]>([])
   const [catId, setCatId] = useState<string | null>(null)
   const [savingTags, setSavingTags] = useState(false)
@@ -186,9 +189,31 @@ export default function FotosPage() {
     await loadPhotos()
   }
 
+  /**
+   * Orte mit Anzahl und Zeitraum – das beantwortet "wo waren die Katzen wann".
+   * Gruppiert wird über den aufgelösten Namen: Aufnahmen im selben Haus haben
+   * leicht abweichende Koordinaten, landen aber auf derselben Straße.
+   */
+  const places = (() => {
+    const map = new Map<string, { count: number; von: string; bis: string }>()
+    for (const p of photos) {
+      if (!p.place) continue
+      const tag = p.taken_at.slice(0, 10)
+      const e = map.get(p.place)
+      if (!e) map.set(p.place, { count: 1, von: tag, bis: tag })
+      else {
+        e.count++
+        if (tag < e.von) e.von = tag
+        if (tag > e.bis) e.bis = tag
+      }
+    }
+    return Array.from(map, ([name, v]) => ({ name, ...v })).sort((a, b) => b.bis.localeCompare(a.bis))
+  })()
+
   const filtered = photos
     .filter(p => filter === 'all' || p.mood_tag === filter)
     .filter(p => catFilter === 'all' || catTags(p).includes(catFilter))
+    .filter(p => placeFilter === 'all' || p.place === placeFilter)
 
   const grouped: Record<string, Photo[]> = {}
   filtered.forEach(p => {
@@ -255,6 +280,49 @@ export default function FotosPage() {
               >
                 🐾 {c.name} ({photos.filter(p => catTags(p).includes(c.id)).length})
               </button>
+            ))}
+          </div>
+        )}
+
+        {/* Orte – nur zeigen, wenn es überhaupt welche gibt. Bei nur einem
+            Ort wäre ein Filter sinnlos, die Zeile informiert dann bloß. */}
+        {places.length > 0 && (
+          <div className="mb-3">
+            <div className="flex gap-2 flex-wrap items-center">
+              {places.length > 1 && (
+                <button
+                  onClick={() => setPlaceFilter('all')}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    placeFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200'
+                  }`}
+                >
+                  Alle Orte
+                </button>
+              )}
+              {places.map(pl => (
+                <button
+                  key={pl.name}
+                  onClick={() => setPlaceFilter(placeFilter === pl.name ? 'all' : pl.name)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors text-left ${
+                    placeFilter === pl.name ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  📍 {pl.name}
+                  <span className={placeFilter === pl.name ? 'opacity-70' : 'text-gray-400'}>
+                    {' '}· {pl.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {places.map(pl => (
+              placeFilter === pl.name && (
+                <p key={pl.name} className="text-xs text-gray-500 mt-2">
+                  {pl.count} {pl.count === 1 ? 'Foto' : 'Fotos'} ·{' '}
+                  {pl.von === pl.bis
+                    ? formatBerlin(`${pl.von}T12:00:00`, { day: 'numeric', month: 'long', year: 'numeric' })
+                    : `${formatBerlin(`${pl.von}T12:00:00`, { day: 'numeric', month: 'short' })} bis ${formatBerlin(`${pl.bis}T12:00:00`, { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                </p>
+              )
             ))}
           </div>
         )}

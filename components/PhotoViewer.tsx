@@ -17,6 +17,7 @@ export type ViewerPhoto = {
   cat_ids: string[] | null
   lat: number | null
   lng: number | null
+  place: string | null
 }
 
 const MOOD_LABELS: Record<string, { label: string; color: string }> = {
@@ -209,7 +210,7 @@ export default function PhotoViewer({
                   rel="noopener noreferrer"
                   style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 3, display: 'inline-block' }}
                 >
-                  📍 {photo.lat.toFixed(4)}, {photo.lng.toFixed(4)}
+                  📍 {photo.place ?? `${photo.lat.toFixed(4)}, ${photo.lng.toFixed(4)}`}
                 </a>
               )}
             </div>

@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { getActiveCat } from '@/lib/active-cat.server'
 import { berlinDayStart, berlinDayEnd, fromBerlinInputValue } from '@/lib/time'
 import { notifyNewPhoto } from '@/lib/notifications'
+import { reverseGeocode } from '@/lib/geocode'
 
 function makeSupabase() {
   const cookieStore = cookies()
@@ -124,6 +125,10 @@ export async function POST(req: NextRequest) {
   const catIds = normalizeCatIds(body)
     ?? [(await getActiveCat(supabase))?.id].filter((id): id is string => !!id)
 
+  // Ortsnamen einmal auflösen und mitspeichern. Scheitert das, bleibt es bei
+  // den Koordinaten – der Upload darf daran nicht hängen.
+  const place = lat !== null && lng !== null ? await reverseGeocode(lat, lng) : null
+
   const { data, error } = await supabase.from('photos').insert({
     ...((await hasCatIdsColumn(supabase)) ? { cat_ids: catIds } : {}),
     cat_id: catIds[0] ?? null,
@@ -134,7 +139,7 @@ export async function POST(req: NextRequest) {
     health_log_id: health_log_id ?? null,
     caption: caption ?? null,
     taken_at: taken_at ?? new Date().toISOString(),
-    lat, lng,
+    lat, lng, place,
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
