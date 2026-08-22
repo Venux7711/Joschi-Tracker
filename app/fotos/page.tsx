@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { pickActiveCat } from '@/lib/active-cat-client'
 import { formatBerlin } from '@/lib/time'
 import { readGpsFromFile } from '@/lib/exif'
-import PhotoInteractions from '@/components/PhotoInteractions'
+import PhotoViewer from '@/components/PhotoViewer'
 import type { Cat } from '@/lib/types'
 
 interface Photo {
@@ -45,7 +45,9 @@ export default function FotosPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const [selected, setSelected] = useState<Photo | null>(null)
+  // Index statt Objekt: Der Betrachter blättert durch die gefilterte Liste,
+  // dafür muss er wissen, an welcher Stelle er steht.
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [catFilter, setCatFilter] = useState<string>('all')
   const [cats, setCats] = useState<Cat[]>([])
@@ -70,14 +72,16 @@ export default function FotosPage() {
   const catName = (id: string | null) => cats.find(c => c.id === id)?.name ?? null
 
   // Ältere Fotos haben nur die alte Einzelspalte – beide Quellen zusammenführen
-  const catTags = (photo: Photo): string[] =>
+  // Nur die beiden Markierungs-Felder verlangen – so lässt sich die Funktion
+  // auch mit den Fotos aus dem Betrachter benutzen
+  const catTags = (photo: { cat_id: string | null; cat_ids: string[] | null }): string[] =>
     photo.cat_ids?.length ? photo.cat_ids : photo.cat_id ? [photo.cat_id] : []
 
   const tagNames = (photo: Photo) =>
     catTags(photo).map(id => catName(id)).filter((n): n is string => !!n)
 
   /** Katze auf dem Foto an-/abwählen – speichert sofort. */
-  const toggleCatTag = async (photo: Photo, id: string) => {
+  const toggleCatTag = async (photo: { id: string; cat_id: string | null; cat_ids: string[] | null }, id: string) => {
     const current = catTags(photo)
     const next = current.includes(id) ? current.filter(c => c !== id) : [...current, id]
 
@@ -100,7 +104,6 @@ export default function FotosPage() {
     // Migration 008 fehlt, kann die DB nur eine Katze pro Foto festhalten.
     const saved: Photo = data.photo ?? { ...photo, cat_ids: next, cat_id: next[0] ?? null }
     setPhotos(prev => prev.map(p => (p.id === photo.id ? saved : p)))
-    setSelected(saved)
 
     if (next.length > 1 && catTags(saved).length < next.length) {
       setTagError('Aktuell ist nur eine Katze pro Foto möglich – die Datenbank-Migration steht noch aus.')
@@ -119,8 +122,8 @@ export default function FotosPage() {
     // direkt dieses Bild öffnen, sonst landet man nur irgendwo im Album.
     const gesucht = new URLSearchParams(window.location.search).get('photo')
     if (gesucht) {
-      const treffer = geladen.find(p => p.id === gesucht)
-      if (treffer) setSelected(treffer)
+      const pos = geladen.findIndex(p => p.id === gesucht)
+      if (pos >= 0) setViewerIndex(pos)
     }
   }
 
@@ -171,7 +174,7 @@ export default function FotosPage() {
     if (e.target) e.target.value = ''
   }
 
-  const handleDelete = async (photo: Photo) => {
+  const handleDelete = async (photo: { id: string; storage_path: string }) => {
     if (!confirm('Foto löschen?')) return
     const res = await fetch('/api/photos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: photo.id, storage_path: photo.storage_path }) })
     if (!res.ok) {
@@ -179,7 +182,7 @@ export default function FotosPage() {
       setUploadError(data.error ?? 'Löschen fehlgeschlagen')
       return
     }
-    setSelected(null)
+    setViewerIndex(null)
     await loadPhotos()
   }
 
@@ -272,7 +275,7 @@ export default function FotosPage() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1 -mx-4 sm:mx-0">
             {Array.from({ length: 9 }).map((_, i) => (
               <div key={i} className="aspect-square bg-gray-200 rounded-xl animate-pulse" />
             ))}
@@ -297,12 +300,14 @@ export default function FotosPage() {
             {Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0])).map(([month, mphotos]) => (
               <div key={month}>
                 <h2 className="text-sm font-semibold text-gray-500 mb-2 uppercase tracking-wide">{monthLabel(month)}</h2>
-                <div className="grid grid-cols-3 gap-2">
+                {/* Randlos und mit schmalen Fugen: In drei Spalten mit
+                    Seitenrand blieben auf dem Handy nur rund 110 px pro Bild. */}
+                <div className="grid grid-cols-3 gap-1 -mx-4 sm:mx-0">
                   {mphotos.map(photo => (
                     <button
                       key={photo.id}
-                      onClick={() => { setTagError(null); setSelected(photo) }}
-                      className="aspect-square relative rounded-xl overflow-hidden group"
+                      onClick={() => { setTagError(null); setViewerIndex(filtered.findIndex(p => p.id === photo.id)) }}
+                      className="aspect-square relative overflow-hidden group sm:rounded-xl"
                     >
                       <Image src={photo.public_url} alt="" fill className="object-cover transition-transform group-hover:scale-105" sizes="33vw" />
                       {photo.mood_tag !== 'normal' && (
@@ -332,76 +337,16 @@ export default function FotosPage() {
         )}
       </main>
 
-      {/* Lightbox */}
-      {selected && (
-        <div
-          className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-4"
-          onClick={() => setSelected(null)}
-        >
-          <div className="relative w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <div className="relative aspect-square w-full rounded-2xl overflow-hidden">
-              <Image src={selected.public_url} alt="" fill className="object-contain" sizes="100vw" />
-            </div>
-            {/* Wer ist auf dem Bild? Antippen zum Ändern – mehrere möglich */}
-            {cats.length > 0 && (
-              <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] uppercase tracking-wide text-white/40 font-semibold">
-                  Wer ist drauf?
-                </span>
-                {cats.map(c => {
-                  const active = catTags(selected).includes(c.id)
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => toggleCatTag(selected, c.id)}
-                      disabled={savingTags}
-                      className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors disabled:opacity-50 ${
-                        active
-                          ? 'bg-amber-500 text-white'
-                          : 'bg-white/10 text-white/60 hover:bg-white/20'
-                      }`}
-                    >
-                      {active ? '✓' : '🐾'} {c.name}
-                    </button>
-                  )
-                })}
-                {catTags(selected).length === 0 && (
-                  <span className="text-xs text-white/40">niemand markiert</span>
-                )}
-                {savingTags && <span className="text-xs text-white/40">speichert…</span>}
-              </div>
-            )}
-
-            {tagError && (
-              <p className="mt-2 text-xs text-red-300">⚠ {tagError}</p>
-            )}
-
-            <div className="flex items-center justify-between mt-3">
-              <div>
-                <span className={`text-xs px-2 py-1 rounded-full ${MOOD_LABELS[selected.mood_tag]?.color ?? 'bg-gray-100 text-gray-600'}`}>
-                  {MOOD_LABELS[selected.mood_tag]?.label ?? selected.mood_tag}
-                </span>
-                <p className="text-gray-400 text-sm mt-1">
-                  {formatBerlin(selected.taken_at, { day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-              </div>
-              <button
-                onClick={() => handleDelete(selected)}
-                className="text-red-400 hover:text-red-300 text-sm px-3 py-1.5 rounded-lg border border-red-400/30 hover:border-red-400"
-              >
-                Löschen
-              </button>
-            </div>
-            <PhotoInteractions photoId={selected.id} />
-
-            <button
-              onClick={() => setSelected(null)}
-              className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-8 h-8 flex items-center justify-center text-lg"
-            >
-              ×
-            </button>
-          </div>
-        </div>
+      {viewerIndex !== null && (
+        <PhotoViewer
+          photos={filtered}
+          index={viewerIndex}
+          cats={cats}
+          onIndexChange={setViewerIndex}
+          onClose={() => setViewerIndex(null)}
+          onToggleTag={toggleCatTag}
+          onDelete={handleDelete}
+        />
       )}
     </div>
   )
