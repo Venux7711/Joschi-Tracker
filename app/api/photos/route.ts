@@ -113,6 +113,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { storage_path, public_url, mood_tag, health_log_id, caption, taken_at } = body
 
+  // Aufnahmeort, falls das Bild welchen mitbrachte. Plausibilität prüfen –
+  // der Wert kommt aus dem Browser.
+  const lat = typeof body.lat === 'number' && Math.abs(body.lat) <= 90 ? body.lat : null
+  const lng = typeof body.lng === 'number' && Math.abs(body.lng) <= 180 ? body.lng : null
+
   // cat_ids markiert nur, wer auf dem Bild ist (mehrere möglich). Kommt keine
   // Angabe mit, wird die aktive Katze als Standard genutzt – die Sichtbarkeit
   // hängt nicht daran.
@@ -129,6 +134,7 @@ export async function POST(req: NextRequest) {
     health_log_id: health_log_id ?? null,
     caption: caption ?? null,
     taken_at: taken_at ?? new Date().toISOString(),
+    lat, lng,
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

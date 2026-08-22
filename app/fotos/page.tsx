@@ -7,6 +7,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { pickActiveCat } from '@/lib/active-cat-client'
 import { formatBerlin } from '@/lib/time'
+import { readGpsFromFile } from '@/lib/exif'
 import type { Cat } from '@/lib/types'
 
 interface Photo {
@@ -21,6 +22,9 @@ interface Photo {
   cat_id: string | null
   /** Mehrere Katzen möglich (z.B. beide auf einem Bild), jederzeit änderbar. */
   cat_ids: string[] | null
+  /** Aufnahmeort aus den EXIF-Daten – nur bei Bildern aus der Fotobibliothek. */
+  lat: number | null
+  lng: number | null
 }
 
 const MOOD_LABELS: Record<string, { label: string; color: string }> = {
@@ -135,6 +139,9 @@ export default function FotosPage() {
 
     const { data: { publicUrl } } = supabase.storage.from('joschi-photos').getPublicUrl(uploadData.path)
 
+    // Aufnahmeort aus den EXIF-Daten – hat längst nicht jedes Bild
+    const ort = await readGpsFromFile(file)
+
     await fetch('/api/photos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -144,6 +151,8 @@ export default function FotosPage() {
         // Beim Filtern nach einer Katze wird das Foto auch für diese markiert.
         // Die Markierung lässt sich danach jederzeit im Lightbox ändern.
         cat_ids: [catFilter !== 'all' ? catFilter : catId].filter(Boolean),
+        lat: ort?.lat ?? null,
+        lng: ort?.lng ?? null,
       }),
     })
 
@@ -289,6 +298,14 @@ export default function FotosPage() {
                       {photo.mood_tag !== 'normal' && (
                         <div className={`absolute top-1 right-1 text-xs px-1.5 py-0.5 rounded-full font-medium ${MOOD_LABELS[photo.mood_tag]?.color}`}>
                           {MOOD_LABELS[photo.mood_tag]?.label}
+                        </div>
+                      )}
+                      {photo.lat !== null && (
+                        <div
+                          className="absolute top-1 left-1 text-[10px] px-1 py-0.5 rounded-full bg-black/45 text-white"
+                          title="Mit Ortsangabe"
+                        >
+                          📍
                         </div>
                       )}
                       {cats.length > 1 && tagNames(photo).length > 0 && (

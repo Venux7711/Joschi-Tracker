@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { readGpsFromFile } from '@/lib/exif'
 
 export type BirthdayCat = {
   id: string
@@ -69,6 +70,7 @@ export default function BirthdayCard({
     }
 
     const { data: { publicUrl } } = supabase.storage.from('joschi-photos').getPublicUrl(upload.path)
+    const ort = await readGpsFromFile(file)
 
     const res = await fetch('/api/photos', {
       method: 'POST',
@@ -80,6 +82,8 @@ export default function BirthdayCard({
         caption: `🎂 ${cat.name}s ${cat.age}. Geburtstag`,
         taken_at: new Date().toISOString(),
         cat_ids: [cat.id],
+        lat: ort?.lat ?? null,
+        lng: ort?.lng ?? null,
       }),
     })
 
