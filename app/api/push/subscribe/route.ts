@@ -43,12 +43,41 @@ export async function POST(req: NextRequest) {
   const subscription = await req.json()
   const endpoint = subscription.endpoint
 
-  await supabase.from('push_subscriptions').upsert(
-    { user_id: user.id, endpoint, subscription },
-    { onConflict: 'endpoint' }
+  const label = guessLabel(
+    user.user_metadata?.display_name as string | undefined,
+    user.email,
+    req.headers.get('user-agent') ?? '',
   )
 
-  return NextResponse.json({ ok: true })
+  // Einen selbst vergebenen Namen nicht überschreiben, wenn dasselbe Abo
+  // erneuert wird.
+  const { data: existing } = await supabase
+    .from('push_subscriptions').select('label').eq('endpoint', endpoint).maybeSingle()
+
+  const { error } = await supabase.from('push_subscriptions').upsert(
+    { user_id: user.id, endpoint, subscription, label: existing?.label ?? label },
+    { onConflict: 'endpoint' }
+  )
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Abgelöste Abos desselben Geräts entfernen.
+  //
+  // iOS vergibt beim erneuten Aktivieren einen neuen Endpunkt, das alte Abo
+  // blieb bisher für immer liegen. Dadurch sammelten sich Karteileichen an,
+  // und in den Einstellungen standen mehrere Einträge fürs selbe Handy –
+  // man wusste nicht mehr, welcher davon der lebende ist.
+  //
+  // "Dasselbe Gerät" heißt hier: gleicher Nutzer, gleicher Name. Der Name
+  // enthält den Gerätetyp, ein iPad verdrängt also kein iPhone.
+  const { data: abgeloest } = await supabase
+    .from('push_subscriptions')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('label', existing?.label ?? label)
+    .neq('endpoint', endpoint)
+    .select('id')
+
+  return NextResponse.json({ ok: true, label: existing?.label ?? label, abgeloest: abgeloest?.length ?? 0 })
 }
 
 export async function DELETE(req: NextRequest) {

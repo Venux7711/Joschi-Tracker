@@ -17,6 +17,7 @@ type Device = {
   topics: NotificationTopic[]
   label: string | null
   created_at: string
+  last_sent_at: string | null
 }
 
 export default function PushSettings() {
@@ -217,6 +218,9 @@ export default function PushSettings() {
                     <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.35)' }}>
                       {isMine ? '📱 dieses Gerät · ' : ''}
                       seit {new Date(d.created_at).toLocaleDateString('de-DE')}
+                      {d.last_sent_at
+                        ? ` · zuletzt beliefert ${new Date(d.last_sent_at).toLocaleDateString('de-DE')}`
+                        : ' · noch nie beliefert'}
                     </p>
                   </div>
                   <button

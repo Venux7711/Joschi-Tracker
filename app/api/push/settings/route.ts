@@ -34,13 +34,26 @@ async function requireUser() {
 export async function GET() {
   if (!await requireUser()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data, error } = await makeAdmin()
-    .from('push_subscriptions')
-    .select('id, endpoint, topics, label, created_at')
-    .order('created_at', { ascending: true })
+  const admin = makeAdmin()
+  const [{ data, error }, { data: sent }] = await Promise.all([
+    admin.from('push_subscriptions')
+      .select('id, endpoint, topics, label, created_at')
+      .order('created_at', { ascending: true }),
+    admin.from('notifications_sent').select('recipient, sent_at').eq('channel', 'push'),
+  ])
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ devices: data ?? [], topics: TOPIC_KEYS })
+
+  // Wann wurde dieses Gerät zuletzt tatsächlich beliefert? Ohne das sieht man
+  // in der Liste nicht, welcher von mehreren Einträgen noch lebt.
+  const lastByEndpoint = new Map<string, string>()
+  for (const row of sent ?? []) {
+    const prev = lastByEndpoint.get(row.recipient)
+    if (!prev || row.sent_at > prev) lastByEndpoint.set(row.recipient, row.sent_at)
+  }
+
+  const devices = (data ?? []).map(d => ({ ...d, last_sent_at: lastByEndpoint.get(d.endpoint) ?? null }))
+  return NextResponse.json({ devices, topics: TOPIC_KEYS })
 }
 
 export async function PATCH(req: NextRequest) {
