@@ -98,6 +98,7 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
               key={emoji}
               onClick={() => toggle(emoji)}
               title={alle.length ? alle.map(r => nameOf(r.user_id)).join(', ') : 'Reagieren'}
+              aria-label={alle.length ? `${emoji}: ${alle.map(r => nameOf(r.user_id)).join(', ')}` : `Mit ${emoji} reagieren`}
               style={{
                 fontSize: 15, lineHeight: 1, padding: '7px 10px', borderRadius: 999, border: 'none',
                 background: meins ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.14)',
@@ -113,6 +114,22 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
           )
         })}
       </div>
+
+      {/* Wer hat womit reagiert. Der Tooltip allein reicht nicht: Auf dem
+          iPhone gibt es kein Überfahren, dort wäre die Information unsichtbar. */}
+      {reactions.length > 0 && (
+        <div className="flex gap-x-3 gap-y-1 flex-wrap mt-2">
+          {REACTIONS.filter(e => reactions.some(r => r.emoji === e)).map(emoji => (
+            <span key={emoji} style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+              {emoji}{' '}
+              {reactions
+                .filter(r => r.emoji === emoji)
+                .map(r => (r.user_id === me ? 'du' : nameOf(r.user_id)))
+                .join(', ')}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Kommentare */}
       {comments.length > 0 && (
