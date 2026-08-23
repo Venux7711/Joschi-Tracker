@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { pickActiveCat } from '@/lib/active-cat-client'
 import { formatBerlin } from '@/lib/time'
 import { readGpsFromFile } from '@/lib/exif'
+import { captureVideoPoster, formatDuration, hasStill, isVideoFile, stillUrl, MAX_VIDEO_BYTES } from '@/lib/media'
 import PhotoViewer from '@/components/PhotoViewer'
 import type { Cat } from '@/lib/types'
 
@@ -28,6 +29,11 @@ interface Photo {
   lng: number | null
   /** Aufgelöster Ortsname, z.B. "Hintermayrstraße, Nürnberg". */
   place: string | null
+  /** 'photo' oder 'video' – Videos liegen in derselben Zeitleiste. */
+  media_type: string | null
+  /** Standbild aus dem Video, für Kachel und alle Stellen die nur Bilder zeigen. */
+  poster_url: string | null
+  duration_seconds: number | null
 }
 
 const MOOD_LABELS: Record<string, { label: string; color: string }> = {
@@ -139,24 +145,63 @@ export default function FotosPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setUploading(false); return }
 
-    const rawExt = file.name.includes('.') ? file.name.split('.').pop()! : 'jpg'
+    const video = isVideoFile(file)
+
+    // Vor dem Hochladen prüfen: Der Speicher weist zu große Dateien mit einer
+    // technischen Meldung ab, aus der niemand schließen kann, was zu tun ist.
+    if (video && file.size > MAX_VIDEO_BYTES) {
+      setUploadError(
+        `Das Video ist ${Math.round(file.size / 1024 / 1024)} MB groß – mehr als ` +
+        `${Math.round(MAX_VIDEO_BYTES / 1024 / 1024)} MB gehen nicht. ` +
+        'In der Fotos-App kürzen (Bearbeiten → Enden zusammenschieben) und nochmal versuchen.'
+      )
+      setUploading(false)
+      if (e.target) e.target.value = ''
+      return
+    }
+
+    const rawExt = file.name.includes('.') ? file.name.split('.').pop()! : video ? 'mp4' : 'jpg'
     const ext = rawExt.toLowerCase().replace('heic', 'jpg').replace('heif', 'jpg')
-    const path = `${catId}/${Date.now()}.${ext}`
+    const basis = `${catId}/${Date.now()}`
+
+    // Standbild aus dem Video greifen, solange die Datei noch im Browser liegt.
+    // Danach ginge es nur noch serverseitig, und dafür bräuchte es ffmpeg.
+    const standbild = video ? await captureVideoPoster(file) : null
 
     const { data: uploadData, error: uploadErr } = await supabase.storage
       .from('joschi-photos')
-      .upload(path, file, { contentType: file.type })
+      .upload(`${basis}.${ext}`, file, { contentType: file.type || (video ? 'video/mp4' : undefined) })
 
     if (uploadErr || !uploadData) {
-      setUploadError(uploadErr?.message ?? 'Upload fehlgeschlagen')
+      setUploadError(
+        /exceed|too large|maximum/i.test(uploadErr?.message ?? '')
+          ? 'Die Datei ist zu groß für den Speicher. Bitte das Video kürzen.'
+          : uploadErr?.message ?? 'Upload fehlgeschlagen'
+      )
       setUploading(false)
       return
     }
 
     const { data: { publicUrl } } = supabase.storage.from('joschi-photos').getPublicUrl(uploadData.path)
 
-    // Aufnahmeort aus den EXIF-Daten – hat längst nicht jedes Bild
-    const ort = await readGpsFromFile(file)
+    // Standbild als eigene Datei daneben legen. Scheitert das, wird das Video
+    // trotzdem gespeichert – dann eben ohne Vorschaubild.
+    let posterUrl: string | null = null
+    let posterPath: string | null = null
+    if (standbild?.blob) {
+      const ziel = `${basis}-poster.jpg`
+      const { data: pd } = await supabase.storage
+        .from('joschi-photos')
+        .upload(ziel, standbild.blob, { contentType: 'image/jpeg' })
+      if (pd) {
+        posterPath = pd.path
+        posterUrl = supabase.storage.from('joschi-photos').getPublicUrl(pd.path).data.publicUrl
+      }
+    }
+
+    // Aufnahmeort aus den EXIF-Daten – hat längst nicht jedes Bild, und
+    // Videos speichern ihn in einem anderen Format, das hier nicht gelesen wird
+    const ort = video ? null : await readGpsFromFile(file)
 
     await fetch('/api/photos', {
       method: 'POST',
@@ -169,6 +214,10 @@ export default function FotosPage() {
         cat_ids: [catFilter !== 'all' ? catFilter : catId].filter(Boolean),
         lat: ort?.lat ?? null,
         lng: ort?.lng ?? null,
+        media_type: video ? 'video' : 'photo',
+        poster_url: posterUrl,
+        poster_path: posterPath,
+        duration_seconds: standbild?.duration ?? null,
       }),
     })
 
@@ -177,8 +226,8 @@ export default function FotosPage() {
     if (e.target) e.target.value = ''
   }
 
-  const handleDelete = async (photo: { id: string; storage_path: string }) => {
-    if (!confirm('Foto löschen?')) return
+  const handleDelete = async (photo: { id: string; storage_path: string; media_type?: string | null }) => {
+    if (!confirm(photo.media_type === 'video' ? 'Video löschen?' : 'Foto löschen?')) return
     const res = await fetch('/api/photos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: photo.id, storage_path: photo.storage_path }) })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
@@ -244,11 +293,11 @@ export default function FotosPage() {
             )}
             <label className={`cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold pressable ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
               📷
-              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleUpload} disabled={uploading} />
+              <input ref={cameraRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={handleUpload} disabled={uploading} />
             </label>
             <label className={`cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold pressable ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
               🖼️
-              <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+              <input ref={galleryRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleUpload} disabled={uploading} />
             </label>
           </div>
         </div>
@@ -354,7 +403,7 @@ export default function FotosPage() {
             {photos.length === 0 ? (
               <>
                 <p className="text-gray-500 mb-2">Noch keine Fotos</p>
-                <p className="text-sm text-gray-400">Tippe oben auf 📷 oder 🖼️ um das erste Bild hinzuzufügen</p>
+                <p className="text-sm text-gray-400">Tippe oben auf 📷 oder 🖼️ um das erste Bild oder Video hinzuzufügen</p>
               </>
             ) : (
               <>
@@ -377,7 +426,40 @@ export default function FotosPage() {
                       onClick={() => { setTagError(null); setViewerIndex(filtered.findIndex(p => p.id === photo.id)) }}
                       className="aspect-square relative overflow-hidden group sm:rounded-xl"
                     >
-                      <Image src={photo.public_url} alt="" fill className="object-cover transition-transform group-hover:scale-105" sizes="33vw" />
+                      {hasStill(photo) ? (
+                        <Image src={stillUrl(photo)} alt="" fill className="object-cover transition-transform group-hover:scale-105" sizes="33vw" />
+                      ) : (
+                        // Video, aus dem sich kein Standbild greifen ließ – ein
+                        // <Image> mit einer .mp4-Adresse bliebe hier leer.
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: '#2C2C2E' }}>
+                          <span style={{ fontSize: 22 }}>🎬</span>
+                        </div>
+                      )}
+                      {photo.media_type === 'video' && (
+                        <>
+                          {/* Abspiel-Zeichen mittig: Ohne das ist eine
+                              Video-Kachel von einem Foto nicht zu unterscheiden */}
+                          <div
+                            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                            aria-hidden
+                          >
+                            <span
+                              className="flex items-center justify-center rounded-full"
+                              style={{
+                                width: 34, height: 34, background: 'rgba(0,0,0,0.45)',
+                                color: 'white', fontSize: 13, paddingLeft: 3,
+                              }}
+                            >
+                              ▶
+                            </span>
+                          </div>
+                          {formatDuration(photo.duration_seconds) && (
+                            <div className="absolute bottom-1 right-1 text-[10px] px-1.5 py-0.5 rounded-md bg-black/60 text-white font-medium tabular-nums">
+                              {formatDuration(photo.duration_seconds)}
+                            </div>
+                          )}
+                        </>
+                      )}
                       {photo.mood_tag !== 'normal' && (
                         <div className={`absolute top-1 right-1 text-xs px-1.5 py-0.5 rounded-full font-medium ${MOOD_LABELS[photo.mood_tag]?.color}`}>
                           {MOOD_LABELS[photo.mood_tag]?.label}

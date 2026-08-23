@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { formatBerlin } from '@/lib/time'
+import { hasStill, isVideo, stillUrl } from '@/lib/media'
 
 interface Photo {
   id: string
@@ -11,6 +12,8 @@ interface Photo {
   mood_tag: string
   caption: string | null
   taken_at: string
+  media_type: string | null
+  poster_url: string | null
 }
 
 const MOOD_COLORS: Record<string, string> = {
@@ -40,7 +43,9 @@ export default function SlideshowPage() {
     fetch('/api/photos?limit=200')
       .then(r => r.json())
       .then(d => {
-        const sorted = (d.photos ?? []).sort((a: Photo, b: Photo) => new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime())
+        // Videos laufen in der Diashow als Standbild mit; ohne ein solches
+        // wären sie eine schwarze Fläche und bleiben deshalb außen vor.
+        const sorted = (d.photos ?? []).filter(hasStill).sort((a: Photo, b: Photo) => new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime())
         setPhotos(sorted)
         setLoading(false)
       })
@@ -109,7 +114,10 @@ export default function SlideshowPage() {
         onClick={() => setPlaying(p => !p)}
         style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.4s ease' }}
       >
-        <Image src={photo.public_url} alt="" fill className="object-contain" sizes="100vw" priority />
+        <Image src={stillUrl(photo)} alt="" fill className="object-contain" sizes="100vw" priority />
+        {isVideo(photo) && (
+          <span className="absolute inset-0 flex items-center justify-center text-white text-4xl pointer-events-none" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>▶</span>
+        )}
 
         {/* Bottom overlay */}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-6 pt-16">

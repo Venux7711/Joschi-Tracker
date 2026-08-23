@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import PhotoInteractions from '@/components/PhotoInteractions'
 import { formatBerlin } from '@/lib/time'
+import { isVideo } from '@/lib/media'
 import type { Cat } from '@/lib/types'
 
 export type ViewerPhoto = {
@@ -18,6 +19,9 @@ export type ViewerPhoto = {
   lat: number | null
   lng: number | null
   place: string | null
+  media_type: string | null
+  poster_url: string | null
+  duration_seconds: number | null
 }
 
 const MOOD_LABELS: Record<string, { label: string; color: string }> = {
@@ -64,6 +68,11 @@ export default function PhotoViewer({
   const photo = photos[index]
   const hasPrev = index > 0
   const hasNext = index < photos.length - 1
+  // Auf einem Video liegen die Abspielregler. Wischen wäre dort mehrdeutig –
+  // eine Bewegung nach rechts wäre gleichzeitig "weiterspulen" und "nächstes".
+  // Deshalb blättert man bei Videos über die Pfeile, die dann auch am Handy
+  // sichtbar sind.
+  const video = isVideo(photo)
 
   const go = useCallback((delta: number) => {
     const next = index + delta
@@ -119,15 +128,34 @@ export default function PhotoViewer({
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
-        <Image
-          key={photo.id}
-          src={photo.public_url}
-          alt={photo.caption ?? ''}
-          fill
-          className="object-contain"
-          sizes="100vw"
-          priority
-        />
+        {video ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video
+              key={photo.id}
+              src={photo.public_url}
+              poster={photo.poster_url ?? undefined}
+              controls
+              playsInline
+              preload="metadata"
+              className="max-h-full max-w-full"
+              // Tippen und Wischen gehören hier den Abspielreglern, nicht dem Album
+              onClick={e => e.stopPropagation()}
+              onTouchStart={e => e.stopPropagation()}
+              onTouchEnd={e => e.stopPropagation()}
+            />
+          </div>
+        ) : (
+          <Image
+            key={photo.id}
+            src={photo.public_url}
+            alt={photo.caption ?? ''}
+            fill
+            className="object-contain"
+            sizes="100vw"
+            priority
+          />
+        )}
       </div>
 
       {/* Blättern mit der Maus – auf dem Handy wird gewischt */}
@@ -135,7 +163,7 @@ export default function PhotoViewer({
         <button
           onClick={() => go(-1)}
           aria-label="Vorheriges Foto"
-          className="hidden sm:flex absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 items-center justify-center rounded-full"
+          className={`${video ? 'flex' : 'hidden sm:flex'} absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 items-center justify-center rounded-full`}
           style={{ background: 'rgba(0,0,0,0.45)', color: 'white', fontSize: 22 }}
         >
           ‹
@@ -145,7 +173,7 @@ export default function PhotoViewer({
         <button
           onClick={() => go(1)}
           aria-label="Nächstes Foto"
-          className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 items-center justify-center rounded-full"
+          className={`${video ? 'flex' : 'hidden sm:flex'} absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 items-center justify-center rounded-full`}
           style={{ background: 'rgba(0,0,0,0.45)', color: 'white', fontSize: 22 }}
         >
           ›

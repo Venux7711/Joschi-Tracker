@@ -32,6 +32,7 @@ import QuickFeed from '@/components/QuickFeed'
 import BirthdayCard from '@/components/BirthdayCard'
 import QuickHealth from '@/components/QuickHealth'
 import { birthdayInfo } from '@/lib/birthday'
+import { hasStill, stillUrl } from '@/lib/media'
 import WeightWidget from '@/components/WeightWidget'
 import MedicationsWidget from '@/components/MedicationsWidget'
 import { ANIFIT_FOODS, getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
@@ -632,14 +633,20 @@ export default async function DashboardPage({
     const day = birthdayCat.info!.isToday ? now : addBerlinDays(now, -1)
     const { data: bdPhotos } = await supabase
       .from('photos')
-      .select('id, public_url, cat_ids, cat_id')
+      .select('id, public_url, cat_ids, cat_id, media_type, poster_url')
       .gte('taken_at', berlinDayStart(day).toISOString())
       .lte('taken_at', berlinDayEnd(day).toISOString())
       .order('taken_at', { ascending: false })
-    birthdayPhotos = (bdPhotos ?? [])
-      .filter((p: { cat_ids: string[] | null; cat_id: string | null }) =>
-        p.cat_ids?.length ? p.cat_ids.includes(birthdayCat.cat.id) : p.cat_id === birthdayCat.cat.id)
-      .map((p: { id: string; public_url: string }) => ({ id: p.id, public_url: p.public_url }))
+    type BdRow = {
+      id: string; public_url: string
+      cat_ids: string[] | null; cat_id: string | null
+      media_type: string | null; poster_url: string | null
+    }
+    birthdayPhotos = ((bdPhotos ?? []) as BdRow[])
+      .filter(p => (p.cat_ids?.length ? p.cat_ids.includes(birthdayCat.cat.id) : p.cat_id === birthdayCat.cat.id))
+      // Ein Video ohne Standbild ließe sich in der Geburtstagskarte nicht zeigen
+      .filter(hasStill)
+      .map(p => ({ id: p.id, public_url: stillUrl(p) }))
   }
 
   // === Sorten für die Ein-Tipp-Erfassung ===

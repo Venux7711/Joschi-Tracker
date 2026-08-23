@@ -114,6 +114,16 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { storage_path, public_url, mood_tag, health_log_id, caption, taken_at } = body
 
+  // Video oder Foto? Der Rest der Zeile ist identisch – beides liegt in
+  // derselben Tabelle, damit Markierung, Reaktionen und Kommentare gelten.
+  const isVideo = body.media_type === 'video'
+  const posterUrl = isVideo && typeof body.poster_url === 'string' ? body.poster_url : null
+  const posterPath = isVideo && typeof body.poster_path === 'string' ? body.poster_path : null
+  const duration =
+    isVideo && typeof body.duration_seconds === 'number' && Number.isFinite(body.duration_seconds)
+      ? body.duration_seconds
+      : null
+
   // Aufnahmeort, falls das Bild welchen mitbrachte. Plausibilität prüfen –
   // der Wert kommt aus dem Browser.
   const lat = typeof body.lat === 'number' && Math.abs(body.lat) <= 90 ? body.lat : null
@@ -140,6 +150,10 @@ export async function POST(req: NextRequest) {
     caption: caption ?? null,
     taken_at: taken_at ?? new Date().toISOString(),
     lat, lng, place,
+    media_type: isVideo ? 'video' : 'photo',
+    poster_url: posterUrl,
+    poster_path: posterPath,
+    duration_seconds: duration,
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -148,7 +162,7 @@ export async function POST(req: NextRequest) {
   // Ende der Antwort abgebrochen. Fehler dürfen den Upload nicht kippen –
   // das Foto liegt zu diesem Zeitpunkt bereits in der Datenbank.
   try {
-    await notifyNewPhoto(user.id, data?.id)
+    await notifyNewPhoto(user.id, data?.id, isVideo)
   } catch (e) {
     console.error('Foto-Benachrichtigung fehlgeschlagen:', e)
   }
@@ -196,8 +210,13 @@ export async function DELETE(req: NextRequest) {
   const { id, storage_path } = await req.json()
   const admin = makeAdminSupabase()
 
-  if (storage_path) {
-    await admin.storage.from('joschi-photos').remove([storage_path])
+  // Bei einem Video liegt zusätzlich das Standbild im Speicher. Den Pfad aus
+  // der Zeile holen statt dem Client zu glauben – der schickt ihn nicht mit.
+  const { data: row } = await admin.from('photos').select('poster_path').eq('id', id).maybeSingle()
+
+  const dateien = [storage_path, row?.poster_path].filter((p): p is string => !!p)
+  if (dateien.length) {
+    await admin.storage.from('joschi-photos').remove(dateien)
   }
 
   // Gemeinsame Bibliothek: jeder eingeladene Nutzer darf auch Fotos des anderen

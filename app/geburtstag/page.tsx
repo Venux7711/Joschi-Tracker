@@ -8,6 +8,7 @@ import { getCatTheme } from '@/lib/cat-theme'
 import { dedupeSharedFeedings, dedupeFeedingsPerDay } from '@/lib/utils'
 import { addBerlinDays, berlinDateKey, formatBerlin } from '@/lib/time'
 import { birthdayInfo } from '@/lib/birthday'
+import { hasStill, stillUrl } from '@/lib/media'
 import type { Cat, FeedingLog, HealthLog } from '@/lib/types'
 
 type Stat = { value: string; label: string; hint?: string }
@@ -65,7 +66,7 @@ export default async function GeburtstagPage({
       .gte('logged_at', windowStart.toISOString()).order('logged_at', { ascending: true }),
     supabase.from('health_logs').select('*').eq('cat_id', cat.id)
       .gte('logged_at', windowStart.toISOString()).order('logged_at', { ascending: true }),
-    supabase.from('photos').select('id, public_url, taken_at, cat_ids, cat_id')
+    supabase.from('photos').select('id, public_url, taken_at, cat_ids, cat_id, media_type, poster_url')
       .order('taken_at', { ascending: true }),
     supabase.from('weights').select('weight_grams, measured_at').eq('cat_id', cat.id)
       .order('measured_at', { ascending: true }),
@@ -75,8 +76,13 @@ export default async function GeburtstagPage({
   const feedingDays = dedupeFeedingsPerDay(feedings)
   const health = (healthRaw ?? []) as HealthLog[]
 
-  type PhotoRow = { id: string; public_url: string; taken_at: string; cat_ids: string[] | null; cat_id: string | null }
-  const photosAll = (photosRaw ?? []) as PhotoRow[]
+  type PhotoRow = {
+    id: string; public_url: string; taken_at: string
+    cat_ids: string[] | null; cat_id: string | null
+    media_type: string | null; poster_url: string | null
+  }
+  // Videos ohne Standbild überspringen – die Rückschau zeigt nur Bilder
+  const photosAll = ((photosRaw ?? []) as PhotoRow[]).filter(hasStill)
   const catPhotos = photosAll.filter(p =>
     p.cat_ids?.length ? p.cat_ids.includes(cat.id) : p.cat_id === cat.id,
   )
@@ -218,7 +224,7 @@ export default async function GeburtstagPage({
               {[firstPhoto, lastPhoto].map((p, i) => (
                 <div key={p.id} style={{ background: 'white', padding: 12 }}>
                   <div style={{ position: 'relative', aspectRatio: '1', borderRadius: 12, overflow: 'hidden' }}>
-                    <Image src={p.public_url} alt="" fill className="object-cover" sizes="50vw" />
+                    <Image src={stillUrl(p)} alt="" fill className="object-cover" sizes="50vw" />
                   </div>
                   <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 7, textAlign: 'center' }}>
                     {i === 0 ? 'erstes Foto' : 'neuestes Foto'}<br />
@@ -239,7 +245,7 @@ export default async function GeburtstagPage({
             <div className="grid grid-cols-4 gap-1 p-3">
               {photosInYear.slice(-12).reverse().map(p => (
                 <Link key={p.id} href="/fotos" style={{ position: 'relative', aspectRatio: '1', borderRadius: 8, overflow: 'hidden' }}>
-                  <Image src={p.public_url} alt="" fill className="object-cover" sizes="25vw" />
+                  <Image src={stillUrl(p)} alt="" fill className="object-cover" sizes="25vw" />
                 </Link>
               ))}
             </div>

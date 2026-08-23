@@ -387,12 +387,12 @@ async function notifyEvent(opts: {
 }
 
 /** Neues Foto im Album. */
-export function notifyNewPhoto(uploaderUserId: string | null, photoId?: string) {
+export function notifyNewPhoto(uploaderUserId: string | null, photoId?: string, isVideo = false) {
   return notifyEvent({
     topic: 'photo',
     actorUserId: uploaderUserId,
-    title: '📸 Neues Foto',
-    body: 'Es gibt ein neues Bild im Album.',
+    title: isVideo ? '🎬 Neues Video' : '📸 Neues Foto',
+    body: isVideo ? 'Es gibt ein neues Video im Album.' : 'Es gibt ein neues Bild im Album.',
     url: photoId ? `/fotos?photo=${photoId}` : '/fotos',
     cooldownMinutes: 10,
   })
