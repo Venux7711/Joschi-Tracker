@@ -145,13 +145,13 @@ export default async function DashboardPage({
       : supabase.from('feeding_logs').select('*').in('cat_id', allCatIds)
     ).order('logged_at', { ascending: true }),
     supabase.from('pantry_items').select('*').in('cat_id', allCatIds).gt('quantity', 0),
-    // Betreuungszeitraum, der heute läuft oder als nächstes ansteht
-    supabase.from('absences').select('*').gte('ends_on', berlinDateKey(now)).order('starts_on').limit(1),
     // Eigene, längere Basis für die Verträglichkeit (siehe unten)
     supabase.from('feeding_logs').select('*').in('cat_id', allCatIds)
       .gte('logged_at', toleranceStart.toISOString()).order('logged_at', { ascending: true }),
     supabase.from('health_logs').select('*').in('cat_id', allCatIds)
       .gte('logged_at', toleranceStart.toISOString()).order('logged_at', { ascending: false }),
+    // Betreuungszeitraum, der heute läuft oder als nächstes ansteht
+    supabase.from('absences').select('*').gte('ends_on', berlinDateKey(now)).order('starts_on').limit(1),
   ])
 
   // Geteilte Mahlzeiten (eine Zeile pro Katze) nur einmal anzeigen/zählen
@@ -310,7 +310,14 @@ export default async function DashboardPage({
    * gut, und Durchfall an einem fremden Ort ist der unangenehmste Fall.
    */
   type Absence = { id: string; starts_on: string; ends_on: string; label: string | null }
-  const absence = ((absenceRaw ?? []) as Absence[])[0] ?? null
+  // Auf gültige Datumsfelder prüfen: Ein unvollständiger Datensatz soll das
+  // ganze Dashboard nicht mit einer Server-Exception abschießen.
+  const isoDay = (v: unknown): v is string => typeof v === 'string' && /^d{4}-d{2}-d{2}$/.test(v)
+  const absenceCandidate = ((absenceRaw ?? []) as Absence[])[0] ?? null
+  const absence =
+    absenceCandidate && isoDay(absenceCandidate.starts_on) && isoDay(absenceCandidate.ends_on)
+      ? absenceCandidate
+      : null
   const heuteKey = berlinDateKey(now)
   const awayMode = !!absence && absence.starts_on <= heuteKey && absence.ends_on >= heuteKey
   const absenceSoon = !!absence && !awayMode
