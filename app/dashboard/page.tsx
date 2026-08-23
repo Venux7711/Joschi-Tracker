@@ -20,6 +20,8 @@ import {
   formatBerlin,
   formatBerlinDate,
   berlinHour,
+  berlinDateKey,
+  fromBerlinInputValue,
   pastBerlinDays,
 } from '@/lib/time'
 import type { Cat, FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@/lib/types'
@@ -121,6 +123,7 @@ export default async function DashboardPage({
     { data: pantryRaw },
     { data: toleranceFeedRaw },
     { data: toleranceHealthRaw },
+    { data: absenceRaw },
   ] = await Promise.all([
     // Fütterung ist Haushalts-Sache (zusammen gefüttert) → über alle Katzen
     supabase.from('feeding_logs').select('*').in('cat_id', allCatIds)
@@ -142,6 +145,8 @@ export default async function DashboardPage({
       : supabase.from('feeding_logs').select('*').in('cat_id', allCatIds)
     ).order('logged_at', { ascending: true }),
     supabase.from('pantry_items').select('*').in('cat_id', allCatIds).gt('quantity', 0),
+    // Betreuungszeitraum, der heute läuft oder als nächstes ansteht
+    supabase.from('absences').select('*').gte('ends_on', berlinDateKey(now)).order('starts_on').limit(1),
     // Eigene, längere Basis für die Verträglichkeit (siehe unten)
     supabase.from('feeding_logs').select('*').in('cat_id', allCatIds)
       .gte('logged_at', toleranceStart.toISOString()).order('logged_at', { ascending: true }),
@@ -297,6 +302,22 @@ export default async function DashboardPage({
     return Math.min(1, score / s.total)
   }
 
+  /**
+   * Betreuung: Die Katzen sind nicht zuhause, jemand anderes füttert.
+   *
+   * In dieser Zeit soll die Empfehlung nichts Neues vorschlagen und schlecht
+   * vertragene Sorten deutlicher meiden. Wer sie betreut, kennt sie weniger
+   * gut, und Durchfall an einem fremden Ort ist der unangenehmste Fall.
+   */
+  type Absence = { id: string; starts_on: string; ends_on: string; label: string | null }
+  const absence = ((absenceRaw ?? []) as Absence[])[0] ?? null
+  const heuteKey = berlinDateKey(now)
+  const awayMode = !!absence && absence.starts_on <= heuteKey && absence.ends_on >= heuteKey
+  const absenceSoon = !!absence && !awayMode
+  const absenceDaysLeft = absence
+    ? berlinDaysBetween(now, fromBerlinInputValue(absence.ends_on))
+    : 0
+
   // Wie viele Tage ist es her, dass es eine Sorte gab? Basis für die
   // Abwertung von kürzlich Gefüttertem.
   const lastFedDays = new Map<string, number>()
@@ -396,7 +417,9 @@ export default async function DashboardPage({
     // Bei Durchfall/weichem Stuhl ist Abwechslung riskant → keine Neuheits-Boni.
     const newProteins = proteins.filter(p => !recentProteins7.has(p))
     const newFamilies = families.filter(f => !recentFamilies3.has(f))
-    if (!digestiveSensitive) {
+    // Bei empfindlichem Bauch UND während der Betreuung keine Neuheits-Boni:
+    // Abwechslung ist dann ein Risiko, kein Vorteil.
+    if (!digestiveSensitive && !awayMode) {
       if (proteins.length > 0 && newProteins.length === proteins.length) {
         score += 12
         reasons.push(`Frische Proteinquelle: ${proteins.join(' + ')}`)
@@ -478,6 +501,21 @@ export default async function DashboardPage({
     if (givenToday) {
       score -= 8
       warnings.push('Heute bereits gegeben')
+    }
+
+    // Betreuung: Bewährtes deutlich bevorzugen, Unerprobtes und Auffälliges
+    // deutlich abwerten. Der Aufschlag kommt zur normalen Bewertung dazu.
+    if (awayMode) {
+      if (rate === null) {
+        score -= 15
+        warnings.push('Während der Betreuung nichts Unerprobtes')
+      } else if (rate > 0.25) {
+        score -= 10
+        warnings.push('Während der Betreuung besser meiden')
+      } else if (rate <= 0.1 && corr && corr.total >= 5) {
+        score += 10
+        reasons.push('Bewährt – gut für die Betreuungszeit')
+      }
     }
 
     // Kürzlich gefüttert → abwerten. Vorher wurde nur "heute" bestraft, wodurch
@@ -742,6 +780,47 @@ export default async function DashboardPage({
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
         </Link>
+
+        {/* ── BETREUUNG ── */}
+        {(awayMode || absenceSoon) && absence && (
+          <div
+            className="card"
+            style={{ padding: '14px 18px', borderLeft: '3px solid var(--am-500, #f59e0b)' }}
+          >
+            <p style={{ fontSize: 14, fontWeight: 700, color: '#1C1C1E' }}>
+              {awayMode ? '🏠 Betreuung läuft' : '🏠 Betreuung steht an'}
+              {absence.label ? ` · ${absence.label}` : ''}
+            </p>
+            <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.5)', marginTop: 3 }}>
+              {formatBerlin(fromBerlinInputValue(absence.starts_on), { day: 'numeric', month: 'long' })}
+              {' bis '}
+              {formatBerlin(fromBerlinInputValue(absence.ends_on), { day: 'numeric', month: 'long' })}
+              {awayMode && absenceDaysLeft >= 0 && ` · noch ${absenceDaysLeft + 1} ${absenceDaysLeft === 0 ? 'Tag' : 'Tage'}`}
+            </p>
+            <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.45)', marginTop: 6 }}>
+              {awayMode
+                ? 'Die Empfehlung schlägt jetzt nur Bewährtes vor – nichts Unerprobtes und nichts, was zuletzt Beschwerden gemacht hat.'
+                : `Ab dem ${formatBerlin(fromBerlinInputValue(absence.starts_on), { day: 'numeric', month: 'long' })} empfiehlt die App nur noch bewährte Sorten.`}
+            </p>
+            {/* Was für den Zeitraum gebraucht wird – 800g-Dosen reichen zwei Tage */}
+            {(() => {
+              const tage = Math.max(
+                0,
+                berlinDaysBetween(
+                  awayMode ? now : fromBerlinInputValue(absence.starts_on),
+                  fromBerlinInputValue(absence.ends_on),
+                ) + 1,
+              )
+              const gramm = tage * (gramsPerDay || 400)
+              const dosen = Math.ceil(gramm / 800)
+              return (
+                <p style={{ fontSize: 12, color: 'var(--am-600)', marginTop: 6, fontWeight: 600 }}>
+                  Bedarf: {tage} {tage === 1 ? 'Tag' : 'Tage'} × {gramsPerDay || 400} g ≈ {dosen} Dosen à 800 g
+                </p>
+              )
+            })()}
+          </div>
+        )}
 
         {/* ── FUTTER-EMPFEHLUNG ── */}
         {bestRec && (
