@@ -321,6 +321,23 @@ export default async function DashboardPage({
       : null
   const heuteKey = berlinDateKey(now)
   const awayMode = !!absence && absence.starts_on <= heuteKey && absence.ends_on >= heuteKey
+
+  /**
+   * Was für diesen Zeitraum eingepackt wurde.
+   *
+   * Bewusst als eigene Abfrage nach dem Promise.all oben: Sie hängt von der
+   * id des Zeitraums ab, den es erst danach gibt. Ins Promise.all gezwängt
+   * hätte sie nur mit einer zweiten Runde funktioniert.
+   */
+  type Supply = { brand: string; type: string; quantity: number; size_grams: number | null }
+  let proviant: Supply[] = []
+  if (absence) {
+    const { data: supplyRaw } = await supabase
+      .from('absence_supplies')
+      .select('brand, type, quantity, size_grams')
+      .eq('absence_id', absence.id)
+    proviant = (supplyRaw ?? []) as Supply[]
+  }
   const absenceSoon = !!absence && !awayMode
   const absenceDaysLeft = absence
     ? berlinDaysBetween(now, fromBerlinInputValue(absence.ends_on))
@@ -376,13 +393,6 @@ export default async function DashboardPage({
     info: ReturnType<typeof getFoodInfo>; score: number; reasons: string[]; warnings: string[]
   }
 
-  // Vorrat gleichmäßig aufbrauchen: Wer über dem Schnitt liegt, kommt zuerst
-  // dran, knappe Sorten werden geschont. Sonst ist am Ende eine Sorte leer,
-  // während von den anderen noch volle Stapel im Regal stehen.
-  const avgCans = pantry.length > 0
-    ? pantry.reduce((sum, p) => sum + p.quantity, 0) / pantry.length
-    : 0
-
   // Kandidaten: Vorrat zuerst, dann alle Anifit-Sorten als Ergänzung
   const pantryKeys = new Set(pantry.map(p => `${p.brand}||${p.type}`))
   const vorratsSorten = pantry.map(p => ({ brand: p.brand, type: p.type, inPantry: true, quantity: p.quantity }))
@@ -390,14 +400,37 @@ export default async function DashboardPage({
   // Während der Betreuung zählt nur, was eingepackt ist. Eine Sorte
   // vorzuschlagen, die zuhause im Regal steht, hilft niemandem – wer füttert,
   // hat ausschließlich den Proviant zur Verfügung.
-  const nurProviant = awayMode && vorratsSorten.length > 0
-  const candidates: Array<{ brand: string; type: string; inPantry: boolean; quantity?: number }> = nurProviant
-    ? vorratsSorten
-    : [
-        ...vorratsSorten,
-        ...ANIFIT_FOODS.filter(f => !pantryKeys.has(`${f.brand}||${f.type}`))
-          .map(f => ({ brand: f.brand, type: f.type, inPantry: false })),
-      ]
+  //
+  // Ist kein Proviant hinterlegt, bleibt der Vorrat die beste verfügbare
+  // Annahme. Das Betreuungs-Feld weist dann darauf hin, dass die Angabe fehlt.
+  const proviantSorten = proviant.map(s => ({
+    brand: s.brand, type: s.type, inPantry: true, quantity: s.quantity,
+  }))
+  const nurProviant = awayMode && proviantSorten.length > 0
+  const nurVorrat = awayMode && !nurProviant && vorratsSorten.length > 0
+
+  const candidates: Array<{ brand: string; type: string; inPantry: boolean; quantity?: number }> =
+    nurProviant
+      ? proviantSorten
+      : nurVorrat
+        ? vorratsSorten
+        : [
+            ...vorratsSorten,
+            ...ANIFIT_FOODS.filter(f => !pantryKeys.has(`${f.brand}||${f.type}`))
+              .map(f => ({ brand: f.brand, type: f.type, inPantry: false })),
+          ]
+
+  // Bestand gleichmäßig aufbrauchen: Wer über dem Schnitt liegt, kommt zuerst
+  // dran, knappe Sorten werden geschont. Sonst ist am Ende eine Sorte leer,
+  // während von den anderen noch volle Stapel dastehen.
+  //
+  // Der Schnitt bezieht sich auf die Sorten, die gerade zur Auswahl stehen –
+  // während der Betreuung also auf den Proviant. Der Vorrat zuhause darf dann
+  // nicht mitrechnen, sonst gälten sechs eingepackte Dosen als "wenig".
+  const bestand = candidates.filter(c => c.inPantry && c.quantity !== undefined)
+  const avgCans = bestand.length > 0
+    ? bestand.reduce((sum, c) => sum + (c.quantity ?? 0), 0) / bestand.length
+    : 0
 
   const recommendations: FoodRecCandidate[] = candidates.map(c => {
     const info = getFoodInfo(c.brand, c.type)
@@ -419,7 +452,7 @@ export default async function DashboardPage({
     // ungefähr gleichzeitig leer werden. −1 (fast leer) bis +1 (deutlich über
     // dem Schnitt), auf ±10 Punkte skaliert – stark genug zum Ausgleichen,
     // schwach genug, dass Verträglichkeit und Rotation weiter den Ton angeben.
-    if (c.inPantry && c.quantity !== undefined && avgCans > 0 && pantry.length > 1) {
+    if (c.inPantry && c.quantity !== undefined && avgCans > 0 && bestand.length > 1) {
       const relative = Math.max(-1, Math.min(1, (c.quantity - avgCans) / avgCans))
       score += Math.round(relative * 10)
       if (relative > 0.25) {
@@ -825,33 +858,34 @@ export default async function DashboardPage({
                 : `Ab dem ${formatBerlin(fromBerlinInputValue(absence.starts_on), { day: 'numeric', month: 'long' })} empfiehlt die App nur noch bewährte Sorten aus dem Vorrat.`}
             </p>
 
-            {/* Der Proviant selbst: Ohne diese Liste ist "Bedarf: 6 Dosen"
-                nicht überprüfbar – man sieht nicht, was davon schon da ist. */}
-            {pantry.length > 0 ? (
+            {/* Was tatsächlich dabei ist. Ohne diese Liste ist "Bedarf: 6 Dosen"
+                nicht überprüfbar – man sieht nicht, was davon schon eingepackt ist. */}
+            {proviant.length > 0 ? (
               <div style={{ marginTop: 8 }}>
                 <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(60,60,67,0.4)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  Proviant
+                  Eingepackt
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 5 }}>
-                  {[...pantry]
+                  {[...proviant]
                     .sort((a, b) => b.quantity - a.quantity)
-                    .map(p => (
+                    .map(s => (
                       <span
-                        key={p.id}
+                        key={`${s.brand}||${s.type}`}
                         style={{
                           fontSize: 12, padding: '3px 9px', borderRadius: 999,
                           background: 'rgba(60,60,67,0.06)', color: '#3C3C43',
                         }}
                       >
-                        {p.type} <strong>{p.quantity}×</strong>
+                        {s.type} <strong>{s.quantity}×</strong>
                       </span>
                     ))}
                 </div>
               </div>
             ) : (
               <p style={{ fontSize: 12, color: '#B45309', marginTop: 8 }}>
-                ⚠ Im Vorrat steht nichts – ohne Bestand kann die App für die Betreuung nichts empfehlen.{' '}
-                <Link href="/pantry" style={{ fontWeight: 600 }}>Vorrat pflegen</Link>
+                ⚠ Es ist nicht hinterlegt, welche Dosen dabei sind – die Empfehlung
+                rechnet deshalb mit dem gesamten Vorrat, auch mit dem, was zuhause steht.{' '}
+                <Link href="/einstellungen" style={{ fontWeight: 600 }}>Proviant eintragen</Link>
               </p>
             )}
             {/* Bedarf gegen den tatsächlichen Bestand rechnen. Vorher stand hier
@@ -869,22 +903,28 @@ export default async function DashboardPage({
               const proTag = gramsPerDay || 400
               const bedarf = tage * proTag
 
+              // Gegen den Proviant rechnen, wenn er hinterlegt ist – sonst
+              // gegen den Vorrat, der dann die einzige Grundlage ist.
+              const basis = proviant.length > 0
+                ? proviant.map(s => ({ quantity: s.quantity, size_grams: s.size_grams }))
+                : pantry.map(p => ({ quantity: p.quantity, size_grams: p.size_grams }))
+
               // Dosengröße fehlt bei alten Einträgen – dann mit 800 g rechnen
-              // und darauf hinweisen, statt den Vorrat stillschweigend auf 0 zu setzen.
-              const ohneGroesse = pantry.filter(p => !p.size_grams).length
-              const bestand = pantry.reduce((s, p) => s + p.quantity * (p.size_grams ?? 800), 0)
-              const reicht = bestand >= bedarf
-              const fehlt = Math.max(0, bedarf - bestand)
+              // und darauf hinweisen, statt die Menge stillschweigend auf 0 zu setzen.
+              const ohneGroesse = basis.filter(b => !b.size_grams).length
+              const vorhanden = basis.reduce((s, b) => s + b.quantity * (b.size_grams ?? 800), 0)
+              const reicht = vorhanden >= bedarf
+              const fehlt = Math.max(0, bedarf - vorhanden)
 
               return (
                 <div style={{ marginTop: 8 }}>
                   <p style={{ fontSize: 12, color: 'var(--am-600)', fontWeight: 600 }}>
                     Bedarf: {tage} {tage === 1 ? 'Tag' : 'Tage'} × {proTag} g = {(bedarf / 1000).toFixed(1)} kg
-                    {' · '}Vorrat: {(bestand / 1000).toFixed(1)} kg
+                    {' · '}{proviant.length > 0 ? 'Dabei' : 'Vorrat'}: {(vorhanden / 1000).toFixed(1)} kg
                   </p>
                   <p style={{ fontSize: 12, marginTop: 2, color: reicht ? '#15803D' : '#B45309', fontWeight: 600 }}>
                     {reicht
-                      ? `✓ Reicht für den Zeitraum${bestand > bedarf ? ` – ${((bestand - bedarf) / 1000).toFixed(1)} kg übrig` : ''}`
+                      ? `✓ Reicht für den Zeitraum${vorhanden > bedarf ? ` – ${((vorhanden - bedarf) / 1000).toFixed(1)} kg übrig` : ''}`
                       : `⚠ Es fehlen ${(fehlt / 1000).toFixed(1)} kg – rund ${Math.ceil(fehlt / 800)} Dosen à 800 g`}
                   </p>
                   {ohneGroesse > 0 && (
@@ -909,7 +949,12 @@ export default async function DashboardPage({
                   ausgeschlossen wurde. */}
               {nurProviant && (
                 <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>
-                  Betreuung – nur aus dem Proviant
+                  Betreuung – nur aus dem, was eingepackt ist
+                </p>
+              )}
+              {nurVorrat && (
+                <p style={{ fontSize: 12, color: '#B45309', marginTop: 2 }}>
+                  Betreuung – Proviant nicht hinterlegt, gerechnet wird mit dem ganzen Vorrat
                 </p>
               )}
             </div>
