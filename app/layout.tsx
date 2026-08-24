@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import { cookies } from 'next/headers'
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
+import UpdateHinweis from '@/components/UpdateHinweis'
 
 const inter = Inter({ subsets: ['latin', 'latin-ext'] })
 
@@ -38,6 +39,7 @@ export default function RootLayout({
   return (
     <html lang="de" data-theme={theme}>
       <body className={inter.className}>
+        <UpdateHinweis />
         {children}
         <BottomNav />
         <script dangerouslySetInnerHTML={{ __html: `

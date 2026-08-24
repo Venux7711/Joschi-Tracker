@@ -221,6 +221,10 @@ export default function FotosPage() {
               'In der Fotos-App kürzen (Bearbeiten → Enden zusammenschieben) und nochmal versuchen.'
             : ergebnis.grund === 'kein_gewinn'
               ? 'Das Video ließ sich nicht kleiner machen. Bitte in der Fotos-App kürzen.'
+              : ergebnis.grund === 'wiedergabe_stockt'
+                ? 'Das Verkleinern kam nicht durch – dem Handy fehlt für dieses Video die Puste. ' +
+                  'Andere Apps schließen hilft manchmal; sicher hilft Kürzen in der Fotos-App ' +
+                  `(Bearbeiten → Enden zusammenschieben). (${ergebnis.schritt})`
               : ergebnis.grund === 'keine_wiedergabe'
                 ? 'Das Video ließ sich zum Verkleinern nicht abspielen. Bei aktivem Stromsparmodus ' +
                   'blockiert das iPhone die Wiedergabe – ausschalten und nochmal versuchen. ' +

@@ -6,6 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase/client'
 import { birthdayInfo } from '@/lib/birthday'
 import { formatBerlin } from '@/lib/time'
+import { AKTUELLE_VERSION } from '@/lib/version'
 import AbsenceSettings from '@/components/AbsenceSettings'
 import PushSettings from '@/components/PushSettings'
 import TelegramSettings from '@/components/TelegramSettings'
@@ -132,6 +133,14 @@ export default function EinstellungenPage() {
             <TelegramSettings />
           </div>
         </details>
+
+        {/* Welche Fassung läuft hier gerade? Auf dem iPhone bleibt eine
+            installierte App tagelang im Hintergrund geladen – ohne diese
+            Angabe ist nicht zu erkennen, ob eine Korrektur überhaupt
+            angekommen ist. */}
+        <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.3)', textAlign: 'center', paddingBottom: 8 }}>
+          Version {AKTUELLE_VERSION}
+        </p>
       </main>
     </div>
   )

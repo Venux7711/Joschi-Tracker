@@ -50,8 +50,20 @@ export type Komprimiergrund =
   | 'nicht_unterstuetzt'
   | 'zu_lang'
   | 'keine_wiedergabe'
+  | 'wiedergabe_stockt'
   | 'fehlgeschlagen'
   | 'kein_gewinn'
+
+/**
+ * So lange darf die Wiedergabe stillstehen, bevor sie als hängend gilt.
+ *
+ * Der Fall, für den das da ist: Das Handy dekodiert 4K, skaliert es und
+ * kodiert gleichzeitig neu. Reicht die Rechenleistung nicht, läuft das Video
+ * kurz an und bleibt dann stehen. Ohne diese Erkennung würde bis zum
+ * Not-Timeout gewartet und am Ende ein abgeschnittenes Video hochgeladen –
+ * das wäre schlimmer als ein ehrlicher Abbruch.
+ */
+const STOCKT_MS = 15_000
 
 export type Komprimierergebnis =
   | { ok: true; file: File; mitTon: boolean }
@@ -181,9 +193,11 @@ async function versuch(
   let audioCtx: AudioContext | null = null
   let recorder: MediaRecorder | null = null
   let animation = 0
+  // Wird gesetzt, sobald die Zeichenschleife läuft – vorher gibt es nichts zu stoppen
+  let stoppeSchleife = () => { cancelAnimationFrame(animation) }
 
   const aufraeumen = () => {
-    cancelAnimationFrame(animation)
+    stoppeSchleife()
     try { if (recorder && recorder.state !== 'inactive') recorder.stop() } catch { /* egal */ }
     try { recorder?.stream.getTracks().forEach(t => t.stop()) } catch { /* egal */ }
     try { audioCtx?.close() } catch { /* egal */ }
@@ -209,7 +223,13 @@ async function versuch(
       return { ok: false, grund: 'zu_lang', schritt: 'Datenrate berechnen' }
     }
 
-    const faktor = Math.min(1, MAX_KANTE / Math.max(video.videoWidth, video.videoHeight))
+    // Bei sehr großen Aufnahmen kleiner ansetzen. Ein iPhone dekodiert 4K,
+    // skaliert es und kodiert gleichzeitig neu – reicht die Rechenleistung
+    // nicht, bleibt die Wiedergabe stehen. 720 statt 1280 nimmt spürbar Last
+    // raus und ist für ein Familienalbum immer noch reichlich.
+    const langeKante = Math.max(video.videoWidth, video.videoHeight)
+    const zielKante = langeKante > 1920 ? 854 : MAX_KANTE
+    const faktor = Math.min(1, zielKante / langeKante)
     const canvas = document.createElement('canvas')
     // Gerade Kantenlängen: Ungerade Werte mag kein H.264-Encoder
     canvas.width = Math.round((video.videoWidth * faktor) / 2) * 2
@@ -262,14 +282,43 @@ async function versuch(
     // Deshalb nicht darauf warten, sondern gleich prüfen, ob sich etwas tut.
     video.play().catch(() => { /* wird unten über den Fortschritt erkannt */ })
 
-    const zeichne = () => {
-      if (!video.paused && !video.ended) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-        if (dauer > 0) melde('Verkleinern', Math.min(1, video.currentTime / dauer))
-      }
-      animation = requestAnimationFrame(zeichne)
+    // Nur so oft zeichnen, wie es Bilder gibt. Die Bildschirm-Schleife läuft
+    // mit 60 Hz, ein Handyvideo hat 30 – die Hälfte der Arbeit wäre doppelt
+    // gemacht, und genau die fehlt dem Dekodierer dann.
+    type MitFrameCallback = HTMLVideoElement & {
+      requestVideoFrameCallback?: (cb: () => void) => number
+      cancelVideoFrameCallback?: (handle: number) => void
     }
-    animation = requestAnimationFrame(zeichne)
+    const v = video as MitFrameCallback
+    const proFrame = typeof v.requestVideoFrameCallback === 'function'
+
+    // Die Anzeige nicht bei jedem Bild anfassen: 60 Zustandswechsel pro
+    // Sekunde kosten mehr Rechenzeit als das Zeichnen selbst.
+    let letzteMeldung = 0
+    let letzterZeichenlauf = 0
+
+    const zeichne = () => {
+      const jetzt = performance.now()
+      if (!video.paused && !video.ended) {
+        // Ohne Bild-Rückruf von Hand auf 30 Bilder je Sekunde begrenzen
+        if (proFrame || jetzt - letzterZeichenlauf >= 32) {
+          letzterZeichenlauf = jetzt
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        }
+        if (dauer > 0 && jetzt - letzteMeldung >= 250) {
+          letzteMeldung = jetzt
+          melde('Verkleinern', Math.min(1, video.currentTime / dauer))
+        }
+      }
+      animation = proFrame
+        ? v.requestVideoFrameCallback!(zeichne)
+        : requestAnimationFrame(zeichne)
+    }
+    stoppeSchleife = () => {
+      if (proFrame && typeof v.cancelVideoFrameCallback === 'function') v.cancelVideoFrameCallback(animation)
+      else cancelAnimationFrame(animation)
+    }
+    animation = proFrame ? v.requestVideoFrameCallback!(zeichne) : requestAnimationFrame(zeichne)
 
     // Läuft es überhaupt an? Ohne diese Prüfung stünde die Anzeige beliebig
     // lange bei 0 %, und genau so hat es sich auf dem iPhone verhalten.
@@ -291,14 +340,53 @@ async function versuch(
       }
     }
 
-    await new Promise<void>(fertig => {
-      video.addEventListener('ended', () => fertig(), { once: true })
-      // Notbremse: Läuft die Wiedergabe irgendwo fest, soll der Upload nicht
-      // ewig hängen. Großzügig bemessen, weil Echtzeit die Untergrenze ist.
-      setTimeout(() => fertig(), (dauer + 30) * 1000)
+    // Bis zum Ende begleiten – und dabei aufpassen, ob es weitergeht. Ein
+    // reiner Not-Timeout hätte am Ende ein abgeschnittenes Video geliefert,
+    // das die Prüfungen unten sogar bestanden hätte.
+    const ausgang = await new Promise<'fertig' | 'stockt'>(fertig => {
+      let letzteZeit = video.currentTime
+      let letzteBewegung = Date.now()
+      let genudged = false
+
+      const beenden = (wert: 'fertig' | 'stockt') => {
+        clearInterval(wache)
+        video.removeEventListener('ended', amEnde)
+        fertig(wert)
+      }
+      const amEnde = () => beenden('fertig')
+      video.addEventListener('ended', amEnde, { once: true })
+
+      const wache = setInterval(() => {
+        if (video.currentTime > letzteZeit + 0.05) {
+          letzteZeit = video.currentTime
+          letzteBewegung = Date.now()
+          genudged = false
+          return
+        }
+        const steht = Date.now() - letzteBewegung
+        // Einmal anstupsen: Nach einem Puffer-Aussetzer bleibt die Wiedergabe
+        // manchmal pausiert stehen und läuft mit einem play() wieder an.
+        if (steht > STOCKT_MS / 2 && !genudged) {
+          genudged = true
+          video.play().catch(() => { /* der Abbruch unten greift */ })
+          return
+        }
+        if (steht > STOCKT_MS) beenden('stockt')
+      }, 1000)
     })
 
-    cancelAnimationFrame(animation)
+    stoppeSchleife()
+
+    if (ausgang === 'stockt') {
+      const geschafft = Math.round((video.currentTime / dauer) * 100)
+      aufraeumen()
+      return {
+        ok: false,
+        grund: 'wiedergabe_stockt',
+        schritt: `Wiedergabe blieb bei ${geschafft} % stehen`,
+      }
+    }
+
     if (recorder.state !== 'inactive') recorder.stop()
     await aufnahmeBeendet
 
@@ -339,7 +427,9 @@ export async function komprimiereVideo(
   // Der Ton ist der empfindlichste Teil: Die Audio-Verarbeitung kann die
   // Wiedergabe blockieren, und stumm abspielen erlaubt jeder Browser ohne
   // Rückfrage. Lieber ein Video ohne Ton als gar keines.
-  if (mitTon.grund === 'keine_wiedergabe') {
+  // Auch beim Stocken lohnt der zweite Anlauf: Ohne Tonverarbeitung hat das
+  // Gerät spürbar weniger zu tun, und genau daran scheitert es hier.
+  if (mitTon.grund === 'keine_wiedergabe' || mitTon.grund === 'wiedergabe_stockt') {
     return versuch(file, zielBytes, false, opt)
   }
 
