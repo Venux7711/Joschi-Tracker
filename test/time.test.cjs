@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const {
   berlinDateKey, berlinDayStart, berlinDayEnd, addBerlinDays, isSameBerlinDay,
   pastBerlinDays, berlinDaysBetween, berlinHour, toBerlinInputValue,
-  fromBerlinInputValue, berlinYear, fromBerlinWallClock,
+  fromBerlinInputValue, berlinYear, fromBerlinWallClock, isIsoDay,
 } = require('../.test-build/time')
 
 // Alle Tagesgrenzen der App hängen an Europe/Berlin, nicht an der Zeitzone des
@@ -83,6 +83,34 @@ test('Formularwert und Speicherung sind zueinander invers', () => {
 
 test('Nur-Datum-Parameter wird als Berliner Tagesanfang gelesen', () => {
   assert.equal(fromBerlinInputValue('2026-08-08').toISOString(), '2026-08-07T22:00:00.000Z')
+})
+
+test('isIsoDay nimmt echte Datumsangaben an', () => {
+  assert.equal(isIsoDay('2026-08-24'), true)
+  assert.equal(isIsoDay('2026-01-01'), true)
+  assert.equal(isIsoDay('1999-12-31'), true)
+})
+
+test('isIsoDay weist alles andere ab', () => {
+  // Der Ernstfall: Eine kaputte Regex ohne Backslashes würde "dddd-dd-dd"
+  // annehmen und echte Daten ablehnen. Genau so fiel der Betreuungszeitraum
+  // still aus – die Seite sah aus, als gäbe es gar keinen.
+  assert.equal(isIsoDay('dddd-dd-dd'), false)
+  assert.equal(isIsoDay('24.08.2026'), false)
+  assert.equal(isIsoDay('2026-8-4'), false)
+  assert.equal(isIsoDay('2026-08-24T10:00'), false)
+  assert.equal(isIsoDay(''), false)
+  assert.equal(isIsoDay(null), false)
+  assert.equal(isIsoDay(undefined), false)
+  assert.equal(isIsoDay(20260824), false)
+})
+
+test('isIsoDay und fromBerlinInputValue passen zusammen', () => {
+  // Was die Prüfung durchlässt, muss auch ein gültiges Datum ergeben
+  for (const v of ['2026-08-24', '2026-03-29', '2026-10-25', '2025-12-31']) {
+    assert.equal(isIsoDay(v), true, v)
+    assert.ok(!Number.isNaN(fromBerlinInputValue(v).getTime()), `${v} ergibt ein gültiges Datum`)
+  }
 })
 
 test('Silvester 23:30 gehört noch ins alte Jahr', () => {

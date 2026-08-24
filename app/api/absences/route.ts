@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { isIsoDay } from '@/lib/time'
 
 function makeSupabase() {
   const cookieStore = cookies()
@@ -24,8 +25,6 @@ async function requireUser() {
   return user
 }
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
-
 export async function GET() {
   if (!await requireUser()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -39,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (!await requireUser()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { starts_on, ends_on, label } = await req.json()
-  if (!ISO_DATE.test(starts_on ?? '') || !ISO_DATE.test(ends_on ?? '')) {
+  if (!isIsoDay(starts_on) || !isIsoDay(ends_on)) {
     return NextResponse.json({ error: 'Bitte Start und Ende angeben' }, { status: 400 })
   }
   // Vertauschte Daten abfangen, bevor die Datenbank-Prüfung sie mit einer

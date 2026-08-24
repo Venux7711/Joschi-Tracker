@@ -22,6 +22,7 @@ import {
   berlinHour,
   berlinDateKey,
   fromBerlinInputValue,
+  isIsoDay,
   pastBerlinDays,
 } from '@/lib/time'
 import type { Cat, FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@/lib/types'
@@ -313,10 +314,9 @@ export default async function DashboardPage({
   type Absence = { id: string; starts_on: string; ends_on: string; label: string | null }
   // Auf gültige Datumsfelder prüfen: Ein unvollständiger Datensatz soll das
   // ganze Dashboard nicht mit einer Server-Exception abschießen.
-  const isoDay = (v: unknown): v is string => typeof v === 'string' && /^d{4}-d{2}-d{2}$/.test(v)
   const absenceCandidate = ((absenceRaw ?? []) as Absence[])[0] ?? null
   const absence =
-    absenceCandidate && isoDay(absenceCandidate.starts_on) && isoDay(absenceCandidate.ends_on)
+    absenceCandidate && isIsoDay(absenceCandidate.starts_on) && isIsoDay(absenceCandidate.ends_on)
       ? absenceCandidate
       : null
   const heuteKey = berlinDateKey(now)
@@ -385,11 +385,19 @@ export default async function DashboardPage({
 
   // Kandidaten: Vorrat zuerst, dann alle Anifit-Sorten als Ergänzung
   const pantryKeys = new Set(pantry.map(p => `${p.brand}||${p.type}`))
-  const candidates: Array<{ brand: string; type: string; inPantry: boolean; quantity?: number }> = [
-    ...pantry.map(p => ({ brand: p.brand, type: p.type, inPantry: true, quantity: p.quantity })),
-    ...ANIFIT_FOODS.filter(f => !pantryKeys.has(`${f.brand}||${f.type}`))
-      .map(f => ({ brand: f.brand, type: f.type, inPantry: false })),
-  ]
+  const vorratsSorten = pantry.map(p => ({ brand: p.brand, type: p.type, inPantry: true, quantity: p.quantity }))
+
+  // Während der Betreuung zählt nur, was eingepackt ist. Eine Sorte
+  // vorzuschlagen, die zuhause im Regal steht, hilft niemandem – wer füttert,
+  // hat ausschließlich den Proviant zur Verfügung.
+  const nurProviant = awayMode && vorratsSorten.length > 0
+  const candidates: Array<{ brand: string; type: string; inPantry: boolean; quantity?: number }> = nurProviant
+    ? vorratsSorten
+    : [
+        ...vorratsSorten,
+        ...ANIFIT_FOODS.filter(f => !pantryKeys.has(`${f.brand}||${f.type}`))
+          .map(f => ({ brand: f.brand, type: f.type, inPantry: false })),
+      ]
 
   const recommendations: FoodRecCandidate[] = candidates.map(c => {
     const info = getFoodInfo(c.brand, c.type)
@@ -813,10 +821,43 @@ export default async function DashboardPage({
             </p>
             <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.45)', marginTop: 6 }}>
               {awayMode
-                ? 'Die Empfehlung schlägt jetzt nur Bewährtes vor – nichts Unerprobtes und nichts, was zuletzt Beschwerden gemacht hat.'
-                : `Ab dem ${formatBerlin(fromBerlinInputValue(absence.starts_on), { day: 'numeric', month: 'long' })} empfiehlt die App nur noch bewährte Sorten.`}
+                ? 'Die Empfehlung schlägt jetzt nur vor, was im Vorrat steht – nichts Unerprobtes und nichts, was zuletzt Beschwerden gemacht hat.'
+                : `Ab dem ${formatBerlin(fromBerlinInputValue(absence.starts_on), { day: 'numeric', month: 'long' })} empfiehlt die App nur noch bewährte Sorten aus dem Vorrat.`}
             </p>
-            {/* Was für den Zeitraum gebraucht wird – 800g-Dosen reichen zwei Tage */}
+
+            {/* Der Proviant selbst: Ohne diese Liste ist "Bedarf: 6 Dosen"
+                nicht überprüfbar – man sieht nicht, was davon schon da ist. */}
+            {pantry.length > 0 ? (
+              <div style={{ marginTop: 8 }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(60,60,67,0.4)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  Proviant
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 5 }}>
+                  {[...pantry]
+                    .sort((a, b) => b.quantity - a.quantity)
+                    .map(p => (
+                      <span
+                        key={p.id}
+                        style={{
+                          fontSize: 12, padding: '3px 9px', borderRadius: 999,
+                          background: 'rgba(60,60,67,0.06)', color: '#3C3C43',
+                        }}
+                      >
+                        {p.type} <strong>{p.quantity}×</strong>
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ) : (
+              <p style={{ fontSize: 12, color: '#B45309', marginTop: 8 }}>
+                ⚠ Im Vorrat steht nichts – ohne Bestand kann die App für die Betreuung nichts empfehlen.{' '}
+                <Link href="/pantry" style={{ fontWeight: 600 }}>Vorrat pflegen</Link>
+              </p>
+            )}
+            {/* Bedarf gegen den tatsächlichen Bestand rechnen. Vorher stand hier
+                nur "≈ X Dosen à 800 g" – das stimmt aber nicht, wenn im Vorrat
+                auch 400-g-Dosen liegen, und beantwortet die eigentliche Frage
+                nicht: Reicht das, was da ist? */}
             {(() => {
               const tage = Math.max(
                 0,
@@ -825,12 +866,34 @@ export default async function DashboardPage({
                   fromBerlinInputValue(absence.ends_on),
                 ) + 1,
               )
-              const gramm = tage * (gramsPerDay || 400)
-              const dosen = Math.ceil(gramm / 800)
+              const proTag = gramsPerDay || 400
+              const bedarf = tage * proTag
+
+              // Dosengröße fehlt bei alten Einträgen – dann mit 800 g rechnen
+              // und darauf hinweisen, statt den Vorrat stillschweigend auf 0 zu setzen.
+              const ohneGroesse = pantry.filter(p => !p.size_grams).length
+              const bestand = pantry.reduce((s, p) => s + p.quantity * (p.size_grams ?? 800), 0)
+              const reicht = bestand >= bedarf
+              const fehlt = Math.max(0, bedarf - bestand)
+
               return (
-                <p style={{ fontSize: 12, color: 'var(--am-600)', marginTop: 6, fontWeight: 600 }}>
-                  Bedarf: {tage} {tage === 1 ? 'Tag' : 'Tage'} × {gramsPerDay || 400} g ≈ {dosen} Dosen à 800 g
-                </p>
+                <div style={{ marginTop: 8 }}>
+                  <p style={{ fontSize: 12, color: 'var(--am-600)', fontWeight: 600 }}>
+                    Bedarf: {tage} {tage === 1 ? 'Tag' : 'Tage'} × {proTag} g = {(bedarf / 1000).toFixed(1)} kg
+                    {' · '}Vorrat: {(bestand / 1000).toFixed(1)} kg
+                  </p>
+                  <p style={{ fontSize: 12, marginTop: 2, color: reicht ? '#15803D' : '#B45309', fontWeight: 600 }}>
+                    {reicht
+                      ? `✓ Reicht für den Zeitraum${bestand > bedarf ? ` – ${((bestand - bedarf) / 1000).toFixed(1)} kg übrig` : ''}`
+                      : `⚠ Es fehlen ${(fehlt / 1000).toFixed(1)} kg – rund ${Math.ceil(fehlt / 800)} Dosen à 800 g`}
+                  </p>
+                  {ohneGroesse > 0 && (
+                    <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>
+                      Bei {ohneGroesse} {ohneGroesse === 1 ? 'Eintrag' : 'Einträgen'} fehlt die Dosengröße – hier mit 800 g gerechnet.{' '}
+                      <Link href="/pantry" style={{ fontWeight: 600 }}>Ergänzen</Link>
+                    </p>
+                  )}
+                </div>
               )
             })()}
           </div>
@@ -841,6 +904,14 @@ export default async function DashboardPage({
           <div className="card overflow-hidden">
             <div className="px-5 pt-5 pb-4" style={{ borderBottom: '0.5px solid rgba(60,60,67,0.08)' }}>
               <h3 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.025em', color: '#1C1C1E' }}>Empfehlung</h3>
+              {/* Klarstellen, worauf sich die Liste stützt – sonst ist nicht zu
+                  erkennen, ob eine fehlende Sorte übersehen oder bewusst
+                  ausgeschlossen wurde. */}
+              {nurProviant && (
+                <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.45)', marginTop: 2 }}>
+                  Betreuung – nur aus dem Proviant
+                </p>
+              )}
             </div>
 
             {/* Beste Empfehlung */}

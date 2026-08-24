@@ -129,6 +129,19 @@ export function toBerlinInputValue(date: Date | string | number = new Date()): s
   return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}`
 }
 
+/**
+ * Ist das ein Datum der Form 2026-08-24?
+ *
+ * Klingt nach einer Kleinigkeit, ist aber die Wache vor fromBerlinInputValue:
+ * Kommt dort etwas anderes an, entsteht ein ungültiges Datum, das sich still
+ * durch die ganze Seite zieht. Deshalb steht die Prüfung hier zentral und
+ * unter Test – eine kaputte Kopie dieser Zeile hat den Betreuungszeitraum
+ * schon einmal unbemerkt außer Kraft gesetzt.
+ */
+export function isIsoDay(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
 /** Umkehrung dazu: "2026-08-08T14:30" wird als Berliner Zeit gelesen */
 export function fromBerlinInputValue(value: string): Date {
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(value)
