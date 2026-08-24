@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { birthdayInfo } from '@/lib/birthday'
 import { formatBerlin } from '@/lib/time'
 import { AKTUELLE_VERSION } from '@/lib/version'
+import VideoProtokoll from '@/components/VideoProtokoll'
 import AbsenceSettings from '@/components/AbsenceSettings'
 import PushSettings from '@/components/PushSettings'
 import TelegramSettings from '@/components/TelegramSettings'
@@ -133,6 +134,8 @@ export default function EinstellungenPage() {
             <TelegramSettings />
           </div>
         </details>
+
+        <VideoProtokoll />
 
         {/* Welche Fassung läuft hier gerade? Auf dem iPhone bleibt eine
             installierte App tagelang im Hintergrund geladen – ohne diese

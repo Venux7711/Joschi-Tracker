@@ -10,6 +10,8 @@ import { formatBerlin } from '@/lib/time'
 import { readGpsFromFile } from '@/lib/exif'
 import { aktuellerOrt, istFrisch } from '@/lib/geolocation'
 import { kannKomprimieren, komprimiereVideo, type Fortschritt } from '@/lib/video-compress'
+import { merkeProtokoll } from '@/lib/video-debug'
+import ProtokollAnzeige from '@/components/ProtokollAnzeige'
 import { captureVideoPoster, formatDuration, hasStill, isVideoFile, stillUrl, MAX_VIDEO_BYTES, ZIEL_BYTES } from '@/lib/media'
 import PhotoViewer from '@/components/PhotoViewer'
 import type { Cat } from '@/lib/types'
@@ -59,6 +61,8 @@ export default function FotosPage() {
   const [komprimierung, setKomprimierung] = useState<Fortschritt | null>(null)
   // Das Video muss zum Verkleinern sichtbar laufen – WebKit pausiert sonst
   const videoSlot = useRef<HTMLDivElement>(null)
+  // Protokoll des letzten Verkleinerungs-Versuchs, zum Weitergeben
+  const [protokoll, setProtokoll] = useState<string | null>(null)
   // Index statt Objekt: Der Betrachter blättert durch die gefilterte Liste,
   // dafür muss er wissen, an welcher Stelle er steht.
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
@@ -179,6 +183,7 @@ export default function FotosPage() {
     if (!file || !catId) return
     setUploading(true)
     setUploadError(null)
+    setProtokoll(null)
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setUploading(false); return }
@@ -211,6 +216,11 @@ export default function FotosPage() {
         onFortschritt: setKomprimierung,
       })
       setKomprimierung(null)
+
+      // Immer aufheben, auch bei Erfolg: Ein gelungener Durchlauf zeigt, wie
+      // es aussehen soll, und das hilft beim Vergleich mit einem misslungenen.
+      setProtokoll(ergebnis.protokoll)
+      merkeProtokoll(ergebnis.protokoll)
 
       if (ergebnis.ok) {
         datei = ergebnis.file
@@ -431,6 +441,14 @@ export default function FotosPage() {
         {uploadError && (
           <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-700 text-sm">
             ⚠ {uploadError}
+            {protokoll && (
+              <>
+                <p style={{ marginTop: 8, fontSize: 12 }}>
+                  Schick mir das Protokoll, dann sehe ich die Ursache statt sie zu raten.
+                </p>
+                <ProtokollAnzeige text={protokoll} />
+              </>
+            )}
           </div>
         )}
 
