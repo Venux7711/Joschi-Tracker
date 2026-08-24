@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { pickActiveCat } from '@/lib/active-cat-client'
 import { formatBerlin } from '@/lib/time'
 import { readGpsFromFile } from '@/lib/exif'
+import { aktuellerOrt, istFrisch } from '@/lib/geolocation'
 import { captureVideoPoster, formatDuration, hasStill, isVideoFile, stillUrl, MAX_VIDEO_BYTES } from '@/lib/media'
 import PhotoViewer from '@/components/PhotoViewer'
 import type { Cat } from '@/lib/types'
@@ -119,6 +120,38 @@ export default function FotosPage() {
     }
   }
 
+  /**
+   * Ort nachtragen – vom Gerät, für ein Bild das keinen hat.
+   *
+   * Der Fall, für den das gedacht ist: Man ist mit den Katzen woanders, hat
+   * schon fotografiert, und die Bilder haben keinen Ort, weil die App-Kamera
+   * keinen mitliefert. Solange man noch dort ist, stimmt der Gerätestandort.
+   */
+  const ortNachtragen = async (photo: { id: string }) => {
+    setTagError(null)
+    setSavingTags(true)
+    const ort = await aktuellerOrt()
+    if (!ort) {
+      setSavingTags(false)
+      setTagError('Kein Standort verfügbar – Ortungsdienste für den Browser erlauben und nochmal versuchen.')
+      return
+    }
+
+    const res = await fetch('/api/photos', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: photo.id, lat: ort.lat, lng: ort.lng }),
+    })
+    setSavingTags(false)
+
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setTagError(data.error ?? 'Ort konnte nicht gespeichert werden')
+      return
+    }
+    setPhotos(prev => prev.map(p => (p.id === photo.id ? (data.photo ?? p) : p)))
+  }
+
   const loadPhotos = async () => {
     setLoading(true)
     const res = await fetch('/api/photos?limit=200')
@@ -199,9 +232,17 @@ export default function FotosPage() {
       }
     }
 
-    // Aufnahmeort aus den EXIF-Daten – hat längst nicht jedes Bild, und
-    // Videos speichern ihn in einem anderen Format, das hier nicht gelesen wird
-    const ort = video ? null : await readGpsFromFile(file)
+    // Aufnahmeort: zuerst aus dem Bild selbst – das ist der echte Ort der
+    // Aufnahme. Videos speichern ihn in einem anderen Format, das hier nicht
+    // gelesen wird.
+    const ausDatei = video ? null : await readGpsFromFile(file)
+
+    // Nichts im Bild? Dann den Gerätestandort nehmen – aber nur bei frischen
+    // Aufnahmen. Ein Bild aus der App-Kamera hat nie Koordinaten, und ohne
+    // diesen Ersatz bliebe der Ort für den Großteil der Fotos leer. Bei einem
+    // alten Bild aus der Fotobibliothek wäre "wo bin ich jetzt" dagegen
+    // schlicht falsch.
+    const ort = ausDatei ?? (istFrisch(file) ? await aktuellerOrt() : null)
 
     await fetch('/api/photos', {
       method: 'POST',
@@ -495,6 +536,7 @@ export default function FotosPage() {
           onIndexChange={setViewerIndex}
           onClose={() => setViewerIndex(null)}
           onToggleTag={toggleCatTag}
+          onAddPlace={ortNachtragen}
           onDelete={handleDelete}
         />
       )}

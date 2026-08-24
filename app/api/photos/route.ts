@@ -189,6 +189,20 @@ export async function PATCH(req: NextRequest) {
   if (mood_tag !== undefined) patch.mood_tag = mood_tag
   if (caption !== undefined) patch.caption = caption
 
+  // Ort nachtragen: Aufnahmen aus der App-Kamera bringen keine Koordinaten
+  // mit, die lassen sich sonst nie mehr zuordnen. Beide Werte müssen kommen –
+  // eine halbe Koordinate ergibt keinen Ort.
+  if (typeof body.lat === 'number' && typeof body.lng === 'number') {
+    if (Math.abs(body.lat) > 90 || Math.abs(body.lng) > 180) {
+      return NextResponse.json({ error: 'Ungültige Koordinaten' }, { status: 400 })
+    }
+    patch.lat = body.lat
+    patch.lng = body.lng
+    // Ortsnamen gleich mit auflösen. Scheitert das, bleiben die Koordinaten –
+    // die sind immer noch mehr als nichts.
+    patch.place = await reverseGeocode(body.lat, body.lng)
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'Nichts zu ändern' }, { status: 400 })
   }

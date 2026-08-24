@@ -51,6 +51,7 @@ export default function PhotoViewer({
   onIndexChange,
   onClose,
   onToggleTag,
+  onAddPlace,
   onDelete,
 }: {
   photos: ViewerPhoto[]
@@ -59,10 +60,12 @@ export default function PhotoViewer({
   onIndexChange: (next: number) => void
   onClose: () => void
   onToggleTag: (photo: ViewerPhoto, catId: string) => Promise<void>
+  onAddPlace: (photo: ViewerPhoto) => Promise<void>
   onDelete: (photo: ViewerPhoto) => void
 }) {
   const [chrome, setChrome] = useState(true)
   const [savingTag, setSavingTag] = useState(false)
+  const [savingPlace, setSavingPlace] = useState(false)
   const touchStart = useRef<{ x: number; y: number } | null>(null)
 
   const photo = photos[index]
@@ -231,7 +234,7 @@ export default function PhotoViewer({
               {photo.caption && (
                 <p style={{ color: 'white', fontSize: 14, marginTop: 4 }}>{photo.caption}</p>
               )}
-              {photo.lat !== null && photo.lng !== null && (
+              {photo.lat !== null && photo.lng !== null ? (
                 <a
                   href={`https://www.openstreetmap.org/?mlat=${photo.lat}&mlon=${photo.lng}#map=16/${photo.lat}/${photo.lng}`}
                   target="_blank"
@@ -240,6 +243,25 @@ export default function PhotoViewer({
                 >
                   📍 {photo.place ?? `${photo.lat.toFixed(4)}, ${photo.lng.toFixed(4)}`}
                 </a>
+              ) : (
+                // Aufnahmen aus der App-Kamera bringen keine Koordinaten mit.
+                // Solange man noch am selben Ort ist, lässt sich das hier
+                // nachholen – danach nie wieder.
+                <button
+                  onClick={async () => {
+                    setSavingPlace(true)
+                    await onAddPlace(photo)
+                    setSavingPlace(false)
+                  }}
+                  disabled={savingPlace}
+                  style={{
+                    color: 'rgba(255,255,255,0.55)', fontSize: 12, marginTop: 4,
+                    padding: '4px 10px', borderRadius: 999,
+                    border: '1px solid rgba(255,255,255,0.2)', background: 'transparent',
+                  }}
+                >
+                  {savingPlace ? '📍 sucht Standort…' : '📍 Ort von hier übernehmen'}
+                </button>
               )}
             </div>
             <button

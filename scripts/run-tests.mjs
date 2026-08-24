@@ -25,7 +25,7 @@ const run = (cmd, args, env) =>
 // npx.cmd eine Shell, und die soll hier gerade vermieden werden.
 const tsc = 'node_modules/typescript/bin/tsc'
 
-run(process.execPath, [tsc, 'lib/time.ts', 'lib/birthday.ts', 'lib/media.ts',
+run(process.execPath, [tsc, 'lib/time.ts', 'lib/birthday.ts', 'lib/media.ts', 'lib/geolocation.ts',
   '--outDir', OUT, '--target', 'es2020', '--module', 'commonjs',
   '--moduleResolution', 'node', '--skipLibCheck'])
 
