@@ -55,6 +55,7 @@ export type Komprimiergrund =
   | 'zu_lang'
   | 'keine_wiedergabe'
   | 'wiedergabe_stockt'
+  | 'abgebrochen'
   | 'fehlgeschlagen'
   | 'kein_gewinn'
 
@@ -84,6 +85,10 @@ export type Optionen = {
   /** Wohin das Video zum Durchlaufen gehängt wird. Muss sichtbar sein. */
   halter?: HTMLElement | null
   onFortschritt?: (f: Fortschritt) => void
+  /** Mitlesen, während es läuft – damit ein Hänger nicht ungesehen bleibt. */
+  onProtokoll?: (text: string) => void
+  /** Zum Abbrechen von Hand, ohne auf einen Zeitablauf zu warten. */
+  signal?: AbortSignal
 }
 
 function waehleFormat(): string | null {
@@ -384,6 +389,7 @@ async function versuch(
     const laeuft = await new Promise<boolean>(fertig => {
       const start = Date.now()
       const pruefe = () => {
+        if (opt.signal?.aborted) return fertig(false)
         if (video.currentTime > 0) return fertig(true)
         if (Date.now() - start > ANLAUF_MS) return fertig(false)
         setTimeout(pruefe, 250)
@@ -392,22 +398,26 @@ async function versuch(
     })
     if (!laeuft) {
       aufraeumen()
+      if (opt.signal?.aborted) return raus('abgebrochen', 'von Hand abgebrochen')
       return raus('keine_wiedergabe', mitTon ? 'Abspielen mit Ton' : 'Abspielen stumm')
     }
 
     // Bis zum Ende begleiten – und dabei aufpassen, ob es weitergeht. Ein
     // reiner Not-Timeout hätte am Ende ein abgeschnittenes Video geliefert,
     // das die Prüfungen unten sogar bestanden hätte.
-    const ausgang = await new Promise<'fertig' | 'stockt'>(fertig => {
+    const ausgang = await new Promise<'fertig' | 'stockt' | 'abbruch'>(fertig => {
       let letzteZeit = video.currentTime
       let letzteBewegung = Date.now()
       let genudged = false
 
-      const beenden = (wert: 'fertig' | 'stockt') => {
+      const beenden = (wert: 'fertig' | 'stockt' | 'abbruch') => {
         clearInterval(wache)
         video.removeEventListener('ended', amEnde)
+        opt.signal?.removeEventListener('abort', abbrechen)
         fertig(wert)
       }
+      const abbrechen = () => beenden('abbruch')
+      opt.signal?.addEventListener('abort', abbrechen, { once: true })
       const amEnde = () => beenden('fertig')
       video.addEventListener('ended', amEnde, { once: true })
 
@@ -450,6 +460,12 @@ async function versuch(
     })
 
     stoppeSchleife()
+
+    if (ausgang === 'abbruch') {
+      log.add('ABGEBROCHEN', { t: video.currentTime })
+      aufraeumen()
+      return raus('abgebrochen', 'von Hand abgebrochen')
+    }
 
     if (ausgang === 'stockt') {
       const geschafft = Math.round((video.currentTime / dauer) * 100)
@@ -497,7 +513,7 @@ export async function komprimiereVideo(
 ): Promise<Komprimierergebnis> {
   // Ein gemeinsames Protokoll über beide Anläufe: Der zweite ist nur zu
   // verstehen, wenn danebensteht, woran der erste gescheitert ist.
-  const log = new Protokoll()
+  const log = new Protokoll(opt.onProtokoll)
   log.umgebung()
   log.add('Datei', {
     name: file.name,
@@ -519,6 +535,9 @@ export async function komprimiereVideo(
   // Rückfrage. Lieber ein Video ohne Ton als gar keines.
   // Auch beim Stocken lohnt der zweite Anlauf: Ohne Tonverarbeitung hat das
   // Gerät spürbar weniger zu tun.
+  // Von Hand abgebrochen heißt: kein zweiter Anlauf.
+  if (mitTon.grund === 'abgebrochen') return mitTon
+
   if (mitTon.grund === 'keine_wiedergabe' || mitTon.grund === 'wiedergabe_stockt') {
     return versuch(file, zielBytes, false, opt, log)
   }

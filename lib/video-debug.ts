@@ -19,6 +19,15 @@ export class Protokoll {
   /** Deckel gegen Endlos-Protokolle bei langen Videos */
   private static MAX = 400
 
+  /**
+   * Wer mitlesen will, während es läuft.
+   *
+   * Der Grund: Hängt der Vorgang, erschien das Protokoll bisher erst nach dem
+   * Zeitablauf – bis zu zwei Minuten später. Wer vorher aufgibt, sieht es nie.
+   * Mit einem Mithörer steht es schon während des Wartens auf dem Bildschirm.
+   */
+  constructor(private onNeu?: (text: string) => void) {}
+
   add(was: string, daten?: Record<string, unknown> | string) {
     if (this.eintraege.length >= Protokoll.MAX) return
     this.eintraege.push({
@@ -33,6 +42,7 @@ export class Protokoll {
                 .map(([k, v]) => `${k}=${formatWert(v)}`)
                 .join(' '),
     })
+    this.onNeu?.(this.text())
   }
 
   /** Umgebung einmal festhalten – Gerät und Browser erklären das meiste */

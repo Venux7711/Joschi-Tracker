@@ -61,8 +61,10 @@ export default function FotosPage() {
   const [komprimierung, setKomprimierung] = useState<Fortschritt | null>(null)
   // Das Video muss zum Verkleinern sichtbar laufen – WebKit pausiert sonst
   const videoSlot = useRef<HTMLDivElement>(null)
-  // Protokoll des letzten Verkleinerungs-Versuchs, zum Weitergeben
+  // Protokoll des letzten Verkleinerungs-Versuchs, zum Weitergeben. Wird
+  // schon während des Laufs gefüllt – ein Hänger soll nicht ungesehen bleiben.
   const [protokoll, setProtokoll] = useState<string | null>(null)
+  const abbruch = useRef<AbortController | null>(null)
   // Index statt Objekt: Der Betrachter blättert durch die gefilterte Liste,
   // dafür muss er wissen, an welcher Stelle er steht.
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
@@ -211,10 +213,16 @@ export default function FotosPage() {
       setKomprimierung({ schritt: 'Vorbereiten', anteil: null })
       await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())))
 
+      abbruch.current = new AbortController()
       const ergebnis = await komprimiereVideo(file, ZIEL_BYTES, {
         halter: videoSlot.current,
         onFortschritt: setKomprimierung,
+        // Laufend mitschreiben und sofort wegsichern: Wer die App schließt,
+        // während es hängt, findet das Protokoll danach in den Einstellungen.
+        onProtokoll: text => { setProtokoll(text); merkeProtokoll(text) },
+        signal: abbruch.current.signal,
       })
+      abbruch.current = null
       setKomprimierung(null)
 
       // Immer aufheben, auch bei Erfolg: Ein gelungener Durchlauf zeigt, wie
@@ -226,7 +234,9 @@ export default function FotosPage() {
         datei = ergebnis.file
       } else {
         setUploadError(
-          ergebnis.grund === 'zu_lang'
+          ergebnis.grund === 'abgebrochen'
+            ? 'Verkleinern abgebrochen. Das Protokoll unten zeigt, wie weit es kam.'
+          : ergebnis.grund === 'zu_lang'
             ? 'Das Video ist zu lang, um es auf eine brauchbare Größe zu bringen. ' +
               'In der Fotos-App kürzen (Bearbeiten → Enden zusammenschieben) und nochmal versuchen.'
             : ergebnis.grund === 'kein_gewinn'
@@ -430,11 +440,26 @@ export default function FotosPage() {
                     }}
                   />
                 </div>
-                <p className="text-xs text-amber-700 mt-2">
-                  Dauert ungefähr so lange, wie das Video läuft.
-                </p>
+                <div className="flex items-center gap-3 mt-2">
+                  <p className="text-xs text-amber-700">
+                    Dauert ungefähr so lange, wie das Video läuft.
+                  </p>
+                  {/* Abbrechen statt warten: Hängt es, dauerte es bisher bis
+                      zu zwei Minuten, bis überhaupt etwas zu sehen war. */}
+                  <button
+                    onClick={() => abbruch.current?.abort()}
+                    className="text-xs font-semibold flex-shrink-0"
+                    style={{ color: '#B45309', textDecoration: 'underline' }}
+                  >
+                    Abbrechen
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* Schon während des Laufens einsehbar – wer nicht warten will,
+                kann den Stand jederzeit kopieren und weitergeben. */}
+            {protokoll && <ProtokollAnzeige text={protokoll} titel="Protokoll (läuft mit)" />}
           </div>
         )}
 
