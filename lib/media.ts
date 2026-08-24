@@ -15,6 +15,13 @@ export type MediaLike = {
 /** 100 MB. Darüber weist der Storage-Bucket den Upload ohnehin ab. */
 export const MAX_VIDEO_BYTES = 100 * 1024 * 1024
 
+/**
+ * Zielgröße beim Verkleinern. Bewusst deutlich unter der Grenze: Die Aufnahme
+ * trifft eine vorgegebene Datenrate nur ungefähr, und ein Ergebnis, das knapp
+ * darüber landet, wäre nach minutenlangem Rechnen doppelt ärgerlich.
+ */
+export const ZIEL_BYTES = 70 * 1024 * 1024
+
 export function isVideo(row: MediaLike | null | undefined): boolean {
   return row?.media_type === 'video'
 }

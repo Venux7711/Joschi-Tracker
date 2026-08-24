@@ -9,7 +9,8 @@ import { pickActiveCat } from '@/lib/active-cat-client'
 import { formatBerlin } from '@/lib/time'
 import { readGpsFromFile } from '@/lib/exif'
 import { aktuellerOrt, istFrisch } from '@/lib/geolocation'
-import { captureVideoPoster, formatDuration, hasStill, isVideoFile, stillUrl, MAX_VIDEO_BYTES } from '@/lib/media'
+import { kannKomprimieren, komprimiereVideo } from '@/lib/video-compress'
+import { captureVideoPoster, formatDuration, hasStill, isVideoFile, stillUrl, MAX_VIDEO_BYTES, ZIEL_BYTES } from '@/lib/media'
 import PhotoViewer from '@/components/PhotoViewer'
 import type { Cat } from '@/lib/types'
 
@@ -54,6 +55,8 @@ export default function FotosPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  // null = wird gerade nicht verkleinert, sonst der Anteil von 0 bis 1
+  const [komprimierung, setKomprimierung] = useState<number | null>(null)
   // Index statt Objekt: Der Betrachter blättert durch die gefilterte Liste,
   // dafür muss er wissen, an welcher Stelle er steht.
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
@@ -180,30 +183,55 @@ export default function FotosPage() {
 
     const video = isVideoFile(file)
 
-    // Vor dem Hochladen prüfen: Der Speicher weist zu große Dateien mit einer
-    // technischen Meldung ab, aus der niemand schließen kann, was zu tun ist.
+    // Zu groß? Erst verkleinern, statt den Nutzer zurückzuschicken. Das läuft
+    // in Echtzeit – deshalb die Fortschrittsanzeige, sonst sähe es aus, als
+    // hinge die App.
+    let datei = file
     if (video && file.size > MAX_VIDEO_BYTES) {
-      setUploadError(
-        `Das Video ist ${Math.round(file.size / 1024 / 1024)} MB groß – mehr als ` +
-        `${Math.round(MAX_VIDEO_BYTES / 1024 / 1024)} MB gehen nicht. ` +
-        'In der Fotos-App kürzen (Bearbeiten → Enden zusammenschieben) und nochmal versuchen.'
-      )
-      setUploading(false)
-      if (e.target) e.target.value = ''
-      return
+      if (!kannKomprimieren()) {
+        setUploadError(
+          `Das Video ist ${Math.round(file.size / 1024 / 1024)} MB groß – mehr als ` +
+          `${Math.round(MAX_VIDEO_BYTES / 1024 / 1024)} MB gehen nicht, und dieser Browser ` +
+          'kann Videos nicht verkleinern. In der Fotos-App kürzen und nochmal versuchen.'
+        )
+        setUploading(false)
+        if (e.target) e.target.value = ''
+        return
+      }
+
+      setKomprimierung(0)
+      const ergebnis = await komprimiereVideo(file, ZIEL_BYTES, setKomprimierung)
+      setKomprimierung(null)
+
+      if (ergebnis.ok) {
+        datei = ergebnis.file
+      } else {
+        setUploadError(
+          ergebnis.grund === 'zu_lang'
+            ? 'Das Video ist zu lang, um es auf eine brauchbare Größe zu bringen. ' +
+              'In der Fotos-App kürzen (Bearbeiten → Enden zusammenschieben) und nochmal versuchen.'
+            : ergebnis.grund === 'kein_gewinn'
+              ? 'Das Video ließ sich nicht kleiner machen. Bitte in der Fotos-App kürzen.'
+              : 'Das Verkleinern hat nicht geklappt. Bitte das Video in der Fotos-App kürzen ' +
+                'und nochmal versuchen.'
+        )
+        setUploading(false)
+        if (e.target) e.target.value = ''
+        return
+      }
     }
 
-    const rawExt = file.name.includes('.') ? file.name.split('.').pop()! : video ? 'mp4' : 'jpg'
+    const rawExt = datei.name.includes('.') ? datei.name.split('.').pop()! : video ? 'mp4' : 'jpg'
     const ext = rawExt.toLowerCase().replace('heic', 'jpg').replace('heif', 'jpg')
     const basis = `${catId}/${Date.now()}`
 
     // Standbild aus dem Video greifen, solange die Datei noch im Browser liegt.
     // Danach ginge es nur noch serverseitig, und dafür bräuchte es ffmpeg.
-    const standbild = video ? await captureVideoPoster(file) : null
+    const standbild = video ? await captureVideoPoster(datei) : null
 
     const { data: uploadData, error: uploadErr } = await supabase.storage
       .from('joschi-photos')
-      .upload(`${basis}.${ext}`, file, { contentType: file.type || (video ? 'video/mp4' : undefined) })
+      .upload(`${basis}.${ext}`, datei, { contentType: datei.type || (video ? 'video/mp4' : undefined) })
 
     if (uploadErr || !uploadData) {
       setUploadError(
@@ -342,6 +370,28 @@ export default function FotosPage() {
             </label>
           </div>
         </div>
+
+        {/* Das Verkleinern läuft in Echtzeit – ohne Anzeige sähe es aus, als
+            hinge die App. Der Hinweis auf die Dauer nimmt die Ungeduld raus. */}
+        {komprimierung !== null && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-amber-800 font-medium">
+                Video wird verkleinert… {Math.round(komprimierung * 100)} %
+              </p>
+              <span className="text-xs text-amber-600 flex-shrink-0">Bitte offen lassen</span>
+            </div>
+            <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(180,83,9,0.15)' }}>
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${Math.round(komprimierung * 100)}%`, background: 'var(--am-500, #f59e0b)', transition: 'width 0.3s' }}
+              />
+            </div>
+            <p className="text-xs text-amber-700 mt-2">
+              Dauert ungefähr so lange, wie das Video läuft.
+            </p>
+          </div>
+        )}
 
         {uploadError && (
           <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-700 text-sm">
