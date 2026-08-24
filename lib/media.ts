@@ -80,10 +80,18 @@ export async function captureVideoPoster(
   video.preload = 'metadata'
   video.muted = true
   video.playsInline = true
+  video.setAttribute('playsinline', '')
+  video.setAttribute('muted', '')
   // Ohne das liefert canvas.toBlob bei Videos von fremder Herkunft nichts.
   // Bei einer blob:-Adresse ist das unkritisch, schadet aber auch nicht.
   video.crossOrigin = 'anonymous'
   video.src = url
+  // Ins Dokument hängen: Safari dekodiert ein Video, das nur im Speicher
+  // existiert, nicht zuverlässig – dann bleibt das Standbild leer. Versteckt
+  // über die Größe, nicht über display:none, das hätte denselben Effekt.
+  video.style.cssText =
+    'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1'
+  document.body.appendChild(video)
 
   /** Wartet auf ein Ereignis, gibt nach n ms auf statt hängen zu bleiben. */
   const warteAuf = (ereignis: string, ms: number) =>
@@ -138,7 +146,8 @@ export async function captureVideoPoster(
     return { blob: null, duration: null }
   } finally {
     video.removeAttribute('src')
-    video.load()
+    try { video.load() } catch { /* egal */ }
+    video.remove()
     URL.revokeObjectURL(url)
   }
 }

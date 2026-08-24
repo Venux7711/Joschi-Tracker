@@ -28,7 +28,10 @@ const tsc = 'node_modules/typescript/bin/tsc'
 run(process.execPath, [tsc, 'lib/time.ts', 'lib/birthday.ts', 'lib/media.ts', 'lib/geolocation.ts',
   'lib/video-compress.ts',
   '--outDir', OUT, '--target', 'es2020', '--module', 'commonjs',
-  '--moduleResolution', 'node', '--skipLibCheck'])
+  // --strict wie in tsconfig.json: Ohne strictNullChecks grenzt TypeScript
+  // unterschiedene Vereinigungstypen nicht ein, und der Testlauf scheiterte
+  // an Code, den der echte Build anstandslos übersetzt.
+  '--moduleResolution', 'node', '--skipLibCheck', '--strict'])
 
 // Zeitzone bewusst auf UTC: So läuft der Test wie auf Vercel und nicht wie auf
 // dem Rechner des Entwicklers – genau dieser Unterschied verbarg die Fehler.

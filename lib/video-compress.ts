@@ -23,6 +23,9 @@ const MIN_BITRATE = 600_000
 const MAX_BITRATE = 5_000_000
 const TON_BITRATE = 96_000
 
+/** So lange wird auf das erste Bild gewartet, bevor der Versuch als tot gilt. */
+const ANLAUF_MS = 8_000
+
 /**
  * Reihenfolge nach Verträglichkeit: MP4 spielt überall, WebM nicht auf jedem
  * iPhone. Safari liefert MP4, Chrome meist WebM – genommen wird das erste,
@@ -37,9 +40,16 @@ const FORMATE = [
   'video/webm',
 ]
 
+export type Komprimiergrund =
+  | 'nicht_unterstuetzt'
+  | 'zu_lang'
+  | 'keine_wiedergabe'
+  | 'fehlgeschlagen'
+  | 'kein_gewinn'
+
 export type Komprimierergebnis =
-  | { ok: true; file: File }
-  | { ok: false; grund: 'nicht_unterstuetzt' | 'zu_lang' | 'fehlgeschlagen' | 'kein_gewinn' }
+  | { ok: true; file: File; mitTon: boolean }
+  | { ok: false; grund: Komprimiergrund }
 
 function waehleFormat(): string | null {
   if (typeof MediaRecorder === 'undefined') return null
@@ -66,41 +76,93 @@ export function zielBitrate(zielBytes: number, dauerSekunden: number): number | 
   return Math.min(MAX_BITRATE, Math.floor(gesamt))
 }
 
-export async function komprimiereVideo(
-  file: File,
-  zielBytes: number,
-  onFortschritt?: (anteil: number) => void,
-): Promise<Komprimierergebnis> {
-  const format = waehleFormat()
-  if (!format || !kannKomprimieren()) return { ok: false, grund: 'nicht_unterstuetzt' }
-
-  const url = URL.createObjectURL(file)
+/**
+ * Erzeugt das Video-Element für einen Versuch.
+ *
+ * Der Knackpunkt steht in der letzten Zeile: Das Element muss im Dokument
+ * hängen. Safari spielt ein Video, das nur im Speicher existiert, schlicht
+ * nicht ab – die Wiedergabe bleibt bei 0:00 stehen, ohne Fehler zu melden.
+ * Chrome ist da großzügiger, weshalb sich der Unterschied leicht übersehen
+ * lässt. Versteckt wird es über die Größe, nicht über display:none: ein
+ * ausgeblendetes Video spielt Safari ebenfalls nicht ab.
+ */
+function baueVideoElement(url: string, stumm: boolean): HTMLVideoElement {
   const video = document.createElement('video')
   video.src = url
   video.preload = 'auto'
+  video.muted = stumm
   video.playsInline = true
+  // Als Attribut zusätzlich zur Eigenschaft – ältere WebKit-Fassungen lesen nur das
+  video.setAttribute('playsinline', '')
+  video.setAttribute('webkit-playsinline', '')
+  if (stumm) video.setAttribute('muted', '')
+  video.style.cssText =
+    'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1'
+  document.body.appendChild(video)
+  return video
+}
+
+/** Wartet auf ein Ereignis am Element, gibt nach ms auf. */
+function warteAuf(el: HTMLVideoElement, ereignis: string, ms: number): Promise<boolean> {
+  return new Promise(fertig => {
+    let erledigt = false
+    const ende = (wert: boolean) => {
+      if (erledigt) return
+      erledigt = true
+      clearTimeout(uhr)
+      el.removeEventListener(ereignis, ok)
+      el.removeEventListener('error', fehler)
+      fertig(wert)
+    }
+    const ok = () => ende(true)
+    const fehler = () => ende(false)
+    const uhr = setTimeout(() => ende(false), ms)
+    el.addEventListener(ereignis, ok, { once: true })
+    el.addEventListener('error', fehler, { once: true })
+  })
+}
+
+/**
+ * Ein Durchlauf. Steckt in einer eigenen Funktion, weil der Ton-Versuch
+ * scheitern kann und dann ein zweiter Anlauf ohne Ton nötig ist – und weil
+ * createMediaElementSource pro Element nur einmal aufgerufen werden darf,
+ * muss dafür alles neu aufgebaut werden.
+ */
+async function versuch(
+  file: File,
+  zielBytes: number,
+  mitTonVersuchen: boolean,
+  onFortschritt?: (anteil: number) => void,
+): Promise<Komprimierergebnis> {
+  const format = waehleFormat()
+  if (!format) return { ok: false, grund: 'nicht_unterstuetzt' }
+
+  const url = URL.createObjectURL(file)
+  // Ohne Ton wird stumm abgespielt: Das erlaubt jeder Browser ohne Rückfrage.
+  // Mit Ton darf nicht stummgeschaltet werden, sonst käme nur Stille an.
+  const video = baueVideoElement(url, !mitTonVersuchen)
 
   let audioCtx: AudioContext | null = null
   let recorder: MediaRecorder | null = null
-  let laufendeAnimation = 0
+  let animation = 0
 
   const aufraeumen = () => {
-    cancelAnimationFrame(laufendeAnimation)
+    cancelAnimationFrame(animation)
+    try { if (recorder && recorder.state !== 'inactive') recorder.stop() } catch { /* egal */ }
     try { recorder?.stream.getTracks().forEach(t => t.stop()) } catch { /* egal */ }
     try { audioCtx?.close() } catch { /* egal */ }
-    video.pause()
+    try { video.pause() } catch { /* egal */ }
     video.removeAttribute('src')
-    video.load()
+    try { video.load() } catch { /* egal */ }
+    video.remove()
     URL.revokeObjectURL(url)
   }
 
   try {
-    const bereit = await new Promise<boolean>(fertig => {
-      const uhr = setTimeout(() => fertig(false), 20_000)
-      video.addEventListener('loadedmetadata', () => { clearTimeout(uhr); fertig(true) }, { once: true })
-      video.addEventListener('error', () => { clearTimeout(uhr); fertig(false) }, { once: true })
-    })
-    if (!bereit) { aufraeumen(); return { ok: false, grund: 'fehlgeschlagen' } }
+    if (!(await warteAuf(video, 'loadedmetadata', 20_000))) {
+      aufraeumen()
+      return { ok: false, grund: 'fehlgeschlagen' }
+    }
 
     const dauer = video.duration
     const bitrate = zielBitrate(zielBytes, dauer)
@@ -114,7 +176,10 @@ export async function komprimiereVideo(
     canvas.width = Math.round((video.videoWidth * faktor) / 2) * 2
     canvas.height = Math.round((video.videoHeight * faktor) / 2) * 2
     const ctx = canvas.getContext('2d')
-    if (!ctx || !canvas.width || !canvas.height) { aufraeumen(); return { ok: false, grund: 'fehlgeschlagen' } }
+    if (!ctx || !canvas.width || !canvas.height) {
+      aufraeumen()
+      return { ok: false, grund: 'fehlgeschlagen' }
+    }
 
     const stream = (canvas as HTMLCanvasElement & { captureStream: (fps?: number) => MediaStream })
       .captureStream(30)
@@ -124,18 +189,21 @@ export async function komprimiereVideo(
     // mit dem Aufnahme-Ziel, nicht mit den Lautsprechern – sonst würde beim
     // Verkleinern das halbe Video laut abgespielt.
     let mitTon = false
-    try {
-      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-      audioCtx = new Ctx()
-      if (audioCtx.state === 'suspended') await audioCtx.resume()
-      const quelle = audioCtx.createMediaElementSource(video)
-      const ziel = audioCtx.createMediaStreamDestination()
-      quelle.connect(ziel)
-      for (const spur of ziel.stream.getAudioTracks()) stream.addTrack(spur)
-      mitTon = ziel.stream.getAudioTracks().length > 0
-    } catch {
-      // Ohne Ton weiterzumachen ist besser als gar nicht zu verkleinern
-      mitTon = false
+    if (mitTonVersuchen) {
+      try {
+        const Ctx =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+        audioCtx = new Ctx()
+        if (audioCtx.state === 'suspended') await audioCtx.resume()
+        const quelle = audioCtx.createMediaElementSource(video)
+        const ziel = audioCtx.createMediaStreamDestination()
+        quelle.connect(ziel)
+        for (const spur of ziel.stream.getAudioTracks()) stream.addTrack(spur)
+        mitTon = ziel.stream.getAudioTracks().length > 0
+      } catch {
+        mitTon = false
+      }
     }
 
     const teile: Blob[] = []
@@ -145,28 +213,36 @@ export async function komprimiereVideo(
       ...(mitTon ? { audioBitsPerSecond: TON_BITRATE } : {}),
     })
     recorder.ondataavailable = e => { if (e.data.size > 0) teile.push(e.data) }
-
-    const fertigGestellt = new Promise<void>(fertig => {
+    const aufnahmeBeendet = new Promise<void>(fertig => {
       recorder!.addEventListener('stop', () => fertig(), { once: true })
     })
-
     recorder.start(1000)
 
-    try {
-      await video.play()
-    } catch {
-      // Ohne Abspielerlaubnis kommt kein einziges Bild zustande
-      aufraeumen()
-      return { ok: false, grund: 'fehlgeschlagen' }
-    }
+    // play() kann auf manchen Geräten weder erfüllt noch abgelehnt werden.
+    // Deshalb nicht darauf warten, sondern gleich prüfen, ob sich etwas tut.
+    video.play().catch(() => { /* wird unten über den Fortschritt erkannt */ })
 
     const zeichne = () => {
-      if (video.ended || video.paused) return
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-      if (dauer > 0) onFortschritt?.(Math.min(1, video.currentTime / dauer))
-      laufendeAnimation = requestAnimationFrame(zeichne)
+      if (!video.paused && !video.ended) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        if (dauer > 0) onFortschritt?.(Math.min(1, video.currentTime / dauer))
+      }
+      animation = requestAnimationFrame(zeichne)
     }
-    laufendeAnimation = requestAnimationFrame(zeichne)
+    animation = requestAnimationFrame(zeichne)
+
+    // Läuft es überhaupt an? Ohne diese Prüfung stünde die Anzeige beliebig
+    // lange bei 0 %, und genau so hat es sich auf dem iPhone verhalten.
+    const laeuft = await new Promise<boolean>(fertig => {
+      const start = Date.now()
+      const pruefe = () => {
+        if (video.currentTime > 0) return fertig(true)
+        if (Date.now() - start > ANLAUF_MS) return fertig(false)
+        setTimeout(pruefe, 250)
+      }
+      pruefe()
+    })
+    if (!laeuft) { aufraeumen(); return { ok: false, grund: 'keine_wiedergabe' } }
 
     await new Promise<void>(fertig => {
       video.addEventListener('ended', () => fertig(), { once: true })
@@ -175,9 +251,9 @@ export async function komprimiereVideo(
       setTimeout(() => fertig(), (dauer + 30) * 1000)
     })
 
-    cancelAnimationFrame(laufendeAnimation)
+    cancelAnimationFrame(animation)
     if (recorder.state !== 'inactive') recorder.stop()
-    await fertigGestellt
+    await aufnahmeBeendet
 
     const blob = new Blob(teile, { type: format.split(';')[0] })
     aufraeumen()
@@ -190,9 +266,30 @@ export async function komprimiereVideo(
     const endung = format.startsWith('video/mp4') ? 'mp4' : 'webm'
     const basis = file.name.replace(/\.[^.]+$/, '') || 'video'
     onFortschritt?.(1)
-    return { ok: true, file: new File([blob], `${basis}.${endung}`, { type: blob.type }) }
+    return { ok: true, file: new File([blob], `${basis}.${endung}`, { type: blob.type }), mitTon }
   } catch {
     aufraeumen()
     return { ok: false, grund: 'fehlgeschlagen' }
   }
+}
+
+export async function komprimiereVideo(
+  file: File,
+  zielBytes: number,
+  onFortschritt?: (anteil: number) => void,
+): Promise<Komprimierergebnis> {
+  if (!kannKomprimieren()) return { ok: false, grund: 'nicht_unterstuetzt' }
+
+  const mitTon = await versuch(file, zielBytes, true, onFortschritt)
+  if (mitTon.ok) return mitTon
+
+  // Der Ton ist der empfindlichste Teil: Die Audio-Verarbeitung kann die
+  // Wiedergabe blockieren, und stumm abspielen erlaubt jeder Browser ohne
+  // Rückfrage. Lieber ein Video ohne Ton als gar keines.
+  if (mitTon.grund === 'keine_wiedergabe') {
+    onFortschritt?.(0)
+    return versuch(file, zielBytes, false, onFortschritt)
+  }
+
+  return mitTon
 }
