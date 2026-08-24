@@ -9,7 +9,7 @@ import { pickActiveCat } from '@/lib/active-cat-client'
 import { formatBerlin } from '@/lib/time'
 import { readGpsFromFile } from '@/lib/exif'
 import { aktuellerOrt, istFrisch } from '@/lib/geolocation'
-import { kannKomprimieren, komprimiereVideo } from '@/lib/video-compress'
+import { kannKomprimieren, komprimiereVideo, type Fortschritt } from '@/lib/video-compress'
 import { captureVideoPoster, formatDuration, hasStill, isVideoFile, stillUrl, MAX_VIDEO_BYTES, ZIEL_BYTES } from '@/lib/media'
 import PhotoViewer from '@/components/PhotoViewer'
 import type { Cat } from '@/lib/types'
@@ -55,8 +55,10 @@ export default function FotosPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  // null = wird gerade nicht verkleinert, sonst der Anteil von 0 bis 1
-  const [komprimierung, setKomprimierung] = useState<number | null>(null)
+  // null = wird gerade nicht verkleinert
+  const [komprimierung, setKomprimierung] = useState<Fortschritt | null>(null)
+  // Das Video muss zum Verkleinern sichtbar laufen – WebKit pausiert sonst
+  const videoSlot = useRef<HTMLDivElement>(null)
   // Index statt Objekt: Der Betrachter blättert durch die gefilterte Liste,
   // dafür muss er wissen, an welcher Stelle er steht.
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
@@ -199,8 +201,15 @@ export default function FotosPage() {
         return
       }
 
-      setKomprimierung(0)
-      const ergebnis = await komprimiereVideo(file, ZIEL_BYTES, setKomprimierung)
+      // Erst die Karte einblenden, dann zwei Bilder warten – vorher gibt es
+      // den Platz für das Video noch nicht, in den es gehängt werden muss.
+      setKomprimierung({ schritt: 'Vorbereiten', anteil: null })
+      await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+
+      const ergebnis = await komprimiereVideo(file, ZIEL_BYTES, {
+        halter: videoSlot.current,
+        onFortschritt: setKomprimierung,
+      })
       setKomprimierung(null)
 
       if (ergebnis.ok) {
@@ -215,9 +224,9 @@ export default function FotosPage() {
               : ergebnis.grund === 'keine_wiedergabe'
                 ? 'Das Video ließ sich zum Verkleinern nicht abspielen. Bei aktivem Stromsparmodus ' +
                   'blockiert das iPhone die Wiedergabe – ausschalten und nochmal versuchen. ' +
-                  'Sonst hilft Kürzen in der Fotos-App.'
+                  `Sonst hilft Kürzen in der Fotos-App. (Schritt: ${ergebnis.schritt})`
                 : 'Das Verkleinern hat nicht geklappt. Bitte das Video in der Fotos-App kürzen ' +
-                  'und nochmal versuchen.'
+                  `und nochmal versuchen. (Schritt: ${ergebnis.schritt})`
         )
         setUploading(false)
         if (e.target) e.target.value = ''
@@ -379,21 +388,39 @@ export default function FotosPage() {
             hinge die App. Der Hinweis auf die Dauer nimmt die Ungeduld raus. */}
         {komprimierung !== null && (
           <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-amber-800 font-medium">
-                Video wird verkleinert… {Math.round(komprimierung * 100)} %
-              </p>
-              <span className="text-xs text-amber-600 flex-shrink-0">Bitte offen lassen</span>
-            </div>
-            <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(180,83,9,0.15)' }}>
+            <div className="flex gap-3">
+              {/* Hier läuft das Video durch. Es muss wirklich zu sehen sein:
+                  WebKit pausiert stumme Videos, die es für unsichtbar hält. */}
               <div
-                className="h-full rounded-full"
-                style={{ width: `${Math.round(komprimierung * 100)}%`, background: 'var(--am-500, #f59e0b)', transition: 'width 0.3s' }}
+                ref={videoSlot}
+                className="rounded-lg overflow-hidden flex-shrink-0"
+                style={{ width: 64, height: 64, background: 'rgba(180,83,9,0.12)' }}
               />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm text-amber-800 font-medium truncate">
+                    {komprimierung.anteil === null
+                      ? `${komprimierung.schritt}…`
+                      : `Wird verkleinert… ${Math.round(komprimierung.anteil * 100)} %`}
+                  </p>
+                  <span className="text-xs text-amber-600 flex-shrink-0">Offen lassen</span>
+                </div>
+                <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(180,83,9,0.15)' }}>
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: komprimierung.anteil === null ? '8%' : `${Math.round(komprimierung.anteil * 100)}%`,
+                      background: 'var(--am-500, #f59e0b)',
+                      transition: 'width 0.3s',
+                      opacity: komprimierung.anteil === null ? 0.5 : 1,
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-amber-700 mt-2">
+                  Dauert ungefähr so lange, wie das Video läuft.
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-amber-700 mt-2">
-              Dauert ungefähr so lange, wie das Video läuft.
-            </p>
           </div>
         )}
 

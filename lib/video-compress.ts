@@ -23,8 +23,14 @@ const MIN_BITRATE = 600_000
 const MAX_BITRATE = 5_000_000
 const TON_BITRATE = 96_000
 
-/** So lange wird auf das erste Bild gewartet, bevor der Versuch als tot gilt. */
-const ANLAUF_MS = 8_000
+/**
+ * So lange wird auf das erste Bild gewartet, bevor der Versuch als tot gilt.
+ *
+ * Großzügig bemessen: Ein 200-MB-Video muss erst so weit gepuffert sein, dass
+ * die Wiedergabe anlaufen kann, und das dauert auf dem Handy spürbar. Acht
+ * Sekunden waren zu knapp.
+ */
+const ANLAUF_MS = 30_000
 
 /**
  * Reihenfolge nach Verträglichkeit: MP4 spielt überall, WebM nicht auf jedem
@@ -49,7 +55,20 @@ export type Komprimiergrund =
 
 export type Komprimierergebnis =
   | { ok: true; file: File; mitTon: boolean }
-  | { ok: false; grund: Komprimiergrund }
+  | { ok: false; grund: Komprimiergrund; schritt: string }
+
+/**
+ * Rückmeldung an die Oberfläche. Der Schritt steht dabei, weil "bleibt bei
+ * 0 % stehen" nichts darüber verrät, woran es liegt – laden, abspielen und
+ * aufnehmen scheitern unterschiedlich und brauchen unterschiedliche Abhilfe.
+ */
+export type Fortschritt = { schritt: string; anteil: number | null }
+
+export type Optionen = {
+  /** Wohin das Video zum Durchlaufen gehängt wird. Muss sichtbar sein. */
+  halter?: HTMLElement | null
+  onFortschritt?: (f: Fortschritt) => void
+}
 
 function waehleFormat(): string | null {
   if (typeof MediaRecorder === 'undefined') return null
@@ -79,14 +98,20 @@ export function zielBitrate(zielBytes: number, dauerSekunden: number): number | 
 /**
  * Erzeugt das Video-Element für einen Versuch.
  *
- * Der Knackpunkt steht in der letzten Zeile: Das Element muss im Dokument
- * hängen. Safari spielt ein Video, das nur im Speicher existiert, schlicht
- * nicht ab – die Wiedergabe bleibt bei 0:00 stehen, ohne Fehler zu melden.
- * Chrome ist da großzügiger, weshalb sich der Unterschied leicht übersehen
- * lässt. Versteckt wird es über die Größe, nicht über display:none: ein
- * ausgeblendetes Video spielt Safari ebenfalls nicht ab.
+ * Zwei Bedingungen, an denen es auf dem iPhone nacheinander gescheitert ist:
+ *
+ * Erstens muss das Element im Dokument hängen. Ein Video, das nur im Speicher
+ * existiert, spielt Safari nicht ab – ohne Fehlermeldung, die Wiedergabe
+ * bleibt einfach bei 0:00.
+ *
+ * Zweitens muss es sichtbar sein. WebKit pausiert stumme Videos, die außerhalb
+ * des Sichtbereichs liegen oder praktisch durchsichtig sind – eine Regel gegen
+ * versteckt laufende Werbung. Ein 2×2-Pixel-Element mit 1 % Deckkraft fällt
+ * genau darunter. Deshalb wird es echt angezeigt, klein und in der
+ * Fortschrittskarte: Man sieht das Video durchlaufen, während es verkleinert
+ * wird, und WebKit ist zufrieden.
  */
-function baueVideoElement(url: string, stumm: boolean): HTMLVideoElement {
+function baueVideoElement(url: string, stumm: boolean, halter: HTMLElement | null): HTMLVideoElement {
   const video = document.createElement('video')
   video.src = url
   video.preload = 'auto'
@@ -96,9 +121,17 @@ function baueVideoElement(url: string, stumm: boolean): HTMLVideoElement {
   video.setAttribute('playsinline', '')
   video.setAttribute('webkit-playsinline', '')
   if (stumm) video.setAttribute('muted', '')
-  video.style.cssText =
-    'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1'
-  document.body.appendChild(video)
+
+  if (halter) {
+    video.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block'
+    halter.replaceChildren(video)
+  } else {
+    // Notlösung ohne Platz in der Oberfläche: wenigstens im sichtbaren Bereich
+    // und groß genug, dass WebKit es als sichtbar zählt.
+    video.style.cssText =
+      'position:fixed;right:4px;bottom:4px;width:64px;height:64px;object-fit:cover;z-index:60'
+    document.body.appendChild(video)
+  }
   return video
 }
 
@@ -132,15 +165,18 @@ async function versuch(
   file: File,
   zielBytes: number,
   mitTonVersuchen: boolean,
-  onFortschritt?: (anteil: number) => void,
+  opt: Optionen,
 ): Promise<Komprimierergebnis> {
+  const melde = (schritt: string, anteil: number | null) => opt.onFortschritt?.({ schritt, anteil })
+
   const format = waehleFormat()
-  if (!format) return { ok: false, grund: 'nicht_unterstuetzt' }
+  if (!format) return { ok: false, grund: 'nicht_unterstuetzt', schritt: 'Format prüfen' }
 
   const url = URL.createObjectURL(file)
   // Ohne Ton wird stumm abgespielt: Das erlaubt jeder Browser ohne Rückfrage.
   // Mit Ton darf nicht stummgeschaltet werden, sonst käme nur Stille an.
-  const video = baueVideoElement(url, !mitTonVersuchen)
+  const video = baueVideoElement(url, !mitTonVersuchen, opt.halter ?? null)
+  melde('Video wird geladen', null)
 
   let audioCtx: AudioContext | null = null
   let recorder: MediaRecorder | null = null
@@ -159,16 +195,19 @@ async function versuch(
   }
 
   try {
-    if (!(await warteAuf(video, 'loadedmetadata', 20_000))) {
+    if (!(await warteAuf(video, 'loadedmetadata', 25_000))) {
       aufraeumen()
-      return { ok: false, grund: 'fehlgeschlagen' }
+      return { ok: false, grund: 'fehlgeschlagen', schritt: 'Video laden' }
     }
 
     const dauer = video.duration
     const bitrate = zielBitrate(zielBytes, dauer)
     // Zu lang: Selbst bei gerade noch ansehbarer Qualität passt es nicht.
     // Das ehrlich zu sagen ist besser, als einen Klumpen Pixel abzuliefern.
-    if (bitrate === null) { aufraeumen(); return { ok: false, grund: 'zu_lang' } }
+    if (bitrate === null) {
+      aufraeumen()
+      return { ok: false, grund: 'zu_lang', schritt: 'Datenrate berechnen' }
+    }
 
     const faktor = Math.min(1, MAX_KANTE / Math.max(video.videoWidth, video.videoHeight))
     const canvas = document.createElement('canvas')
@@ -178,7 +217,7 @@ async function versuch(
     const ctx = canvas.getContext('2d')
     if (!ctx || !canvas.width || !canvas.height) {
       aufraeumen()
-      return { ok: false, grund: 'fehlgeschlagen' }
+      return { ok: false, grund: 'fehlgeschlagen', schritt: 'Leinwand anlegen' }
     }
 
     const stream = (canvas as HTMLCanvasElement & { captureStream: (fps?: number) => MediaStream })
@@ -217,6 +256,7 @@ async function versuch(
       recorder!.addEventListener('stop', () => fertig(), { once: true })
     })
     recorder.start(1000)
+    melde(mitTon ? 'Wiedergabe startet' : 'Wiedergabe startet (ohne Ton)', null)
 
     // play() kann auf manchen Geräten weder erfüllt noch abgelehnt werden.
     // Deshalb nicht darauf warten, sondern gleich prüfen, ob sich etwas tut.
@@ -225,7 +265,7 @@ async function versuch(
     const zeichne = () => {
       if (!video.paused && !video.ended) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-        if (dauer > 0) onFortschritt?.(Math.min(1, video.currentTime / dauer))
+        if (dauer > 0) melde('Verkleinern', Math.min(1, video.currentTime / dauer))
       }
       animation = requestAnimationFrame(zeichne)
     }
@@ -242,7 +282,14 @@ async function versuch(
       }
       pruefe()
     })
-    if (!laeuft) { aufraeumen(); return { ok: false, grund: 'keine_wiedergabe' } }
+    if (!laeuft) {
+      aufraeumen()
+      return {
+        ok: false,
+        grund: 'keine_wiedergabe',
+        schritt: mitTon ? 'Abspielen mit Ton' : 'Abspielen stumm',
+      }
+    }
 
     await new Promise<void>(fertig => {
       video.addEventListener('ended', () => fertig(), { once: true })
@@ -258,37 +305,42 @@ async function versuch(
     const blob = new Blob(teile, { type: format.split(';')[0] })
     aufraeumen()
 
-    if (blob.size === 0) return { ok: false, grund: 'fehlgeschlagen' }
+    if (blob.size === 0) return { ok: false, grund: 'fehlgeschlagen', schritt: 'Aufnahme auswerten' }
     // Nichts gewonnen? Dann lieber das Original behalten – das hat wenigstens
     // die volle Qualität.
-    if (blob.size >= file.size) return { ok: false, grund: 'kein_gewinn' }
+    if (blob.size >= file.size) return { ok: false, grund: 'kein_gewinn', schritt: 'Ergebnis pruefen' }
 
     const endung = format.startsWith('video/mp4') ? 'mp4' : 'webm'
     const basis = file.name.replace(/\.[^.]+$/, '') || 'video'
-    onFortschritt?.(1)
+    melde('Fertig', 1)
     return { ok: true, file: new File([blob], `${basis}.${endung}`, { type: blob.type }), mitTon }
-  } catch {
+  } catch (e) {
     aufraeumen()
-    return { ok: false, grund: 'fehlgeschlagen' }
+    return {
+      ok: false,
+      grund: 'fehlgeschlagen',
+      schritt: e instanceof Error ? `Ausnahme: ${e.name}` : 'unerwarteter Fehler',
+    }
   }
 }
 
 export async function komprimiereVideo(
   file: File,
   zielBytes: number,
-  onFortschritt?: (anteil: number) => void,
+  opt: Optionen = {},
 ): Promise<Komprimierergebnis> {
-  if (!kannKomprimieren()) return { ok: false, grund: 'nicht_unterstuetzt' }
+  if (!kannKomprimieren()) {
+    return { ok: false, grund: 'nicht_unterstuetzt', schritt: 'Fähigkeiten prüfen' }
+  }
 
-  const mitTon = await versuch(file, zielBytes, true, onFortschritt)
+  const mitTon = await versuch(file, zielBytes, true, opt)
   if (mitTon.ok) return mitTon
 
   // Der Ton ist der empfindlichste Teil: Die Audio-Verarbeitung kann die
   // Wiedergabe blockieren, und stumm abspielen erlaubt jeder Browser ohne
   // Rückfrage. Lieber ein Video ohne Ton als gar keines.
   if (mitTon.grund === 'keine_wiedergabe') {
-    onFortschritt?.(0)
-    return versuch(file, zielBytes, false, onFortschritt)
+    return versuch(file, zielBytes, false, opt)
   }
 
   return mitTon
