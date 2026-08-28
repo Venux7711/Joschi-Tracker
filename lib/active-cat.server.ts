@@ -9,6 +9,20 @@ export async function getCats(supabase: ReturnType<typeof createClient>): Promis
   return (data ?? []) as Cat[]
 }
 
+/**
+ * Wie getCats, unterscheidet aber "keine Katzen da" von "Abfrage misslungen".
+ *
+ * Der Unterschied ist folgenschwer: Das Dashboard legt Joschi an, wenn es
+ * keine Katze findet. Eine fehlgeschlagene Abfrage sah bisher genauso aus wie
+ * eine leere Tabelle – und erzeugte einen zweiten Joschi.
+ */
+export async function getCatsStrikt(
+  supabase: ReturnType<typeof createClient>,
+): Promise<{ cats: Cat[]; fehler: boolean }> {
+  const { data, error } = await supabase.from('cats').select('*').order('created_at', { ascending: true })
+  return { cats: (data ?? []) as Cat[], fehler: !!error }
+}
+
 // Liest die vom Nutzer gewählte Katze aus dem Cookie (vom CatSwitcher gesetzt).
 // Fällt auf die zuerst angelegte Katze zurück, falls kein/ein ungültiges Cookie vorliegt.
 export async function getActiveCat(supabase: ReturnType<typeof createClient>): Promise<Cat | undefined> {

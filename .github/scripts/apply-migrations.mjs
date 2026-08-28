@@ -69,7 +69,15 @@ async function main() {
   for (const file of pending) {
     const sql = readFileSync(join(MIG_DIR, file), 'utf8')
     console.log(`→ wende an: ${file}`)
-    await query(sql)
+    const ergebnis = await query(sql)
+    // Gibt die Migration Zeilen zurück – etwa aus einem abschließenden SELECT –
+    // hier ausgeben. Ohne das ließe sich nicht nachsehen, was eine Bereinigung
+    // vorgefunden und was sie hinterlassen hat.
+    if (Array.isArray(ergebnis) && ergebnis.length > 0) {
+      console.log(`  Ergebnis (${ergebnis.length} Zeilen):`)
+      for (const zeile of ergebnis.slice(0, 50)) console.log(`    ${JSON.stringify(zeile)}`)
+      if (ergebnis.length > 50) console.log(`    … ${ergebnis.length - 50} weitere`)
+    }
     // Dollar-Quoting, damit der Dateiname keine Quote-Probleme macht
     await query(
       `INSERT INTO public._applied_migrations (name) VALUES ($tag$${file}$tag$)

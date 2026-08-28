@@ -37,7 +37,7 @@ import { hasStill, stillUrl } from '@/lib/media'
 import WeightWidget from '@/components/WeightWidget'
 import MedicationsWidget from '@/components/MedicationsWidget'
 import { ANIFIT_FOODS, getFoodInfo, getProteinLabel, getProteinBadgeColor } from '@/lib/food-data'
-import { getActiveCat, getCats } from '@/lib/active-cat.server'
+import { getActiveCat, getCats, getCatsStrikt } from '@/lib/active-cat.server'
 import { getCatTheme } from '@/lib/cat-theme'
 
 function dayLabel(date: Date): string {
@@ -77,9 +77,18 @@ export default async function DashboardPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Aktive Katze (per Umschalter gewählt) holen, oder Joschi als allererste Katze anlegen
+  // Aktive Katze (per Umschalter gewählt) holen, oder Joschi als allererste
+  // Katze anlegen.
+  //
+  // Die Prüfung auf einen Abfragefehler ist der entscheidende Teil: Vorher
+  // sah eine misslungene Abfrage aus wie eine leere Tabelle, und das Dashboard
+  // legte prompt einen zweiten Joschi an. Genauso, wenn ein weiterer Nutzer
+  // sich anmeldet – die Katzen-Tabelle ist bis heute auf den Besitzer
+  // beschränkt, während Vorrat und Fotos längst dem ganzen Haushalt gehören.
+  const { cats: vorhandene, fehler: katzenFehler } = await getCatsStrikt(supabase)
   let cat: Cat | undefined = await getActiveCat(supabase)
-  if (!cat) {
+
+  if (!cat && !katzenFehler && vorhandene.length === 0) {
     const { data: newCat } = await supabase.from('cats').insert({
       name: 'Joschi', owner_id: user.id, theme: 'amber', photo_url: '/joschi.jpg',
       breed: 'Britisch Langhaar', coat: 'golden', condition: 'Rezidivierender Durchfall',
@@ -88,9 +97,14 @@ export default async function DashboardPage({
     }).select().single()
     cat = newCat as Cat | undefined
   }
+
   if (!cat) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <p className="text-gray-500">Fehler beim Laden. Seite neu laden.</p>
+    <div className="min-h-screen flex items-center justify-center px-6 text-center">
+      <p className="text-gray-500">
+        {katzenFehler
+          ? 'Die Katzen konnten nicht geladen werden. Bitte die Seite neu laden.'
+          : 'Fehler beim Laden. Seite neu laden.'}
+      </p>
     </div>
   )
   const theme = getCatTheme(cat.theme)
