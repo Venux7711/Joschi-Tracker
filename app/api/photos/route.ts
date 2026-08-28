@@ -117,6 +117,19 @@ export async function POST(req: NextRequest) {
   // Video oder Foto? Der Rest der Zeile ist identisch – beides liegt in
   // derselben Tabelle, damit Markierung, Reaktionen und Kommentare gelten.
   const isVideo = body.media_type === 'video'
+
+  /**
+   * Ab welcher Größe lohnt sich das Verkleinern im Hintergrund?
+   *
+   * 20 MB. Darunter ist der Gewinn klein und der Aufwand – herunterladen,
+   * umrechnen, wieder hochladen – steht in keinem Verhältnis. Darüber wird
+   * fast immer die Hälfte oder mehr eingespart.
+   */
+  const VERKLEINERN_AB = 20 * 1024 * 1024
+  const bytes =
+    typeof body.bytes === 'number' && Number.isFinite(body.bytes) && body.bytes > 0
+      ? Math.round(body.bytes)
+      : null
   const posterUrl = isVideo && typeof body.poster_url === 'string' ? body.poster_url : null
   const posterPath = isVideo && typeof body.poster_path === 'string' ? body.poster_path : null
   const duration =
@@ -154,6 +167,11 @@ export async function POST(req: NextRequest) {
     poster_url: posterUrl,
     poster_path: posterPath,
     duration_seconds: duration,
+    original_bytes: isVideo ? bytes : null,
+    // In die Warteschlange stellen, wenn es sich lohnt. Auch ein Video ohne
+    // Standbild kommt hinein – der Hintergrundlauf holt beides nach.
+    compress_state:
+      isVideo && (!posterUrl || (bytes !== null && bytes > VERKLEINERN_AB)) ? 'wartet' : null,
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

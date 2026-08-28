@@ -38,6 +38,8 @@ interface Photo {
   /** Standbild aus dem Video, für Kachel und alle Stellen die nur Bilder zeigen. */
   poster_url: string | null
   duration_seconds: number | null
+  /** 'wartet'/'laeuft' solange der Hintergrundlauf das Video noch verkleinert. */
+  compress_state: string | null
 }
 
 const MOOD_LABELS: Record<string, { label: string; color: string }> = {
@@ -324,6 +326,9 @@ export default function FotosPage() {
         poster_url: posterUrl,
         poster_path: posterPath,
         duration_seconds: standbild?.duration ?? null,
+        // Größe mitgeben: Danach entscheidet der Server, ob das Video im
+        // Hintergrund verkleinert wird.
+        bytes: datei.size,
       }),
     })
 
@@ -606,6 +611,14 @@ export default function FotosPage() {
                       )}
                       {photo.media_type === 'video' && (
                         <>
+                          {/* Noch in Arbeit: Das Video ist schon da und
+                              abspielbar, wird aber gleich durch eine kleinere
+                              Fassung ersetzt. */}
+                          {(photo.compress_state === 'wartet' || photo.compress_state === 'laeuft') && (
+                            <div className="absolute top-1 right-1 text-[10px] px-1.5 py-0.5 rounded-full bg-black/60 text-white">
+                              ⏳
+                            </div>
+                          )}
                           {/* Abspiel-Zeichen mittig: Ohne das ist eine
                               Video-Kachel von einem Foto nicht zu unterscheiden */}
                           <div

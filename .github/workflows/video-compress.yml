@@ -1,0 +1,42 @@
+name: Videos verkleinern
+
+# Alle zehn Minuten nachsehen, ob ein Video wartet.
+#
+# GitHub führt geplante Läufe nicht auf die Minute genau aus, sondern mit ein
+# paar Minuten Verzug – das reicht hier völlig. Wer nicht warten will, startet
+# den Lauf über "Run workflow" von Hand.
+#
+# Der Runner bringt ffmpeg mit, hat sechs Stunden Zeit und nichts anderes zu
+# tun. Genau das fehlt einem iPhone, an dem vier Anläufe gescheitert sind.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+# Zwei Läufe gleichzeitig würden sich dieselben Videos greifen.
+concurrency:
+  group: video-compress
+  cancel-in-progress: false
+
+jobs:
+  compress:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: ffmpeg prüfen
+        run: ffmpeg -version | head -1
+
+      - run: npm ci
+
+      - name: Wartende Videos verkleinern
+        run: node .github/scripts/compress-videos.mjs
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
