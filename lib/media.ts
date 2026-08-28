@@ -12,15 +12,28 @@ export type MediaLike = {
   duration_seconds?: number | null
 }
 
-/** 100 MB. Darüber weist der Storage-Bucket den Upload ohnehin ab. */
-export const MAX_VIDEO_BYTES = 100 * 1024 * 1024
+/**
+ * Bis hierher wird ein Video unverändert hochgeladen – 400 MB.
+ *
+ * Vorher waren es 100 MB, und alles darüber musste durch das Verkleinern im
+ * Browser. Das ist der aufwendigste Weg mit den meisten Fehlerquellen: Das
+ * Video wird in Echtzeit abgespielt, jedes Bild auf eine Leinwand gezeichnet
+ * und wieder aufgenommen. Auf dem iPhone blieb es dabei hängen, und im Album
+ * landete in der Folge kein einziges Video.
+ *
+ * Ein Handyvideo von einer Minute liegt je nach Auflösung zwischen 60 und
+ * 400 MB. Mit dieser Grenze geht der übliche Fall ohne jede Umrechnung durch.
+ */
+export const MAX_VIDEO_BYTES = 400 * 1024 * 1024
 
 /**
- * Zielgröße beim Verkleinern. Bewusst deutlich unter der Grenze: Die Aufnahme
- * trifft eine vorgegebene Datenrate nur ungefähr, und ein Ergebnis, das knapp
- * darüber landet, wäre nach minutenlangem Rechnen doppelt ärgerlich.
+ * Zielgröße beim Verkleinern – für die seltenen Fälle jenseits der Grenze.
+ *
+ * Deutlich unter MAX_VIDEO_BYTES: Die Aufnahme trifft eine vorgegebene
+ * Datenrate nur ungefähr, und ein Ergebnis, das knapp darüber landet, wäre
+ * nach minutenlangem Rechnen doppelt ärgerlich.
  */
-export const ZIEL_BYTES = 70 * 1024 * 1024
+export const ZIEL_BYTES = 200 * 1024 * 1024
 
 export function isVideo(row: MediaLike | null | undefined): boolean {
   return row?.media_type === 'video'

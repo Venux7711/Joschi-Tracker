@@ -2,7 +2,7 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const { zielBitrate } = require('../.test-build/video-compress')
 
-const ZIEL = 70 * 1024 * 1024 // dieselbe Zielgröße wie in lib/media.ts
+const ZIEL = 200 * 1024 * 1024 // dieselbe Zielgröße wie ZIEL_BYTES in lib/media.ts
 
 /** Wie groß wird das Ergebnis ungefähr bei dieser Datenrate? */
 const groesse = (bitrate, sekunden) => ((bitrate + 96_000) * sekunden) / 8
@@ -32,10 +32,12 @@ test('zu lange Videos werden abgelehnt statt matschig gerechnet', () => {
 })
 
 test('die Grenze zwischen machbar und zu lang ist stetig', () => {
-  // Kein Loch: Es gibt genau einen Übergang, nicht mehrere
+  // Kein Loch: Es gibt genau einen Übergang, nicht mehrere. Der Bereich muss
+  // weit genug reichen, um den Übergang zu enthalten – bei der aktuellen
+  // Zielgröße liegt er bei gut 35 Minuten Laufzeit.
   let vorher = zielBitrate(ZIEL, 1)
   let wechsel = 0
-  for (let s = 2; s <= 2000; s++) {
+  for (let s = 2; s <= 5000; s++) {
     const jetzt = zielBitrate(ZIEL, s)
     if ((vorher === null) !== (jetzt === null)) wechsel++
     vorher = jetzt
