@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
       const { data: kommentar } = await admin.from('photo_comments')
         .select('user_id, text').eq('id', comment_id).maybeSingle()
       if (kommentar && kommentar.user_id !== user.id) {
-        await notifyCommentReaction(user.id, name, emoji, kommentar.text, photo_id)
+        await notifyCommentReaction(user.id, name, emoji, kommentar.text, photo_id, kommentar.user_id)
       }
     } catch (e) {
       console.error('Kommentar-Reaktions-Benachrichtigung fehlgeschlagen:', e)

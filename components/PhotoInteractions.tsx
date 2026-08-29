@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { REACTIONS } from '@/lib/reactions'
+import EmojiPicker from '@/components/EmojiPicker'
 
 type Reaction = { id: string; photo_id: string; user_id: string; emoji: string }
 type Comment = { id: string; photo_id: string; user_id: string; text: string; created_at: string }
@@ -21,6 +22,8 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
   // Welcher Kommentar zeigt gerade seine Emoji-Auswahl? Immer alle
   // einzublenden würde die Kommentarliste zukleistern.
   const [offeneAuswahl, setOffeneAuswahl] = useState<string | null>(null)
+  // Die volle Emoji-Auswahl – 'bild' für das Foto, sonst die Kommentar-Kennung
+  const [pickerFuer, setPickerFuer] = useState<string | null>(null)
   const [names, setNames] = useState<Record<string, string>>({})
   const [me, setMe] = useState<string | null>(null)
   const [text, setText] = useState('')
@@ -44,6 +47,15 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
   }, [photoId])
 
   const nameOf = (id: string) => names[id] ?? 'Jemand'
+
+  // Welche Emojis stehen am Bild? Die Schnellauswahl immer, dazu alles, was
+  // hier schon jemand benutzt hat. Ohne das verschwände ein aus der vollen
+  // Auswahl gewähltes Emoji sofort wieder aus der Knopfreihe.
+  const benutzteEmojis = Array.from(new Set(reactions.map(r => r.emoji)))
+  const bildEmojis = [
+    ...REACTIONS,
+    ...benutzteEmojis.filter(e => !(REACTIONS as readonly string[]).includes(e)),
+  ]
 
   const toggle = async (emoji: string) => {
     if (!me) return
@@ -118,9 +130,11 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
 
   return (
     <div className="mt-3">
-      {/* Reaktionen */}
+      {/* Reaktionen: Schnellauswahl, dazu alles, womit hier schon reagiert
+          wurde – ein gewähltes Emoji soll nicht wieder verschwinden, nur weil
+          es nicht zur festen Auswahl gehört. */}
       <div className="flex gap-1.5 flex-wrap">
-        {REACTIONS.map(emoji => {
+        {bildEmojis.map(emoji => {
           const alle = reactions.filter(r => r.emoji === emoji)
           const meins = !!me && alle.some(r => r.user_id === me)
           return (
@@ -143,13 +157,31 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
             </button>
           )
         })}
+        <button
+          onClick={() => setPickerFuer(pickerFuer === 'bild' ? null : 'bild')}
+          aria-label="Weitere Emojis"
+          title="Weitere Emojis"
+          style={{
+            fontSize: 15, lineHeight: 1, padding: '7px 11px', borderRadius: 999, border: 'none',
+            background: 'rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.75)', fontWeight: 700,
+          }}
+        >
+          +
+        </button>
       </div>
+
+      {pickerFuer === 'bild' && (
+        <EmojiPicker
+          onWaehlen={emoji => { toggle(emoji); setPickerFuer(null) }}
+          onSchliessen={() => setPickerFuer(null)}
+        />
+      )}
 
       {/* Wer hat womit reagiert. Der Tooltip allein reicht nicht: Auf dem
           iPhone gibt es kein Überfahren, dort wäre die Information unsichtbar. */}
       {reactions.length > 0 && (
         <div className="flex gap-x-3 gap-y-1 flex-wrap mt-2">
-          {REACTIONS.filter(e => reactions.some(r => r.emoji === e)).map(emoji => (
+          {benutzteEmojis.map(emoji => (
             <span key={emoji} style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
               {emoji}{' '}
               {reactions
@@ -168,9 +200,8 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
             const meine = commentReactions.filter(r => r.comment_id === c.id)
             // Gleiche Emojis bündeln, damit unter einem Kommentar nicht
             // dreimal dasselbe Herz nebeneinander steht
-            const gebuendelt = REACTIONS
+            const gebuendelt = Array.from(new Set(meine.map(r => r.emoji)))
               .map(e => ({ emoji: e, leute: meine.filter(r => r.emoji === e) }))
-              .filter(g => g.leute.length > 0)
 
             return (
               <div key={c.id}>
@@ -200,20 +231,39 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
 
                 {/* Auswahl nur für den angetippten Kommentar */}
                 {offeneAuswahl === c.id && (
-                  <div className="flex gap-1 flex-wrap mt-1.5">
-                    {REACTIONS.map(emoji => (
+                  <>
+                    <div className="flex gap-1 flex-wrap mt-1.5">
+                      {REACTIONS.map(emoji => (
+                        <button
+                          key={emoji}
+                          onClick={() => toggleKommentar(c.id, emoji)}
+                          style={{
+                            fontSize: 15, lineHeight: 1, padding: '5px 8px', borderRadius: 999,
+                            border: 'none', background: 'rgba(255,255,255,0.14)',
+                          }}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
                       <button
-                        key={emoji}
-                        onClick={() => toggleKommentar(c.id, emoji)}
+                        onClick={() => setPickerFuer(pickerFuer === c.id ? null : c.id)}
+                        aria-label="Weitere Emojis"
                         style={{
-                          fontSize: 15, lineHeight: 1, padding: '5px 8px', borderRadius: 999,
+                          fontSize: 15, lineHeight: 1, padding: '5px 9px', borderRadius: 999,
                           border: 'none', background: 'rgba(255,255,255,0.14)',
+                          color: 'rgba(255,255,255,0.75)', fontWeight: 700,
                         }}
                       >
-                        {emoji}
+                        +
                       </button>
-                    ))}
-                  </div>
+                    </div>
+                    {pickerFuer === c.id && (
+                      <EmojiPicker
+                        onWaehlen={emoji => { toggleKommentar(c.id, emoji); setPickerFuer(null) }}
+                        onSchliessen={() => setPickerFuer(null)}
+                      />
+                    )}
+                  </>
                 )}
 
                 {/* Was schon dransteht – antippen nimmt die eigene zurück */}

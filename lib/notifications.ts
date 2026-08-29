@@ -337,6 +337,12 @@ async function notifyEvent(opts: {
   body: string
   url: string
   cooldownMinutes: number
+  /**
+   * Nur an diese eine Person. Für Meldungen, die persönlich formuliert sind:
+   * "hat auf deinen Kommentar reagiert" an alle zu schicken war schlicht
+   * falsch – für die anderen stimmte der Satz nicht.
+   */
+  onlyUserId?: string
 }): Promise<{ sent: number }> {
   const admin = makeAdmin()
   const now = new Date()
@@ -358,6 +364,7 @@ async function notifyEvent(opts: {
   for (const sub of subs ?? []) {
     if (!(sub.topics ?? []).includes(opts.topic)) continue
     if (opts.actorUserId && sub.user_id === opts.actorUserId) continue
+    if (opts.onlyUserId && sub.user_id !== opts.onlyUserId) continue
 
     const { data: last } = await admin
       .from('notifications_sent')
@@ -440,14 +447,20 @@ export function notifyCommentReaction(
   emoji: string,
   kommentarText: string,
   photoId: string,
+  /** Der Verfasser des Kommentars – nur er bekommt die Meldung. */
+  empfaengerUserId: string,
 ) {
   const kurz = kommentarText.length > 60 ? `${kommentarText.slice(0, 59)}…` : kommentarText
   return notifyEvent({
     topic: 'reaction',
     actorUserId,
+    onlyUserId: empfaengerUserId,
     title: `${emoji} ${actorName}`,
     body: `${actorName} hat auf deinen Kommentar reagiert: „${kurz}"`,
     url: `/fotos?photo=${photoId}`,
-    cooldownMinutes: 3,
+    // Keine Sperrzeit: Die Meldung geht an genau eine Person und bezieht sich
+    // auf genau einen Kommentar. Sie wegen einer anderen Reaktion kurz zuvor
+    // zu verschlucken, wäre der falsche Sparsamkeitsgedanke.
+    cooldownMinutes: 0,
   })
 }
