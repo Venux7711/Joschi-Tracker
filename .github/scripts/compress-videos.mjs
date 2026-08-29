@@ -30,10 +30,14 @@ const PRO_LAUF = 5
 /** Längste Kante. 720p reicht für ein Familienalbum. */
 const MAX_KANTE = 1280
 
+// Noch nicht eingerichtet ist kein Fehler, sondern ein Zustand. Vorher brach
+// der Lauf hier hart ab – und schickte alle zehn Minuten eine Fehlermeldung,
+// obwohl schlicht nichts zu tun war. Echte Fehler weiter unten bleiben laut.
 if (!URL_ || !KEY) {
-  console.error('✗ NEXT_PUBLIC_SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY müssen gesetzt sein.')
-  console.error('  Als Repository-Secrets hinterlegen (Settings → Secrets and variables → Actions).')
-  process.exit(1)
+  console.log('⏸ Übersprungen: NEXT_PUBLIC_SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY fehlen.')
+  console.log('  Als Repository-Secrets hinterlegen (Settings → Secrets and variables → Actions),')
+  console.log('  dann verkleinert dieser Lauf wartende Videos automatisch.')
+  process.exit(0)
 }
 
 const db = createClient(URL_, KEY, { auth: { persistSession: false } })

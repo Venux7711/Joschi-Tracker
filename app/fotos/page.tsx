@@ -92,6 +92,16 @@ export default function FotosPage() {
     init()
   }, [])
 
+  // Steht ein Filter, gehört das in die Zusammenfassung – sonst sieht man
+  // dem eingeklappten Bereich nicht an, warum Fotos fehlen.
+  const filterAktiv = filter !== 'all' || placeFilter !== 'all'
+  const filterBeschriftung = !filterAktiv
+    ? 'Filtern nach Ort und Stimmung'
+    : [
+        placeFilter !== 'all' ? `📍 ${placeFilter}` : null,
+        filter !== 'all' ? MOOD_LABELS[filter]?.label ?? filter : null,
+      ].filter(Boolean).join(' · ')
+
   const catName = (id: string | null) => cats.find(c => c.id === id)?.name ?? null
 
   // Ältere Fotos haben nur die alte Einzelspalte – beide Quellen zusammenführen
@@ -507,63 +517,96 @@ export default function FotosPage() {
           </div>
         )}
 
-        {/* Orte – nur zeigen, wenn es überhaupt welche gibt. Bei nur einem
-            Ort wäre ein Filter sinnlos, die Zeile informiert dann bloß. */}
-        {places.length > 0 && (
-          <div className="mb-3">
-            <div className="flex gap-2 flex-wrap items-center">
-              {places.length > 1 && (
-                <button
-                  onClick={() => setPlaceFilter('all')}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    placeFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200'
-                  }`}
-                >
-                  Alle Orte
-                </button>
-              )}
-              {places.map(pl => (
-                <button
-                  key={pl.name}
-                  onClick={() => setPlaceFilter(placeFilter === pl.name ? 'all' : pl.name)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors text-left ${
-                    placeFilter === pl.name ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
-                  }`}
-                >
-                  📍 {pl.name}
-                  <span className={placeFilter === pl.name ? 'opacity-70' : 'text-gray-400'}>
-                    {' '}· {pl.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {places.map(pl => (
-              placeFilter === pl.name && (
-                <p key={pl.name} className="text-xs text-gray-500 mt-2">
-                  {pl.count} {pl.count === 1 ? 'Foto' : 'Fotos'} ·{' '}
-                  {pl.von === pl.bis
-                    ? formatBerlin(`${pl.von}T12:00:00`, { day: 'numeric', month: 'long', year: 'numeric' })
-                    : `${formatBerlin(`${pl.von}T12:00:00`, { day: 'numeric', month: 'short' })} bis ${formatBerlin(`${pl.bis}T12:00:00`, { day: 'numeric', month: 'short', year: 'numeric' })}`}
-                </p>
-              )
-            ))}
-          </div>
-        )}
-
-        {/* Stimmungs-Filter */}
-        <div className="flex gap-2 mb-5 flex-wrap">
-          {['all', 'good', 'normal', 'bad', 'vet'].map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                filter === f ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-amber-300'
-              }`}
+        {/* Orte und Stimmungen – eingeklappt.
+            Vorher standen bis zu einem Dutzend Knöpfe über dem Raster und
+            schoben die Fotos aus dem Bild. Gefiltert wird selten, angesehen
+            wird immer; deshalb hat das Raster Vorrang. Ist ein Filter aktiv,
+            steht er in der Zeile und die Auswahl öffnet sich von selbst. */}
+        {(places.length > 0 || photos.length > 0) && (
+          <details open={filterAktiv} className="mb-4">
+            <summary
+              style={{
+                listStyle: 'none', cursor: 'pointer', display: 'flex',
+                alignItems: 'center', gap: 6, padding: '4px 2px',
+                fontSize: 13, color: filterAktiv ? 'var(--am-600)' : 'rgba(60,60,67,0.45)',
+                fontWeight: filterAktiv ? 600 : 400,
+              }}
             >
-              {f === 'all' ? 'Alle Stimmungen' : MOOD_LABELS[f]?.label}
-            </button>
-          ))}
-        </div>
+              <span>⚙︎</span>
+              <span>{filterBeschriftung}</span>
+              {filterAktiv && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={e => { e.preventDefault(); setFilter('all'); setPlaceFilter('all') }}
+                  onKeyDown={e => { if (e.key === 'Enter') { setFilter('all'); setPlaceFilter('all') } }}
+                  style={{
+                    marginLeft: 'auto', fontSize: 12, fontWeight: 600,
+                    color: 'rgba(60,60,67,0.45)', textDecoration: 'underline',
+                  }}
+                >
+                  zurücksetzen
+                </span>
+              )}
+            </summary>
+
+            <div className="mt-2 space-y-2">
+              {places.length > 0 && (
+                <div className="flex gap-2 flex-wrap items-center">
+                  {places.length > 1 && (
+                    <button
+                      onClick={() => setPlaceFilter('all')}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                        placeFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200'
+                      }`}
+                    >
+                      Alle Orte
+                    </button>
+                  )}
+                  {places.map(pl => (
+                    <button
+                      key={pl.name}
+                      onClick={() => setPlaceFilter(placeFilter === pl.name ? 'all' : pl.name)}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors text-left ${
+                        placeFilter === pl.name ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
+                      }`}
+                    >
+                      📍 {pl.name}
+                      <span className={placeFilter === pl.name ? 'opacity-70' : 'text-gray-400'}>
+                        {' '}· {pl.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {places.map(pl => (
+                placeFilter === pl.name && (
+                  <p key={pl.name} className="text-xs text-gray-500">
+                    {pl.count} {pl.count === 1 ? 'Foto' : 'Fotos'} ·{' '}
+                    {pl.von === pl.bis
+                      ? formatBerlin(`${pl.von}T12:00:00`, { day: 'numeric', month: 'long', year: 'numeric' })
+                      : `${formatBerlin(`${pl.von}T12:00:00`, { day: 'numeric', month: 'short' })} bis ${formatBerlin(`${pl.bis}T12:00:00`, { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                  </p>
+                )
+              ))}
+
+              <div className="flex gap-2 flex-wrap">
+                {['all', 'good', 'normal', 'bad', 'vet'].map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      filter === f ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-amber-300'
+                    }`}
+                  >
+                    {f === 'all' ? 'Alle Stimmungen' : MOOD_LABELS[f]?.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </details>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-3 gap-1 -mx-4 sm:mx-0">

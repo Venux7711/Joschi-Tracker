@@ -426,3 +426,28 @@ export function notifyComment(actorUserId: string, actorName: string, text: stri
     cooldownMinutes: 0,
   })
 }
+
+/**
+ * Jemand hat auf einen Kommentar reagiert.
+ *
+ * Der Kommentartext steht in der Meldung – ohne ihn wüsste der Verfasser
+ * nicht, worauf sich das Herz bezieht, und bei mehreren Kommentaren unter
+ * einem Bild hilft der Link allein nicht weiter.
+ */
+export function notifyCommentReaction(
+  actorUserId: string,
+  actorName: string,
+  emoji: string,
+  kommentarText: string,
+  photoId: string,
+) {
+  const kurz = kommentarText.length > 60 ? `${kommentarText.slice(0, 59)}…` : kommentarText
+  return notifyEvent({
+    topic: 'reaction',
+    actorUserId,
+    title: `${emoji} ${actorName}`,
+    body: `${actorName} hat auf deinen Kommentar reagiert: „${kurz}"`,
+    url: `/fotos?photo=${photoId}`,
+    cooldownMinutes: 3,
+  })
+}

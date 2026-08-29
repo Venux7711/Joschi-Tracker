@@ -1,17 +1,21 @@
 name: Videos verkleinern
 
-# Alle zehn Minuten nachsehen, ob ein Video wartet.
+# Einmal je Stunde nachsehen, ob ein Video wartet.
 #
-# GitHub führt geplante Läufe nicht auf die Minute genau aus, sondern mit ein
-# paar Minuten Verzug – das reicht hier völlig. Wer nicht warten will, startet
-# den Lauf über "Run workflow" von Hand.
+# Nicht öfter, und das aus zwei Gründen. Erstens kostet jeder Lauf Minuten aus
+# dem monatlichen Kontingent – alle zehn Minuten wären über 2000 im Monat und
+# damit mehr, als kostenlos zur Verfügung steht. Zweitens eilt es nicht: Das
+# Video liegt sofort nach dem Hochladen im Album und ist abspielbar, es wird
+# später nur durch eine kleinere Fassung ersetzt.
+#
+# Wer nicht warten will, startet den Lauf über "Run workflow" von Hand.
 #
 # Der Runner bringt ffmpeg mit, hat sechs Stunden Zeit und nichts anderes zu
 # tun. Genau das fehlt einem iPhone, an dem vier Anläufe gescheitert sind.
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '7 * * * *'
   workflow_dispatch:
 
 # Zwei Läufe gleichzeitig würden sich dieselben Videos greifen.
