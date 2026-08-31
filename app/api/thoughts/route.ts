@@ -245,6 +245,29 @@ export async function GET(req: NextRequest) {
     })
   }
 
+  return NextResponse.json(await erzeuge(admin, gestern, tag))
+}
+
+/**
+ * Nochmal würfeln.
+ *
+ * Bei einem Gag-Feature ist das kein Luxus: Ein misslungener Satz stünde sonst
+ * bis zum nächsten Tag da. Der alte wird dabei überschrieben – ein Archiv aus
+ * verworfenen Versuchen hilft niemandem.
+ */
+export async function POST() {
+  const { data: { user } } = await makeSupabase().auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const admin = makeAdmin()
+  const gestern = addBerlinDays(new Date(), -1)
+  const tag = berlinDateKey(gestern)
+
+  await admin.from('cat_thoughts').delete().eq('tag', tag)
+  return NextResponse.json(await erzeuge(admin, gestern, tag))
+}
+
+async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: string) {
   const { bild, bilder } = await baueTagesbild(admin, gestern)
   const bildteile = await ladeBilder(bilder.map(b => b.url))
   const hinweis = bildteile.length > 0
@@ -265,11 +288,11 @@ export async function GET(req: NextRequest) {
   ) as Record<Stimme, string>
   const quelle = gelesen ? 'ki' : 'ersatz'
 
-  // onConflict: Zwei Personen können die Seite gleichzeitig öffnen; die zweite
-  // Einfügung darf dann nicht mit einem Fehler abbrechen.
   // Das Bild, über das gesprochen wurde – die Karte zeigt es daneben
   const hauptbild = bilder[0] ?? null
 
+  // onConflict: Zwei Personen können die Seite gleichzeitig öffnen; die zweite
+  // Einfügung darf dann nicht mit einem Fehler abbrechen.
   await admin.from('cat_thoughts').upsert(
     STIMMEN.map(s => ({
       tag, stimme: s, text: gedanken[s],
@@ -281,5 +304,5 @@ export async function GET(req: NextRequest) {
     { onConflict: 'tag,stimme' },
   )
 
-  return NextResponse.json({ tag, gedanken, quelle, foto: hauptbild?.url ?? null })
+  return { tag, gedanken, quelle, foto: hauptbild?.url ?? null }
 }

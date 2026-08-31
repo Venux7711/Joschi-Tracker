@@ -51,6 +51,20 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
 
   useEffect(laden, [])
 
+  const [wuerfelt, setWuerfelt] = useState(false)
+
+  /** Nochmal würfeln – ein misslungener Satz stünde sonst bis morgen da. */
+  const nochmal = async () => {
+    setWuerfelt(true)
+    try {
+      const res = await fetch('/api/thoughts', { method: 'POST' })
+      if (res.ok) setDaten(await res.json())
+    } catch {
+      // Der alte Satz bleibt stehen – schlechter als vorher wird es nicht
+    }
+    setWuerfelt(false)
+  }
+
   const katzeMit = (name: string) =>
     cats.find(c => c.name.toLowerCase() === name.toLowerCase())
 
@@ -158,13 +172,26 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
           />
         )}
 
-        {/* Ehrlich bleiben: Ist die KI ausgefallen, stammt der Satz aus einer
-            festen Liste. Das gehört dazugesagt, sonst hält man ihn für erfunden. */}
-        {daten?.quelle === 'ersatz' && (
-          <p style={{ fontSize: 10, color: 'rgba(60,60,67,0.3)', marginTop: 8 }}>
-            Ohne KI zusammengesetzt
-          </p>
-        )}
+        <div className="flex items-center justify-between gap-3" style={{ marginTop: 10 }}>
+          {/* Ehrlich bleiben: Ist die KI ausgefallen, stammt der Satz aus einer
+              festen Liste. Das gehört dazugesagt, sonst hält man ihn für erfunden. */}
+          <span style={{ fontSize: 10, color: 'rgba(60,60,67,0.3)' }}>
+            {daten?.quelle === 'ersatz' ? 'Ohne KI zusammengesetzt' : ''}
+          </span>
+          {daten && (
+            <button
+              onClick={nochmal}
+              disabled={wuerfelt}
+              style={{
+                fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 8,
+                border: 'none', background: 'rgba(60,60,67,0.06)',
+                color: 'rgba(60,60,67,0.55)', flexShrink: 0,
+              }}
+            >
+              {wuerfelt ? 'würfelt…' : '🎲 Nochmal'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
