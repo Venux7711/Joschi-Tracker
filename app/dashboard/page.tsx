@@ -29,6 +29,7 @@ import type { Cat, FeedingLog, HealthLog, PantryItem, StoolConsistency } from '@
 import AiInsights from '@/components/AiInsights'
 import CatPhoto from '@/components/CatPhoto'
 import MemoryOfTheDay from '@/components/MemoryOfTheDay'
+import CatThoughts from '@/components/CatThoughts'
 import QuickFeed from '@/components/QuickFeed'
 import BirthdayCard from '@/components/BirthdayCard'
 import QuickHealth from '@/components/QuickHealth'
@@ -1470,6 +1471,8 @@ export default async function DashboardPage({
         <MedicationsWidget />
 
         {/* ── ERINNERUNG – VOR EINEM JAHR ── */}
+        <CatThoughts cats={allCats} />
+
         <MemoryOfTheDay />
 
         {/* ── KI-AUSWERTUNG ── */}

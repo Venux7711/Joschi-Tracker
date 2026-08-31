@@ -26,7 +26,7 @@ const run = (cmd, args, env) =>
 const tsc = 'node_modules/typescript/bin/tsc'
 
 run(process.execPath, [tsc, 'lib/time.ts', 'lib/birthday.ts', 'lib/media.ts', 'lib/geolocation.ts',
-  'lib/video-compress.ts', 'lib/video-debug.ts', 'lib/reactions.ts',
+  'lib/video-compress.ts', 'lib/video-debug.ts', 'lib/reactions.ts', 'lib/thoughts.ts',
   '--outDir', OUT, '--target', 'es2020', '--module', 'commonjs',
   // --strict wie in tsconfig.json: Ohne strictNullChecks grenzt TypeScript
   // unterschiedene Vereinigungstypen nicht ein, und der Testlauf scheiterte
