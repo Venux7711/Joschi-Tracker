@@ -91,12 +91,14 @@ async function baueTagesbild(
     besonderes.push(`Besonderes: Die Katzen sind gerade nicht zuhause (${abwesenheit.label ?? 'Betreuung'}), jemand anderes füttert.`)
   }
 
-  // Höchstens drei Bilder, gleichmäßig über den Tag verteilt statt der ersten
-  // drei: Bei fünfzehn Fotos aus derselben Minute sähe die KI sonst dreimal
-  // dasselbe. Bei Videos das Standbild – Bewegtbilder kann sie hier nicht lesen.
-  const schritt = Math.max(1, Math.floor(fotos.length / 3))
+  // Höchstens zwei Bilder, über den Tag verteilt statt einfach die ersten:
+  // Bei fünfzehn Fotos aus derselben Minute sähe die KI sonst zweimal
+  // dasselbe. Bei Videos das Standbild – Bewegtbilder kann sie hier nicht
+  // lesen. Zwei statt drei, weil jedes Bild Zeit kostet und die Anfrage beim
+  // ersten Anlauf genau daran gescheitert ist.
+  const schritt = Math.max(1, Math.floor(fotos.length / 2))
   const bilder: Bildquelle[] = []
-  for (let i = 0; i < fotos.length && bilder.length < 3; i += schritt) {
+  for (let i = 0; i < fotos.length && bilder.length < 2; i += schritt) {
     const f = fotos[i]
     const url = f.media_type === 'video' ? f.poster_url : f.public_url
     if (url) bilder.push({ id: f.id, url })
@@ -124,27 +126,53 @@ async function baueTagesbild(
 type Bildteil = { inline_data: { mime_type: string; data: string } }
 
 /**
- * Lädt die Fotos herunter und macht Bildteile für die Anfrage daraus.
+ * Verkleinerte Fassung eines Bildes, über den eigenen Bilddienst.
  *
- * Der Grund für die Größengrenze: Ein Handyfoto kann acht Megabyte haben, und
- * drei davon sprengen die Anfrage. Vier Megabyte reichen dem Modell zum
- * Erkennen bei Weitem – größere werden übersprungen statt alles scheitern zu
- * lassen.
+ * Der Grund ist der erste Anlauf: Handyfotos in Originalgröße – acht Megabyte,
+ * nach der Umkodierung elf – dauerten samt Modellanfrage länger als die
+ * erlaubte Minute, und die Karte blieb schlicht leer. Zum Erkennen einer
+ * schlafenden Katze reichen 640 Pixel bei Weitem; damit wird aus elf Megabyte
+ * ein Fünfzigstel.
+ *
+ * Klappt das nicht – etwa lokal ohne Bilddienst –, wird das Original genommen.
+ * Lieber langsam als gar nicht.
  */
+function kleinereFassung(url: string): string {
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL
+  if (!host) return url
+  return `https://${host}/_next/image?url=${encodeURIComponent(url)}&w=640&q=55`
+}
+
+/** Holt eine Datei mit Zeitlimit – ein hängender Abruf darf nicht alles blockieren. */
+async function holeMitLimit(url: string, ms: number): Promise<Response | null> {
+  const abbruch = new AbortController()
+  const uhr = setTimeout(() => abbruch.abort(), ms)
+  try {
+    return await fetch(url, { signal: abbruch.signal })
+  } catch {
+    return null
+  } finally {
+    clearTimeout(uhr)
+  }
+}
+
+/** Lädt die Fotos herunter und macht Bildteile für die Anfrage daraus. */
 async function ladeBilder(urls: string[]): Promise<Bildteil[]> {
   const teile: Bildteil[] = []
   for (const url of urls) {
-    try {
-      const res = await fetch(url)
-      if (!res.ok) continue
-      const typ = res.headers.get('content-type') ?? 'image/jpeg'
-      if (!typ.startsWith('image/')) continue
-      const puffer = Buffer.from(await res.arrayBuffer())
-      if (puffer.byteLength > 4 * 1024 * 1024) continue
-      teile.push({ inline_data: { mime_type: typ, data: puffer.toString('base64') } })
-    } catch {
-      // Ein Bild weniger ist kein Grund, den ganzen Tag ohne Gedanken zu lassen
-    }
+    // Erst die verkleinerte Fassung, sonst das Original
+    let res = await holeMitLimit(kleinereFassung(url), 8_000)
+    if (!res?.ok) res = await holeMitLimit(url, 8_000)
+    if (!res?.ok) continue
+
+    const typ = res.headers.get('content-type') ?? 'image/jpeg'
+    if (!typ.startsWith('image/')) continue
+
+    const puffer = Buffer.from(await res.arrayBuffer())
+    // Kam trotzdem etwas Großes zurück, wird es übersprungen statt die
+    // Anfrage damit über die Zeit zu bringen.
+    if (puffer.byteLength > 2 * 1024 * 1024) continue
+    teile.push({ inline_data: { mime_type: typ, data: puffer.toString('base64') } })
   }
   return teile
 }
@@ -154,10 +182,16 @@ async function frageKi(prompt: string, bilder: Bildteil[]): Promise<string | nul
   if (!apiKey) return null
 
   for (const model of GEMINI_MODELS) {
+    // Zeitlimit je Modell: Der zweite Versuch muss noch in die erlaubte
+    // Minute passen, sonst läuft die ganze Anfrage in den Abbruch und der
+    // Ersatztext kommt nie zum Zug.
+    const abbruch = new AbortController()
+    const uhr = setTimeout(() => abbruch.abort(), 20_000)
     try {
       const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: abbruch.signal,
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }, ...bilder] }],
           // Höhere Temperatur als bei den Auswertungen: Hier ist Einfallsreichtum
@@ -176,6 +210,8 @@ async function frageKi(prompt: string, bilder: Bildteil[]): Promise<string | nul
       if (text) return text
     } catch (e) {
       console.error(`Gedanken: ${model} fehlgeschlagen`, e)
+    } finally {
+      clearTimeout(uhr)
     }
   }
   return null

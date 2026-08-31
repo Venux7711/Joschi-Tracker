@@ -801,6 +801,10 @@ export default async function DashboardPage({
           </div>
         </div>
 
+        {/* ── GEDANKEN ── Direkt unter dem Kopfbereich, weil es sonst
+             zwischen den Zahlenkarten untergeht. */}
+        <CatThoughts cats={allCats} />
+
         {/* ── QUICK ACTIONS ── */}
         <div className="grid grid-cols-2 gap-3">
           <Link
@@ -1471,8 +1475,6 @@ export default async function DashboardPage({
         <MedicationsWidget />
 
         {/* ── ERINNERUNG – VOR EINEM JAHR ── */}
-        <CatThoughts cats={allCats} />
-
         <MemoryOfTheDay />
 
         {/* ── KI-AUSWERTUNG ── */}

@@ -33,15 +33,23 @@ const STIMMEN: { key: Stimme; label: string }[] = [
 
 export default function CatThoughts({ cats }: { cats: Cat[] }) {
   const [daten, setDaten] = useState<Antwort | null>(null)
-  const [fehlgeschlagen, setFehlgeschlagen] = useState(false)
+  const [fehler, setFehler] = useState<string | null>(null)
   const [aktiv, setAktiv] = useState<Stimme>('joschi')
 
-  useEffect(() => {
+  const laden = () => {
+    setFehler(null)
     fetch('/api/thoughts')
-      .then(r => (r.ok ? r.json() : Promise.reject()))
+      .then(async r => {
+        if (r.ok) return r.json()
+        // 504 heißt: Die Erzeugung hat zu lange gedauert. Das ist etwas
+        // anderes als ein kaputter Aufruf und verdient einen eigenen Satz.
+        throw new Error(r.status === 504 ? 'zeit' : 'fehler')
+      })
       .then(setDaten)
-      .catch(() => setFehlgeschlagen(true))
-  }, [])
+      .catch(e => setFehler(e?.message === 'zeit' ? 'zeit' : 'fehler'))
+  }
+
+  useEffect(laden, [])
 
   const katzeMit = (name: string) =>
     cats.find(c => c.name.toLowerCase() === name.toLowerCase())
@@ -51,7 +59,32 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
   // Bella hat ein eigenes Thema; die Karte färbt sich mit, wenn sie spricht.
   const akzent = aktiv === 'bella' ? '#6E8090' : aktiv === 'joschi' ? '#D97706' : '#8B7BA8'
 
-  if (fehlgeschlagen) return null
+  // Bewusst kein stilles Verschwinden mehr: Beim ersten Anlauf lief die
+  // Erzeugung in eine Zeitüberschreitung, die Karte war schlicht weg, und von
+  // außen war nicht zu unterscheiden, ob sie fehlt oder nie gebaut wurde.
+  if (fehler) {
+    return (
+      <div className="card" style={{ padding: '14px 18px', borderLeft: '3px solid rgba(60,60,67,0.2)' }}>
+        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(60,60,67,0.38)' }}>
+          Gedanken zu gestern
+        </p>
+        <p style={{ fontSize: 13, color: 'rgba(60,60,67,0.55)', marginTop: 6 }}>
+          {fehler === 'zeit'
+            ? 'Die Katzen denken noch nach – das dauert beim ersten Mal am Tag etwas länger.'
+            : 'Konnte gerade nicht geladen werden.'}
+        </p>
+        <button
+          onClick={laden}
+          style={{
+            fontSize: 12, fontWeight: 600, marginTop: 8, padding: '6px 12px',
+            borderRadius: 8, border: 'none', background: 'rgba(60,60,67,0.07)', color: '#3C3C43',
+          }}
+        >
+          Nochmal versuchen
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div
