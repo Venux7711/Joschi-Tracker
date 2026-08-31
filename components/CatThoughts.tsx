@@ -17,12 +17,19 @@ import type { Cat } from '@/lib/types'
  * jedem Blick neu würfelt, ist keiner mehr.
  */
 
+/**
+ * Je Stimme ein eigener Gedanke mit dem Bild, auf das er sich bezieht.
+ *
+ * Vorher stand über allen drei Stimmen dasselbe Foto. Das war irreführend:
+ * Bella redet über den Teppich, Joschi über die Werkbank – dann muss auch das
+ * passende Bild danebenstehen, sonst geht die Pointe verloren.
+ */
+type Gedanke = { text: string; foto: string | null; fotoId: string | null }
+
 type Antwort = {
   tag: string
-  gedanken: Record<Stimme, string>
+  gedanken: Record<Stimme, Gedanke>
   quelle: 'ki' | 'ersatz'
-  /** Das Bild, das die KI gesehen hat – ohne es fehlt dem Satz der Bezug. */
-  foto: string | null
 }
 
 const STIMMEN: { key: Stimme; label: string }[] = [
@@ -72,6 +79,9 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
 
   // Bella hat ein eigenes Thema; die Karte färbt sich mit, wenn sie spricht.
   const akzent = aktiv === 'bella' ? '#6E8090' : aktiv === 'joschi' ? '#D97706' : '#8B7BA8'
+
+  const aktuellerGedanke = daten?.gedanken?.[aktiv] ?? null
+  const aktuellesFoto = aktuellerGedanke?.foto ?? null
 
   // Bewusst kein stilles Verschwinden mehr: Beim ersten Anlauf lief die
   // Erzeugung in eine Zeitüberschreitung, die Karte war schlicht weg, und von
@@ -127,16 +137,43 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
         </div>
       </div>
 
-      {/* Das Bild, über das gesprochen wird. Ohne es liest sich ein Satz über
-          die Schlafstellung wie eine Behauptung; daneben wird er zur Pointe. */}
-      {daten?.foto && (
+      {/* Das Bild, über das diese Stimme spricht. Ohne es liest sich ein Satz
+          über die Schlafstellung wie eine Behauptung; daneben wird er zur
+          Pointe.
+
+          key auf der Bild-Adresse: Ohne das tauscht React nur die Quelle im
+          bestehenden Element aus, und beim Umschalten bliebe für einen Moment
+          das alte Bild stehen. Mit key wird es neu aufgebaut und lädt sauber. */}
+      {aktuellesFoto && (
         <div style={{ padding: '10px 18px 0' }}>
-          <div
-            className="relative overflow-hidden"
-            style={{ width: '100%', height: 150, borderRadius: 12, background: 'rgba(60,60,67,0.06)' }}
+          <a
+            href={aktuellerGedanke?.fotoId ? `/fotos?photo=${aktuellerGedanke.fotoId}` : '/fotos'}
+            className="relative block overflow-hidden"
+            style={{
+              width: '100%', aspectRatio: '4 / 3', borderRadius: 12,
+              background: 'rgba(60,60,67,0.06)', border: `1px solid ${akzent}22`,
+            }}
           >
-            <Image src={daten.foto} alt="Foto von gestern" fill className="object-cover" sizes="(max-width: 640px) 100vw, 600px" />
-          </div>
+            <Image
+              key={aktuellesFoto}
+              src={aktuellesFoto}
+              alt="Das Foto, über das gesprochen wird"
+              fill
+              className="object-cover"
+              sizes="(max-width: 640px) 100vw, 600px"
+              style={{ animation: 'fadeIn 0.35s ease' }}
+            />
+            {/* Kein Rätselraten, worauf sich der Satz bezieht */}
+            <span
+              style={{
+                position: 'absolute', left: 8, bottom: 8,
+                fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 999,
+                background: 'rgba(0,0,0,0.55)', color: 'white',
+              }}
+            >
+              Darüber wird geredet
+            </span>
+          </a>
         </div>
       )}
 
@@ -150,7 +187,7 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
           // Der Dialog bekommt zwei Blasen, versetzt wie ein Chatverlauf –
           // als eine Zeile gelesen ginge die Pointe des Konterns verloren.
           <div className="space-y-2">
-            {teileDialog(daten.gedanken.beide).map((zeile, i) => (
+            {teileDialog(daten.gedanken.beide.text).map((zeile, i) => (
               <Sprechblase
                 key={i}
                 name={zeile.wer}
@@ -165,7 +202,7 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
           <Sprechblase
             name={aktiv === 'joschi' ? 'Joschi' : 'Bella'}
             bild={bildVon(aktiv === 'joschi' ? 'Joschi' : 'Bella')}
-            text={daten.gedanken[aktiv]}
+            text={daten.gedanken[aktiv].text}
             rechts={false}
             farbe={akzent}
             gross

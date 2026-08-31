@@ -12,22 +12,45 @@ const tag = {
   besonderes: [],
 }
 
-test('sauberes JSON wird gelesen', () => {
-  const r = leseAntwort('{"joschi":"A","bella":"B","beide":"Joschi: A | Bella: B"}')
-  assert.equal(r.joschi, 'A')
-  assert.equal(r.bella, 'B')
+test('sauberes JSON wird gelesen, samt Bildnummer', () => {
+  const r = leseAntwort('{"joschi":"A","joschi_bild":2,"bella":"B","bella_bild":1,"beide":"Joschi: A | Bella: B"}')
+  assert.equal(r.joschi.text, 'A')
+  assert.equal(r.joschi.bild, 2)
+  assert.equal(r.bella.text, 'B')
+  assert.equal(r.bella.bild, 1)
+})
+
+test('fehlende Bildnummer ist kein Fehler', () => {
+  // Der Satz bleibt gültig, auch wenn er sich auf kein Bild bezieht
+  const r = leseAntwort('{"joschi":"A","bella":"B","beide":"C"}')
+  assert.equal(r.joschi.text, 'A')
+  assert.equal(r.joschi.bild, null)
+})
+
+test('Bildnummer als Text wird trotzdem verstanden', () => {
+  // Modelle liefern gern "1" statt 1. Deswegen das passende Bild neben dem
+  // Satz zu verlieren wäre Verschwendung.
+  const r = leseAntwort('{"joschi":"A","joschi_bild":"3","bella":"B","beide":"C"}')
+  assert.equal(r.joschi.bild, 3)
+})
+
+test('unsinnige Bildnummern werden verworfen', () => {
+  for (const wert of ['0', '-2', '1.5', 'zwei', 'null']) {
+    const r = leseAntwort('{"joschi":"A","joschi_bild":"' + wert + '","bella":"B","beide":"C"}')
+    assert.equal(r.joschi.bild, null, wert)
+  }
 })
 
 test('JSON im Codeblock wird trotzdem gelesen', () => {
   // Modelle rahmen ihre Antwort gern ein, obwohl der Prompt es ausschließt.
   // Deswegen deshalb auf den Ersatztext zurückzufallen wäre Verschwendung.
   const r = leseAntwort('```json\n{"joschi":"A","bella":"B","beide":"C"}\n```')
-  assert.equal(r.joschi, 'A')
+  assert.equal(r.joschi.text, 'A')
 })
 
 test('Geschwätz vor und nach dem JSON stört nicht', () => {
   const r = leseAntwort('Klar, hier: {"joschi":"A","bella":"B","beide":"C"} Viel Spaß!')
-  assert.equal(r.bella, 'B')
+  assert.equal(r.bella.text, 'B')
 })
 
 test('unbrauchbare Antworten ergeben null – dann greift der Ersatz', () => {
@@ -40,7 +63,7 @@ test('unbrauchbare Antworten ergeben null – dann greift der Ersatz', () => {
 test('nur teilweise gefüllte Antworten liefern, was da ist', () => {
   // Ein halb gelungener Durchlauf soll nicht alles verwerfen
   const r = leseAntwort('{"joschi":"A"}')
-  assert.equal(r.joschi, 'A')
+  assert.equal(r.joschi.text, 'A')
   assert.equal(r.bella, undefined)
 })
 

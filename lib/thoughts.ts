@@ -112,6 +112,13 @@ Kommentiere es aus Katzensicht, beschreibe es nicht.
 Joschi ist golden und langhaarig, Bella silbern getigert. Bist du dir nicht
 sicher, wer zu sehen ist, lass die Zuordnung weg.
 
+Die Fotos sind durchnummeriert, in der Reihenfolge, in der sie beiliegen: das
+erste ist Bild 1, das zweite Bild 2 und so weiter. Sag zu jeder Stimme dazu,
+auf welches Bild sie sich bezieht – die App zeigt es daneben an, und ein
+falsches Bild neben dem Satz macht die Pointe kaputt. Nimm nach Möglichkeit
+für die drei Stimmen verschiedene Bilder. Bezieht sich ein Satz auf kein Bild,
+schreib 0.
+
 WAS NICHT PASSIEREN DARF
 - Nichts erfinden. Keine Ereignisse, die nicht in den Daten stehen oder auf
   keinem Bild zu sehen sind. Eine Uhrzeit gehört zu einem Foto, nicht zu einer
@@ -121,8 +128,8 @@ WAS NICHT PASSIEREN DARF
 - Nicht jeden Datenpunkt unterbringen. Eine einzige Beobachtung genügt.
 
 ANTWORTFORMAT
-Nur ein JSON-Objekt, ohne Text davor oder danach:
-{"joschi":"…","bella":"…","beide":"Joschi: … | Bella: …"}`
+Nur ein JSON-Objekt, ohne Text davor oder danach. Die Bildnummern sind Zahlen:
+{"joschi":"…","joschi_bild":1,"bella":"…","bella_bild":2,"beide":"Joschi: … | Bella: …","beide_bild":1}`
 
 /**
  * Ersatz ohne KI.
@@ -169,7 +176,13 @@ export function ersatzGedanken(t: Tagesbild): Record<Stimme, string> {
  * ausschließt. Das hier zu behandeln ist billiger, als deshalb auf den
  * Ersatztext zurückzufallen.
  */
-export function leseAntwort(roh: string): Partial<Record<Stimme, string>> | null {
+export type Gedanke = {
+  text: string
+  /** Nummer des gemeinten Bildes, 1-basiert. null heißt: bezieht sich auf keins. */
+  bild: number | null
+}
+
+export function leseAntwort(roh: string): Partial<Record<Stimme, Gedanke>> | null {
   const ohneRahmen = roh.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
   const anfang = ohneRahmen.indexOf('{')
   const ende = ohneRahmen.lastIndexOf('}')
@@ -177,10 +190,21 @@ export function leseAntwort(roh: string): Partial<Record<Stimme, string>> | null
 
   try {
     const daten = JSON.parse(ohneRahmen.slice(anfang, ende + 1))
-    const raus: Partial<Record<Stimme, string>> = {}
+    const raus: Partial<Record<Stimme, Gedanke>> = {}
     for (const stimme of STIMMEN) {
       const wert = daten[stimme]
-      if (typeof wert === 'string' && wert.trim()) raus[stimme] = wert.trim().slice(0, 400)
+      if (typeof wert !== 'string' || !wert.trim()) continue
+
+      // Die Bildnummer kommt gelegentlich als Text zurück ("1"), obwohl der
+      // Prompt eine Zahl verlangt. Beides annehmen ist billiger, als deshalb
+      // das passende Bild zu verlieren.
+      const roheNummer = daten[`${stimme}_bild`]
+      const nummer = typeof roheNummer === 'number' ? roheNummer : Number(roheNummer)
+
+      raus[stimme] = {
+        text: wert.trim().slice(0, 400),
+        bild: Number.isInteger(nummer) && nummer > 0 ? nummer : null,
+      }
     }
     return Object.keys(raus).length > 0 ? raus : null
   } catch {

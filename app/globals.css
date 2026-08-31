@@ -46,6 +46,13 @@
   .accent-amber-500 { accent-color: var(--am-500); }
 }
 
+/* Sanftes Einblenden beim Bildwechsel – ohne das springt beim Umschalten
+   zwischen den Katzen-Stimmen das neue Foto hart ins Bild. */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;

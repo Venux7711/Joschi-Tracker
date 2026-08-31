@@ -91,14 +91,14 @@ async function baueTagesbild(
     besonderes.push(`Besonderes: Die Katzen sind gerade nicht zuhause (${abwesenheit.label ?? 'Betreuung'}), jemand anderes füttert.`)
   }
 
-  // Höchstens zwei Bilder, über den Tag verteilt statt einfach die ersten:
-  // Bei fünfzehn Fotos aus derselben Minute sähe die KI sonst zweimal
-  // dasselbe. Bei Videos das Standbild – Bewegtbilder kann sie hier nicht
-  // lesen. Zwei statt drei, weil jedes Bild Zeit kostet und die Anfrage beim
-  // ersten Anlauf genau daran gescheitert ist.
-  const schritt = Math.max(1, Math.floor(fotos.length / 2))
+  // Drei Bilder, über den Tag verteilt statt einfach die ersten: Bei fünfzehn
+  // Fotos aus derselben Minute sähe die KI sonst dreimal dasselbe. Drei, weil
+  // jede der drei Stimmen ein eigenes bekommen soll – seit die Bilder
+  // verkleinert übertragen werden, kostet das kaum noch Zeit. Bei Videos das
+  // Standbild, Bewegtbilder kann das Modell hier nicht lesen.
+  const schritt = Math.max(1, Math.floor(fotos.length / 3))
   const bilder: Bildquelle[] = []
-  for (let i = 0; i < fotos.length && bilder.length < 2; i += schritt) {
+  for (let i = 0; i < fotos.length && bilder.length < 3; i += schritt) {
     const f = fotos[i]
     const url = f.media_type === 'video' ? f.poster_url : f.public_url
     if (url) bilder.push({ id: f.id, url })
@@ -234,14 +234,15 @@ export async function GET(req: NextRequest) {
   }
 
   const { data: vorhanden } = await admin.from('cat_thoughts')
-    .select('stimme, text, erzeugt_von, foto_url').eq('tag', tag)
+    .select('stimme, text, erzeugt_von, foto_url, foto_id').eq('tag', tag)
 
   if (vorhanden && vorhanden.length >= STIMMEN.length) {
     return NextResponse.json({
       tag,
-      gedanken: Object.fromEntries(vorhanden.map(z => [z.stimme, z.text])),
       quelle: vorhanden[0].erzeugt_von,
-      foto: vorhanden.find(z => z.foto_url)?.foto_url ?? null,
+      gedanken: Object.fromEntries(
+        vorhanden.map(z => [z.stimme, { text: z.text, foto: z.foto_url, fotoId: z.foto_id }]),
+      ),
     })
   }
 
@@ -283,26 +284,45 @@ async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: 
   // Fehlt eine Stimme, wird nur diese aus dem Ersatz ergänzt – ein halb
   // gelungener Durchlauf soll nicht alles verwerfen.
   const ersatz = ersatzGedanken(bild)
-  const gedanken = Object.fromEntries(
-    STIMMEN.map(s => [s, gelesen?.[s] ?? ersatz[s]]),
-  ) as Record<Stimme, string>
   const quelle = gelesen ? 'ki' : 'ersatz'
 
-  // Das Bild, über das gesprochen wurde – die Karte zeigt es daneben
-  const hauptbild = bilder[0] ?? null
+  /**
+   * Das Bild, auf das sich diese Stimme bezieht.
+   *
+   * Nur die Bilder, die tatsächlich mitgeschickt wurden, kommen infrage –
+   * nennt das Modell eine Nummer, die es gar nicht gibt, wäre das Bild neben
+   * dem Satz schlicht falsch. Dann lieber das erste als gar keins: Die Karte
+   * soll nicht mal mit und mal ohne Bild dastehen.
+   */
+  const bildFuer = (nummer: number | null) => {
+    const verfuegbar = bilder.slice(0, bildteile.length)
+    if (verfuegbar.length === 0) return null
+    if (nummer === null || nummer > verfuegbar.length) return verfuegbar[0]
+    return verfuegbar[nummer - 1] ?? verfuegbar[0]
+  }
+
+  const zeilen = STIMMEN.map(s => {
+    const g = gelesen?.[s]
+    const foto = bildFuer(g?.bild ?? null)
+    return {
+      tag, stimme: s,
+      text: g?.text ?? ersatz[s],
+      grundlage: `${beschreibeTag(bild)}\n(${bildteile.length} Bild(er) angesehen)`.slice(0, 1000),
+      erzeugt_von: quelle,
+      foto_id: foto?.id ?? null,
+      foto_url: foto?.url ?? null,
+    }
+  })
 
   // onConflict: Zwei Personen können die Seite gleichzeitig öffnen; die zweite
   // Einfügung darf dann nicht mit einem Fehler abbrechen.
-  await admin.from('cat_thoughts').upsert(
-    STIMMEN.map(s => ({
-      tag, stimme: s, text: gedanken[s],
-      grundlage: `${beschreibeTag(bild)}\n(${bildteile.length} Bild(er) angesehen)`.slice(0, 1000),
-      erzeugt_von: quelle,
-      foto_id: hauptbild?.id ?? null,
-      foto_url: hauptbild?.url ?? null,
-    })),
-    { onConflict: 'tag,stimme' },
-  )
+  await admin.from('cat_thoughts').upsert(zeilen, { onConflict: 'tag,stimme' })
 
-  return { tag, gedanken, quelle, foto: hauptbild?.url ?? null }
+  return {
+    tag,
+    quelle,
+    gedanken: Object.fromEntries(
+      zeilen.map(z => [z.stimme, { text: z.text, foto: z.foto_url, fotoId: z.foto_id }]),
+    ),
+  }
 }
