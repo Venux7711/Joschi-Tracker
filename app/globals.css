@@ -54,24 +54,28 @@
 }
 
 @layer base {
+  /* Kein overflow auf html oder body – und das ist eine bewusste Entscheidung,
+     keine Auslassung.
+
+     Auf dem Wurzelelement überträgt sich overflow auf den gesamten
+     Sichtbereich. Sobald dort etwas anderes als "visible" steht, behandelt
+     iOS Safari position: fixed unzuverlässig: Die untere Leiste löst sich
+     beim Scrollen vom Bildschirmrand und wandert zur Mitte.
+
+     Der erste Versuch tauschte hidden gegen clip, weil clip laut Regelwerk
+     keinen Scrollbereich erzeugt. Das half nicht – für den Sichtbereich gilt
+     dieselbe Übertragung. Also gar keins.
+
+     Waagerechtes Scrollen verhindert stattdessen jede Komponente selbst: Wo
+     etwas breiter werden kann als der Bildschirm – Tabellen, Chip-Reihen,
+     Code – gehört ein eigener Bereich mit overflow-x: auto darum. */
   html {
     -webkit-tap-highlight-color: transparent;
-    /* clip statt hidden – der Unterschied ist auf dem iPhone gravierend.
-       overflow-x: hidden macht aus dem Wurzelelement einen Scrollbereich, und
-       darin verliert position: fixed seinen Bezug zum Bildschirm: Die untere
-       Leiste blieb beim Scrollen mitten im Bild hängen und wanderte mit.
-       clip verhindert waagerechtes Scrollen genauso, erzeugt aber keinen
-       Scrollbereich. */
-    overflow-x: clip;
   }
 
   body {
     background-color: #F2F2F7;
     color: #1C1C1E;
-    /* Weder overflow-x noch max-width: 100vw hier – beides löst dasselbe
-       Problem aus. 100vw ist zudem breiter als der Inhaltsbereich, sobald ein
-       Rollbalken sichtbar ist, und erzeugt den Überlauf, den es verhindern
-       soll. */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }

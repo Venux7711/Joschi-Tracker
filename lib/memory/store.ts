@@ -152,6 +152,41 @@ export async function ladeLetzteSaetze(db: DbClient, anzahl = 14): Promise<strin
   return (data ?? []).map(z => String((z as { text: string }).text))
 }
 
+/**
+ * Wie hat jede Stimme zuletzt geklungen?
+ *
+ * Damit Joschi nicht nächste Woche wie Bella klingt. Feste Beispielsätze in
+ * der Anweisung geben den Grundton vor, aber sie ändern sich nie – ein
+ * Charakter, der sich über Monate nicht bewegt, ist eine Schablone. Die
+ * eigenen letzten Sätze dazuzunehmen verankert den Ton in dem, was tatsächlich
+ * schon dastand.
+ *
+ * Nur von der KI erzeugte: Die Ersatzsätze stammen aus einer festen Liste und
+ * würden sich selbst verstärken, bis alles nach ihnen klingt.
+ */
+export async function ladeStimmbeispiele(
+  db: DbClient,
+  proStimme = 3,
+): Promise<Record<string, string[]>> {
+  const { data } = await db
+    .from('cat_thoughts')
+    .select('stimme, text, tag')
+    .eq('erzeugt_von', 'ki')
+    .order('tag', { ascending: false })
+    .limit(proStimme * 8)
+
+  const nach: Record<string, string[]> = {}
+  for (const z of data ?? []) {
+    const zeile = z as { stimme: string; text: string }
+    const liste = nach[zeile.stimme] ?? []
+    if (liste.length < proStimme) {
+      liste.push(zeile.text)
+      nach[zeile.stimme] = liste
+    }
+  }
+  return nach
+}
+
 /** Legt die Tageszusammenfassung ab, damit die Rohdaten nicht erneut durchsucht werden müssen. */
 export async function speichereTagesbild(
   db: DbClient,

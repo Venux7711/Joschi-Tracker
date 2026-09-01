@@ -14,7 +14,7 @@ import { verschmelze, veralte } from '@/lib/memory/merge'
 import { waehleRelevante, alsText, zuAehnlich, type Kontext } from '@/lib/memory/select'
 import {
   ladeBrauchbare, speichere, speichereVeraltet, ladeVerwendungen,
-  ladeLetzteSaetze, speichereTagesbild,
+  ladeLetzteSaetze, ladeStimmbeispiele, speichereTagesbild,
 } from '@/lib/memory/store'
 import type { Cat, FeedingLog, HealthLog } from '@/lib/types'
 
@@ -303,14 +303,29 @@ async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: 
   let verwendete: string[] = []
   let erinnerungsText = 'Noch keine gesicherten Erinnerungen.'
   let letzteSaetze: string[] = []
+  let eigeneStimmen = ''
 
   try {
-    const [geladen, verwendungen, saetze] = await Promise.all([
+    const [geladen, verwendungen, saetze, beispiele] = await Promise.all([
       ladeBrauchbare(admin),
       ladeVerwendungen(admin),
       ladeLetzteSaetze(admin),
+      ladeStimmbeispiele(admin),
     ])
     letzteSaetze = saetze
+
+    // Feste Beispielsätze geben den Grundton vor, ändern sich aber nie – ein
+    // Charakter, der sich über Monate nicht bewegt, ist eine Schablone. Die
+    // eigenen letzten Sätze verankern den Ton in dem, was schon dastand, und
+    // lassen ihn sich mit den Katzen mitentwickeln.
+    const stimmzeilen = Object.entries(beispiele)
+      .filter(([, saetzeDerStimme]) => saetzeDerStimme.length > 0)
+      .map(([stimme, saetzeDerStimme]) =>
+        `${stimme}: ${saetzeDerStimme.map(s => `"${s}"`).join(' ')}`)
+    if (stimmzeilen.length > 0) {
+      eigeneStimmen = '\n\nSO HAST DU ZULETZT GEKLUNGEN\n' + stimmzeilen.join('\n')
+        + '\nBleib bei diesem Ton, wiederhole aber keinen dieser Sätze.'
+    }
 
     // Verblasstes vor der Auswahl aussortieren, sonst schleppt ein halbes Jahr
     // altes Muster ewig mit.
@@ -337,7 +352,7 @@ async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: 
   }
 
   const antwort = await frageKi(
-    `${SYSTEM_PROMPT}\n\nDATEN VON GESTERN\n${beschreibeTag(bild)}${hinweis}` +
+    `${SYSTEM_PROMPT}${eigeneStimmen}\n\nDATEN VON GESTERN\n${beschreibeTag(bild)}${hinweis}` +
     `\n\nERINNERUNGEN\n${erinnerungsText}`,
     bildteile,
   )
