@@ -27,6 +27,9 @@ const tsc = 'node_modules/typescript/bin/tsc'
 
 run(process.execPath, [tsc, 'lib/time.ts', 'lib/birthday.ts', 'lib/media.ts', 'lib/geolocation.ts',
   'lib/video-compress.ts', 'lib/video-debug.ts', 'lib/reactions.ts', 'lib/thoughts.ts',
+  // Das Gedächtnis: reine Funktionen, damit sich die Regeln prüfen lassen,
+  // ohne einen Tag zu simulieren oder eine Datenbank anzufassen.
+  'lib/memory/types.ts', 'lib/memory/merge.ts', 'lib/memory/select.ts', 'lib/memory/observe.ts',
   '--outDir', OUT, '--target', 'es2020', '--module', 'commonjs',
   // --strict wie in tsconfig.json: Ohne strictNullChecks grenzt TypeScript
   // unterschiedene Vereinigungstypen nicht ein, und der Testlauf scheiterte

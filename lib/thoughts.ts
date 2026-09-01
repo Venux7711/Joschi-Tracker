@@ -127,9 +127,46 @@ WAS NICHT PASSIEREN DARF
   hingeschaut. Mach daraus keine Vernachlässigung und keine Klage.
 - Nicht jeden Datenpunkt unterbringen. Eine einzige Beobachtung genügt.
 
+WAS DIE APP SCHON WEISS
+Unter ERINNERUNGEN stehen Dinge, die über längere Zeit beobachtet wurden, mit
+Zahlen dahinter. Nutze sie, wenn sie zum heutigen Tag passen – dann darfst du
+Wörter wie „inzwischen", „schon wieder", „noch immer" oder „erstmals"
+verwenden. Nur dann. Ohne Beleg in den Erinnerungen sind diese Wörter eine
+Behauptung über eine Vergangenheit, die niemand kennt.
+Ein Rückgriff auf ein bekanntes Thema ist mehr wert als ein neuer Witz: Wer
+liest „Ich sage nichts zum Karton", soll wissen, worum es geht. Erkläre den
+Bezug nie – wer ihn kennt, versteht ihn.
+Steht dort nichts Passendes, schreib einfach über heute.
+
+BEOBACHTUNGEN MITLIEFERN
+Sag zusätzlich zu jedem Bild, was sachlich darauf zu sehen ist. Das ist
+getrennt von den Sätzen: hier keine Pointen, keine Deutung, nur was da ist.
+Diese Angaben baut die App zu ihrem Gedächtnis aus, deshalb zählt Genauigkeit
+mehr als Vollständigkeit.
+- katze: "Joschi", "Bella", "beide" – oder weglassen, wenn unklar.
+- platz: worauf oder wo die Katze liegt oder sitzt, ein bis zwei Wörter
+  ("Sofa", "Fensterbrett", "Kratzbaum"). Weglassen, wenn nicht erkennbar.
+- aktivitaet: ein Wort ("schläft", "frisst", "spielt"). Weglassen im Zweifel.
+- objekte: auffällige, wiedererkennbare Gegenstände ("roter Karton",
+  "Wollknäuel"). NICHT "Boden", "Wand", "Fell", "Licht" – das ist auf jedem
+  Bild. Lieber nichts als etwas Beliebiges.
+Bist du dir bei einer Angabe nicht sicher: weglassen. Eine falsche Angabe
+landet dauerhaft im Gedächtnis und taucht Monate später wieder auf.
+
 ANTWORTFORMAT
 Nur ein JSON-Objekt, ohne Text davor oder danach. Die Bildnummern sind Zahlen:
-{"joschi":"…","joschi_bild":1,"bella":"…","bella_bild":2,"beide":"Joschi: … | Bella: …","beide_bild":1}`
+{"joschi":"…","joschi_bild":1,"bella":"…","bella_bild":2,"beide":"Joschi: … | Bella: …","beide_bild":1,
+ "beobachtungen":[{"bild":1,"katze":"Joschi","platz":"Sofa","aktivitaet":"schläft","objekte":["roter Karton"]}]}`
+
+/**
+ * Fassung der Anweisung.
+ *
+ * Wird zu jeder Erinnerung mitgeschrieben. Ändert sich der Ton grundlegend,
+ * lässt sich später unterscheiden, was unter welcher Anweisung entstanden ist –
+ * ohne das wäre nach einem halben Jahr nicht mehr nachvollziehbar, warum ein
+ * älterer Eintrag anders klingt.
+ */
+export const PROMPT_FASSUNG = '2026-09-01-gedaechtnis'
 
 /**
  * Ersatz ohne KI.
@@ -180,6 +217,25 @@ export type Gedanke = {
   text: string
   /** Nummer des gemeinten Bildes, 1-basiert. null heißt: bezieht sich auf keins. */
   bild: number | null
+}
+
+/**
+ * Die rohen Beobachtungen aus derselben Antwort.
+ *
+ * Getrennt von leseAntwort, weil sie unterschiedlich scheitern dürfen: Ein
+ * Gedanke ohne Beobachtungen ist immer noch ein Gedanke, und Beobachtungen
+ * ohne verwertbaren Gedanken sind für das Gedächtnis trotzdem etwas wert.
+ */
+export function leseBeobachtungsteil(roh: string): unknown[] {
+  const anfang = roh.indexOf('{')
+  const ende = roh.lastIndexOf('}')
+  if (anfang < 0 || ende <= anfang) return []
+  try {
+    const daten = JSON.parse(roh.slice(anfang, ende + 1))
+    return Array.isArray(daten.beobachtungen) ? daten.beobachtungen : []
+  } catch {
+    return []
+  }
 }
 
 export function leseAntwort(roh: string): Partial<Record<Stimme, Gedanke>> | null {

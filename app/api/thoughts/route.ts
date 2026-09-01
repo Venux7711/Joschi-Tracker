@@ -5,9 +5,17 @@ import { addBerlinDays, berlinDateKey, berlinDayStart, berlinDayEnd, formatBerli
 import { dedupeSharedFeedings } from '@/lib/utils'
 import { birthdayInfo } from '@/lib/birthday'
 import {
-  STIMMEN, SYSTEM_PROMPT, beschreibeTag, ersatzGedanken, leseAntwort,
+  STIMMEN, SYSTEM_PROMPT, PROMPT_FASSUNG, beschreibeTag, ersatzGedanken,
+  leseAntwort, leseBeobachtungsteil,
   type Stimme, type Tagesbild,
 } from '@/lib/thoughts'
+import { leseBeobachtungen, zuKandidaten } from '@/lib/memory/observe'
+import { verschmelze, veralte } from '@/lib/memory/merge'
+import { waehleRelevante, alsText, zuAehnlich, type Kontext } from '@/lib/memory/select'
+import {
+  ladeBrauchbare, speichere, speichereVeraltet, ladeVerwendungen,
+  ladeLetzteSaetze, speichereTagesbild,
+} from '@/lib/memory/store'
 import type { Cat, FeedingLog, HealthLog } from '@/lib/types'
 
 // Bilder herunterladen und ein Modell mit Bildern befragen dauert länger als
@@ -40,7 +48,14 @@ type Bildquelle = { id: string; url: string }
 async function baueTagesbild(
   admin: ReturnType<typeof makeAdmin>,
   gestern: Date,
-): Promise<{ bild: Tagesbild; bilder: Bildquelle[] }> {
+): Promise<{
+  bild: Tagesbild
+  bilder: Bildquelle[]
+  /** Katzenname klein → Kennung. Das Modell nennt Namen, das Gedächtnis braucht Kennungen. */
+  katzenIds: Record<string, string>
+  /** Umgekehrt, für die Formulierung der Erinnerungen. */
+  katzenNamen: Record<string, string>
+}> {
   const von = berlinDayStart(gestern).toISOString()
   const bis = berlinDayEnd(gestern).toISOString()
 
@@ -120,6 +135,8 @@ async function baueTagesbild(
       besonderes,
     },
     bilder,
+    katzenIds: Object.fromEntries(cats.map(c => [c.name.toLowerCase(), c.id])),
+    katzenNamen: Object.fromEntries(cats.map(c => [c.id, c.name])),
   }
 }
 
@@ -269,17 +286,85 @@ export async function POST() {
 }
 
 async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: string) {
-  const { bild, bilder } = await baueTagesbild(admin, gestern)
+  const { bild, bilder, katzenIds, katzenNamen } = await baueTagesbild(admin, gestern)
   const bildteile = await ladeBilder(bilder.map(b => b.url))
   const hinweis = bildteile.length > 0
     ? `\n\nDazu ${bildteile.length} Foto(s) von gestern – sieh sie dir an.`
     : '\n\nEs liegen keine Fotos bei.'
 
+  /**
+   * Was die App schon weiß, passend zum heutigen Tag.
+   *
+   * Bewusst so abgesichert, dass ein Ausfall hier den Gedanken nicht kostet:
+   * Das Gedächtnis ist eine Verbesserung, keine Voraussetzung. Fällt es aus,
+   * entsteht eben ein Satz nur über gestern – so wie bisher auch.
+   */
+  let bestand: Awaited<ReturnType<typeof ladeBrauchbare>> = []
+  let verwendete: string[] = []
+  let erinnerungsText = 'Noch keine gesicherten Erinnerungen.'
+  let letzteSaetze: string[] = []
+
+  try {
+    const [geladen, verwendungen, saetze] = await Promise.all([
+      ladeBrauchbare(admin),
+      ladeVerwendungen(admin),
+      ladeLetzteSaetze(admin),
+    ])
+    letzteSaetze = saetze
+
+    // Verblasstes vor der Auswahl aussortieren, sonst schleppt ein halbes Jahr
+    // altes Muster ewig mit.
+    const frisch = veralte(geladen, tag)
+    speichereVeraltet(admin, geladen, frisch).catch(e => console.error('Veralten:', e))
+    bestand = frisch
+
+    const kontext: Kontext = {
+      themen: [
+        ...(bild.fotos.ort ? [bild.fotos.ort.toLowerCase()] : []),
+        ...bild.futter.map(f => f.name.toLowerCase()),
+      ],
+      katzen: Object.values(katzenIds),
+      zusammen: false,
+      tag,
+      zuletztVerwendet: verwendungen,
+    }
+
+    const relevante = waehleRelevante(bestand, kontext)
+    verwendete = relevante.map(m => m.id).filter((id): id is string => !!id)
+    erinnerungsText = alsText(relevante, katzenNamen)
+  } catch (e) {
+    console.error('Gedächtnis nicht verfügbar, Gedanke entsteht ohne:', e)
+  }
+
   const antwort = await frageKi(
-    `${SYSTEM_PROMPT}\n\nDATEN VON GESTERN\n${beschreibeTag(bild)}${hinweis}`,
+    `${SYSTEM_PROMPT}\n\nDATEN VON GESTERN\n${beschreibeTag(bild)}${hinweis}` +
+    `\n\nERINNERUNGEN\n${erinnerungsText}`,
     bildteile,
   )
   const gelesen = antwort ? leseAntwort(antwort) : null
+
+  // Beobachtungen ins Gedächtnis einarbeiten. Getrennt abgesichert: Ein Fehler
+  // hier darf den fertigen Gedanken nicht kosten.
+  if (antwort) {
+    try {
+      const beobachtungen = leseBeobachtungen(
+        leseBeobachtungsteil(antwort),
+        bilder.map(b => b.id),
+        tag,
+      )
+      const kandidaten = zuKandidaten(beobachtungen, katzenIds, tag)
+      const aenderungen = verschmelze(bestand, kandidaten, tag)
+      const bilanz = await speichere(admin, aenderungen, GEMINI_MODELS[0], PROMPT_FASSUNG)
+      await speichereTagesbild(admin, tag, beobachtungen, {
+        futter: bild.futter,
+        fotos: bild.fotos.anzahl,
+        befinden: bild.befinden.length,
+      }, bild.fotos.anzahl)
+      console.log(`Gedächtnis: ${bilanz.neu} neu, ${bilanz.verstaerkt} bestätigt`)
+    } catch (e) {
+      console.error('Gedächtnis konnte nicht ergänzt werden:', e)
+    }
+  }
 
   // Fehlt eine Stimme, wird nur diese aus dem Ersatz ergänzt – ein halb
   // gelungener Durchlauf soll nicht alles verwerfen.
@@ -304,13 +389,24 @@ async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: 
   const zeilen = STIMMEN.map(s => {
     const g = gelesen?.[s]
     const foto = bildFuer(g?.bild ?? null)
+
+    // Sagt der neue Satz im Kern dasselbe wie einer der letzten, wird der
+    // Ersatz genommen. Lieber ein schlichter Satz als zum fünften Mal
+    // dieselbe Pointe in anderen Worten.
+    const text = g?.text && !zuAehnlich(g.text, letzteSaetze) ? g.text : ersatz[s]
+
     return {
       tag, stimme: s,
-      text: g?.text ?? ersatz[s],
+      text,
       grundlage: `${beschreibeTag(bild)}\n(${bildteile.length} Bild(er) angesehen)`.slice(0, 1000),
       erzeugt_von: quelle,
       foto_id: foto?.id ?? null,
       foto_url: foto?.url ?? null,
+      // Womit gearbeitet wurde: Grundlage für die Ruhezeit der Running Gags
+      // und später für die Frage "warum sagt die App das?"
+      used_memory_ids: verwendete,
+      model_version: GEMINI_MODELS[0],
+      prompt_version: PROMPT_FASSUNG,
     }
   })
 
