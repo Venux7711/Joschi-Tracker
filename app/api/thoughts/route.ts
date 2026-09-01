@@ -9,7 +9,7 @@ import {
   leseAntwort, leseBeobachtungsteil,
   type Stimme, type Tagesbild,
 } from '@/lib/thoughts'
-import { technikFuer, tagesAnweisung, gleicheForm } from '@/lib/humor'
+import { tagesAnweisung, waehleBesten, istPremisse, type Premisse } from '@/lib/humor'
 import { leseBeobachtungen, zuKandidaten } from '@/lib/memory/observe'
 import { verschmelze, veralte } from '@/lib/memory/merge'
 import { waehleRelevante, alsText, zuAehnlich, type Kontext } from '@/lib/memory/select'
@@ -305,6 +305,12 @@ async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: 
   let erinnerungsText = 'Noch keine gesicherten Erinnerungen.'
   let letzteSaetze: string[] = []
   let eigeneStimmen = ''
+  // Welche Ansätze zuletzt dran waren – Grundlage für die Abwechslung, die
+  // hier aus der Bewertung entsteht und nicht aus einem Kalender.
+  let letztePremissen: Premisse[] = []
+  // Stichworte der eingeflossenen Erinnerungen: Ein Satz, der eine davon
+  // aufgreift, ist belegt konkret und kein beliebiger Katzensatz.
+  let verwendeteTitel: string[] = []
 
   try {
     const [geladen, verwendungen, saetze, beispiele] = await Promise.all([
@@ -347,55 +353,41 @@ async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: 
 
     const relevante = waehleRelevante(bestand, kontext)
     verwendete = relevante.map(m => m.id).filter((id): id is string => !!id)
+    verwendeteTitel = relevante.map(m => m.title.toLowerCase())
     erinnerungsText = alsText(relevante, katzenNamen)
+
+    const { data: fruehere } = await admin.from('cat_thoughts')
+      .select('premise').order('tag', { ascending: false }).limit(12)
+    letztePremissen = (fruehere ?? [])
+      .map(z => (z as { premise: string | null }).premise)
+      .filter(istPremisse)
   } catch (e) {
     console.error('Gedächtnis nicht verfügbar, Gedanke entsteht ohne:', e)
   }
 
+  const antwort = await frageKi(
+    `${SYSTEM_PROMPT}${eigeneStimmen}\n\n${tagesAnweisung(letzteSaetze, letztePremissen)}` +
+    `\n\nDATEN VON GESTERN\n${beschreibeTag(bild)}${hinweis}` +
+    `\n\nERINNERUNGEN\n${erinnerungsText}`,
+    bildteile,
+  )
+  const gelesen = antwort ? leseAntwort(antwort) : null
+
   /**
-   * Der Versuch, einen Satz zu bekommen, der nicht wie gestern klingt.
+   * Was heute überhaupt konkret ist.
    *
-   * Zwei Anläufe: Beim zweiten wird eine andere Technik vorgegeben und
-   * ausdrücklich benannt, was am ersten nicht taugte. Das ist deutlich besser
-   * als der frühere Weg, bei dem ein zu ähnlicher Satz durch einen Ersatz aus
-   * fester Liste ausgetauscht wurde – der klang zuverlässig schlechter als
-   * das, was er ersetzte.
+   * Grundlage für die Prüfung, ob ein Satz nur auf diesen Haushalt zutrifft
+   * oder in jeder Katzen-App stehen könnte.
    */
-  const basis = (versatz: number, tadel = '') => {
-    const technik = technikFuer(tag, versatz)
-    return `${SYSTEM_PROMPT}${eigeneStimmen}\n\n${tagesAnweisung(technik, letzteSaetze)}${tadel}` +
-      `\n\nDATEN VON GESTERN\n${beschreibeTag(bild)}${hinweis}` +
-      `\n\nERINNERUNGEN\n${erinnerungsText}`
-  }
+  const anker = [
+    ...bild.futter.map(f => f.name.toLowerCase()),
+    ...(bild.fotos.ort ? [bild.fotos.ort.toLowerCase()] : []),
+    ...Object.values(katzenNamen).map(n => n.toLowerCase()),
+    ...verwendeteTitel,
+  ]
 
-  let antwort = await frageKi(basis(0), bildteile)
-  let gelesen = antwort ? leseAntwort(antwort) : null
-
-  // Kommt dieselbe Satzform wie zuletzt heraus, einmal nachfassen. Genau das
-  // war der Befund: fünf von sechs Sätzen in der Form "Ich + Verb + Ort".
-  const formGleich = gelesen
-    ? STIMMEN.filter(s => gelesen?.[s] && gleicheForm(gelesen[s]!.text, letzteSaetze)).length
-    : 0
-
-  if (gelesen && formGleich >= 2) {
-    console.log(`Gedanken: ${formGleich} Sätze in alter Form – zweiter Anlauf`)
-    const zweite = await frageKi(
-      basis(3, '\n\nDein erster Entwurf hatte dieselbe Satzform wie die letzten Tage. ' +
-        'Fang anders an und bau die Sätze anders.'),
-      bildteile,
-    )
-    const zweiteGelesen = zweite ? leseAntwort(zweite) : null
-    // Nur übernehmen, wenn der zweite Anlauf wirklich besser ist
-    if (zweiteGelesen) {
-      const nochGleich = STIMMEN.filter(
-        s => zweiteGelesen[s] && gleicheForm(zweiteGelesen[s]!.text, letzteSaetze),
-      ).length
-      if (nochGleich < formGleich) {
-        antwort = zweite
-        gelesen = zweiteGelesen
-      }
-    }
-  }
+  /** Bella redet knapper als Joschi – das gehört zu ihrer Stimme. */
+  const zielLaenge: Record<Stimme, number> = { joschi: 14, bella: 10, beide: 16 }
 
   // Beobachtungen ins Gedächtnis einarbeiten. Getrennt abgesichert: Ein Fehler
   // hier darf den fertigen Gedanken nicht kosten.
@@ -440,26 +432,50 @@ async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: 
     return verfuegbar[nummer - 1] ?? verfuegbar[0]
   }
 
+  /**
+   * Aus den Vorschlägen wird ausgewählt, nicht der erste genommen.
+   *
+   * Die Bewertung läuft hier und nicht im Modell: Ein Modell, das seine
+   * eigenen Vorschläge benotet, benotet sie gut. Hier ist nachvollziehbar,
+   * warum ein Satz gewonnen hat – und im Protokoll steht es auch.
+   */
   const zeilen = STIMMEN.map(s => {
-    const g = gelesen?.[s]
-    const foto = bildFuer(g?.bild ?? null)
+    const vorschlaege = gelesen?.[s] ?? []
+    const gewaehlt = vorschlaege.length > 0
+      ? waehleBesten(vorschlaege, {
+          anker,
+          letzteSaetze,
+          letztePremissen,
+          zielLaenge: zielLaenge[s],
+        })
+      : null
 
-    // Nur bei wörtlicher Wiederholung auf den Ersatz ausweichen. Die
-    // Formgleichheit ist oben schon behandelt worden, und dafür einen Satz aus
-    // fester Liste einzusetzen wäre der falsche Weg: Er klingt zuverlässig
-    // schlechter als das, was er ersetzt.
-    const text = g?.text && !zuAehnlich(g.text, letzteSaetze) ? g.text : ersatz[s]
+    if (vorschlaege.length > 0 && !gewaehlt) {
+      console.log(`Gedanken/${s}: alle ${vorschlaege.length} Vorschläge abgelehnt`)
+    } else if (gewaehlt) {
+      console.log(
+        `Gedanken/${s}: ${vorschlaege.length} Vorschläge, gewählt ` +
+        `(${gewaehlt.bewertung.punkte}, ${gewaehlt.bewertung.gruende.join(', ') || 'ohne Auffälligkeit'})`,
+      )
+    }
+
+    // Ersatz nur, wenn wirklich nichts brauchbar war – nicht als Strafe für
+    // einen schwachen Satz. Er klingt zuverlässig schlechter als das, was er
+    // ersetzt.
+    const text = gewaehlt?.kandidat.text ?? ersatz[s]
+    const foto = bildFuer(gewaehlt?.kandidat.bild ?? null)
 
     return {
       tag, stimme: s,
       text,
       grundlage: `${beschreibeTag(bild)}\n(${bildteile.length} Bild(er) angesehen)`.slice(0, 1000),
-      erzeugt_von: quelle,
+      erzeugt_von: gewaehlt ? quelle : 'ersatz',
       foto_id: foto?.id ?? null,
       foto_url: foto?.url ?? null,
       // Womit gearbeitet wurde: Grundlage für die Ruhezeit der Running Gags
       // und später für die Frage "warum sagt die App das?"
       used_memory_ids: verwendete,
+      premise: gewaehlt?.kandidat.premisse ?? null,
       model_version: GEMINI_MODELS[0],
       prompt_version: PROMPT_FASSUNG,
     }

@@ -11,6 +11,8 @@
  * nicht antwortet.
  */
 
+import { istPremisse, type Premisse } from './humor'
+
 export type Stimme = 'joschi' | 'bella' | 'beide'
 export const STIMMEN: Stimme[] = ['joschi', 'bella', 'beide']
 
@@ -200,19 +202,13 @@ Bist du dir bei einer Angabe nicht sicher: weglassen. Eine falsche Angabe
 landet dauerhaft im Gedächtnis und taucht Monate später wieder auf.
 
 ANTWORTFORMAT
-Nur ein JSON-Objekt, ohne Text davor oder danach. Die Bildnummern sind Zahlen:
-{"joschi":"…","joschi_bild":1,"bella":"…","bella_bild":2,"beide":"Joschi: … | Bella: …","beide_bild":1,
+Nur ein JSON-Objekt, ohne Text davor oder danach. Je Stimme drei Vorschläge:
+{"joschi":[{"text":"…","ansatz":"status","bild":1},{"text":"…","ansatz":"untertreibung","bild":2},{"text":"…","ansatz":"beobachtung","bild":1}],
+ "bella":[…drei…],
+ "beide":[{"text":"Joschi: … | Bella: …","ansatz":"kontrast","bild":1},…drei…],
  "beobachtungen":[{"bild":1,"katze":"Joschi","platz":"Sofa","aktivitaet":"schläft","objekte":["roter Karton"]}]}`
 
-/**
- * Fassung der Anweisung.
- *
- * Wird zu jeder Erinnerung mitgeschrieben. Ändert sich der Ton grundlegend,
- * lässt sich später unterscheiden, was unter welcher Anweisung entstanden ist –
- * ohne das wäre nach einem halben Jahr nicht mehr nachvollziehbar, warum ein
- * älterer Eintrag anders klingt.
- */
-export const PROMPT_FASSUNG = '2026-09-01-missverhaeltnis'
+export const PROMPT_FASSUNG = '2026-09-02-kandidaten'
 
 /**
  * Ersatz ohne KI.
@@ -259,8 +255,11 @@ export function ersatzGedanken(t: Tagesbild): Record<Stimme, string> {
  * ausschließt. Das hier zu behandeln ist billiger, als deshalb auf den
  * Ersatztext zurückzufallen.
  */
-export type Gedanke = {
+/** Ein Vorschlag des Modells – noch nicht der ausgelieferte Satz. */
+export type Vorschlag = {
   text: string
+  /** Auf welcher Art Situation er beruht. Grundlage für die Bewertung. */
+  premisse: Premisse | null
   /** Nummer des gemeinten Bildes, 1-basiert. null heißt: bezieht sich auf keins. */
   bild: number | null
 }
@@ -284,30 +283,59 @@ export function leseBeobachtungsteil(roh: string): unknown[] {
   }
 }
 
-export function leseAntwort(roh: string): Partial<Record<Stimme, Gedanke>> | null {
+/**
+ * Liest die Vorschläge je Stimme.
+ *
+ * Verträgt zwei Formen: die aktuelle mit einer Liste von Vorschlägen je
+ * Stimme, und die frühere mit einem einzelnen Satz. Ein Modell fällt
+ * gelegentlich in ein einfacheres Format zurück, und deshalb einen ganzen
+ * Tag zu verlieren wäre unverhältnismäßig.
+ */
+export function leseAntwort(roh: string): Partial<Record<Stimme, Vorschlag[]>> | null {
   const ohneRahmen = roh.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
   const anfang = ohneRahmen.indexOf('{')
-  const ende = ohneRahmen.lastIndexOf('}')
-  if (anfang < 0 || ende <= anfang) return null
+  const schluss = ohneRahmen.lastIndexOf('}')
+  if (anfang < 0 || schluss <= anfang) return null
+
+  const bildnummer = (roh: unknown): number | null => {
+    // Kommt gelegentlich als Text zurück ("1"), obwohl der Prompt eine Zahl
+    // verlangt. Beides anzunehmen ist billiger, als das Bild zu verlieren.
+    const n = typeof roh === 'number' ? roh : Number(roh)
+    return Number.isInteger(n) && n > 0 ? n : null
+  }
+
+  const alsVorschlag = (roh: unknown): Vorschlag | null => {
+    if (typeof roh === 'string') {
+      return roh.trim() ? { text: roh.trim().slice(0, 400), premisse: null, bild: null } : null
+    }
+    if (!roh || typeof roh !== 'object') return null
+    const o = roh as Record<string, unknown>
+    const text = typeof o.text === 'string' ? o.text.trim() : ''
+    if (!text) return null
+    const ansatz = o.ansatz ?? o.premisse
+    return {
+      text: text.slice(0, 400),
+      premisse: istPremisse(ansatz) ? ansatz : null,
+      bild: bildnummer(o.bild),
+    }
+  }
 
   try {
-    const daten = JSON.parse(ohneRahmen.slice(anfang, ende + 1))
-    const raus: Partial<Record<Stimme, Gedanke>> = {}
+    const daten = JSON.parse(ohneRahmen.slice(anfang, schluss + 1))
+    const raus: Partial<Record<Stimme, Vorschlag[]>> = {}
+
     for (const stimme of STIMMEN) {
       const wert = daten[stimme]
-      if (typeof wert !== 'string' || !wert.trim()) continue
+      const liste = (Array.isArray(wert) ? wert : [wert])
+        .map(alsVorschlag)
+        .filter((v): v is Vorschlag => v !== null)
+        // Höchstens fünf: Mehr liefert kein Modell sinnvoll, und die
+        // Bewertung soll nicht zur Sortieraufgabe werden.
+        .slice(0, 5)
 
-      // Die Bildnummer kommt gelegentlich als Text zurück ("1"), obwohl der
-      // Prompt eine Zahl verlangt. Beides annehmen ist billiger, als deshalb
-      // das passende Bild zu verlieren.
-      const roheNummer = daten[`${stimme}_bild`]
-      const nummer = typeof roheNummer === 'number' ? roheNummer : Number(roheNummer)
-
-      raus[stimme] = {
-        text: wert.trim().slice(0, 400),
-        bild: Number.isInteger(nummer) && nummer > 0 ? nummer : null,
-      }
+      if (liste.length > 0) raus[stimme] = liste
     }
+
     return Object.keys(raus).length > 0 ? raus : null
   } catch {
     return null

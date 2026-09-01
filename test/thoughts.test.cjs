@@ -12,32 +12,53 @@ const tag = {
   besonderes: [],
 }
 
-test('sauberes JSON wird gelesen, samt Bildnummer', () => {
-  const r = leseAntwort('{"joschi":"A","joschi_bild":2,"bella":"B","bella_bild":1,"beide":"Joschi: A | Bella: B"}')
-  assert.equal(r.joschi.text, 'A')
-  assert.equal(r.joschi.bild, 2)
-  assert.equal(r.bella.text, 'B')
-  assert.equal(r.bella.bild, 1)
+test('mehrere Vorschläge je Stimme werden gelesen', () => {
+  const r = leseAntwort(JSON.stringify({
+    joschi: [
+      { text: 'A', ansatz: 'status', bild: 2 },
+      { text: 'B', ansatz: 'absurd', bild: 1 },
+    ],
+    bella: [{ text: 'C', ansatz: 'kontrast', bild: 1 }],
+  }))
+  assert.equal(r.joschi.length, 2)
+  assert.equal(r.joschi[0].text, 'A')
+  assert.equal(r.joschi[0].premisse, 'status')
+  assert.equal(r.joschi[0].bild, 2)
+  assert.equal(r.bella.length, 1)
+})
+
+test('das frühere Format mit einem Satz je Stimme geht weiter', () => {
+  // Ein Modell fällt gelegentlich in ein einfacheres Format zurück. Deshalb
+  // einen ganzen Tag zu verlieren wäre unverhältnismäßig.
+  const r = leseAntwort('{"joschi":"A","bella":"B","beide":"Joschi: A | Bella: B"}')
+  assert.equal(r.joschi.length, 1)
+  assert.equal(r.joschi[0].text, 'A')
+  assert.equal(r.joschi[0].premisse, null)
+})
+
+test('ein unbekannter Ansatz wird verworfen, der Satz nicht', () => {
+  const r = leseAntwort('{"joschi":[{"text":"A","ansatz":"quatsch"}]}')
+  assert.equal(r.joschi[0].text, 'A')
+  assert.equal(r.joschi[0].premisse, null)
 })
 
 test('fehlende Bildnummer ist kein Fehler', () => {
-  // Der Satz bleibt gültig, auch wenn er sich auf kein Bild bezieht
-  const r = leseAntwort('{"joschi":"A","bella":"B","beide":"C"}')
-  assert.equal(r.joschi.text, 'A')
-  assert.equal(r.joschi.bild, null)
+  const r = leseAntwort('{"joschi":[{"text":"A"}]}')
+  assert.equal(r.joschi[0].text, 'A')
+  assert.equal(r.joschi[0].bild, null)
 })
 
 test('Bildnummer als Text wird trotzdem verstanden', () => {
   // Modelle liefern gern "1" statt 1. Deswegen das passende Bild neben dem
   // Satz zu verlieren wäre Verschwendung.
-  const r = leseAntwort('{"joschi":"A","joschi_bild":"3","bella":"B","beide":"C"}')
-  assert.equal(r.joschi.bild, 3)
+  const r = leseAntwort('{"joschi":[{"text":"A","bild":"3"}]}')
+  assert.equal(r.joschi[0].bild, 3)
 })
 
 test('unsinnige Bildnummern werden verworfen', () => {
   for (const wert of ['0', '-2', '1.5', 'zwei', 'null']) {
-    const r = leseAntwort('{"joschi":"A","joschi_bild":"' + wert + '","bella":"B","beide":"C"}')
-    assert.equal(r.joschi.bild, null, wert)
+    const r = leseAntwort('{"joschi":[{"text":"A","bild":"' + wert + '"}]}')
+    assert.equal(r.joschi[0].bild, null, wert)
   }
 })
 
@@ -45,12 +66,12 @@ test('JSON im Codeblock wird trotzdem gelesen', () => {
   // Modelle rahmen ihre Antwort gern ein, obwohl der Prompt es ausschließt.
   // Deswegen deshalb auf den Ersatztext zurückzufallen wäre Verschwendung.
   const r = leseAntwort('```json\n{"joschi":"A","bella":"B","beide":"C"}\n```')
-  assert.equal(r.joschi.text, 'A')
+  assert.equal(r.joschi[0].text, 'A')
 })
 
 test('Geschwätz vor und nach dem JSON stört nicht', () => {
   const r = leseAntwort('Klar, hier: {"joschi":"A","bella":"B","beide":"C"} Viel Spaß!')
-  assert.equal(r.bella.text, 'B')
+  assert.equal(r.bella[0].text, 'B')
 })
 
 test('unbrauchbare Antworten ergeben null – dann greift der Ersatz', () => {
@@ -63,7 +84,7 @@ test('unbrauchbare Antworten ergeben null – dann greift der Ersatz', () => {
 test('nur teilweise gefüllte Antworten liefern, was da ist', () => {
   // Ein halb gelungener Durchlauf soll nicht alles verwerfen
   const r = leseAntwort('{"joschi":"A"}')
-  assert.equal(r.joschi.text, 'A')
+  assert.equal(r.joschi[0].text, 'A')
   assert.equal(r.bella, undefined)
 })
 
