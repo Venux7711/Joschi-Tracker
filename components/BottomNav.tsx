@@ -12,6 +12,7 @@ const PRIMARY = [
 ]
 
 const MORE = [
+  { href: '/gedaechtnis', emoji: '🧠', label: 'Weiß ich' },
   { href: '/chat', emoji: '💬', label: 'Chat' },
   { href: '/collage', emoji: '🗓️', label: 'Woche' },
   { href: '/gewicht', emoji: '⚖️', label: 'Gewicht' },
