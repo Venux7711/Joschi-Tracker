@@ -36,10 +36,47 @@ test('zwei Tage reichen nicht', () => {
   assert.equal(finde(ausHistorie(anTagen(2, { place: 'Sofa' }), [], KATZEN), 'sofa'), undefined)
 })
 
-test('aus vielen Tagen wird eine Vorliebe', () => {
-  const m = finde(ausHistorie(anTagen(10, { place: 'Fensterbrett' }), [], KATZEN), 'fensterbrett')
-  assert.equal(m.memoryType, 'preference')
-  assert.equal(m.occurrenceCount, 10)
+test('ein Aufenthaltsort wird nie zur Vorliebe', () => {
+  // Eine Katze sucht sich die Straße nicht aus, in der sie lebt. Das als
+  // "Vorliebe" auszugeben behauptet eine Neigung, wo nur ein Aufenthalt war.
+  const m = finde(ausHistorie(anTagen(20, { place: 'Fensterbrett' }), [], KATZEN), 'fensterbrett')
+  assert.equal(m.memoryType, 'pattern')
+  assert.equal(m.occurrenceCount, 20)
+})
+
+test('ein Aufenthalt während einer Betreuung wird als solcher benannt', () => {
+  // Sonst liest sich ein achttägiger Aufenthalt wie eine Gewohnheit der Katze,
+  // dabei sagt er etwas über den Kalender der Menschen aus.
+  const fotos = anTagen(5, { place: 'Bronnbacher Straße' })
+  const m = finde(ausHistorie(fotos, [], KATZEN, [
+    { starts_on: '2026-06-01', ends_on: '2026-06-12', label: 'Betreuung' },
+  ]), 'bronnbacher straße')
+  assert.ok(m.description.includes('während der Betreuung'), m.description)
+})
+
+test('ohne Betreuung bleibt es eine schlichte Feststellung', () => {
+  const m = finde(ausHistorie(anTagen(5, { place: 'Sofa' }), [], KATZEN), 'sofa')
+  assert.ok(m.description.includes('häufig'), m.description)
+  assert.ok(!m.description.includes('Betreuung'), m.description)
+})
+
+test('ein Aufenthalt am Rand einer Betreuung zählt nicht als solcher', () => {
+  // Mehrheitlich, nicht vollständig – aber ein einzelner Tag reicht nicht
+  const m = finde(ausHistorie(anTagen(5, { place: 'Sofa' }), [], KATZEN, [
+    { starts_on: '2026-06-01', ends_on: '2026-06-01', label: 'kurz weg' },
+  ]), 'sofa')
+  assert.ok(!m.description.includes('Betreuung'), m.description)
+})
+
+test('ein neuer Ort ist ein Ereignis, der erste aber nicht', () => {
+  const fotos = [
+    ...anTagen(3, { place: 'Zuhause' }),
+    foto({ id: 'neu', taken_at: '2026-08-01T12:00:00Z', place: 'Külsheim' }),
+  ]
+  const memories = ausHistorie(fotos, [], KATZEN)
+  assert.ok(finde(memories, 'erstmals am ort külsheim'), 'neuer Ort fehlt')
+  // Der allererste Ort überhaupt ist kein Ereignis, sondern der Anfang
+  assert.equal(finde(memories, 'erstmals am ort zuhause'), undefined)
 })
 
 test('zwanzig Fotos an einem Tag sind ein Tag', () => {
@@ -100,13 +137,56 @@ test('alte Fotos mit nur einer Katzenspalte zählen mit', () => {
 
 test('Futtersorten werden nach Tagen gezählt und gehören dem Haushalt', () => {
   const fuetterungen = Array.from({ length: 6 }, (_, i) => ({
-    logged_at: `2026-06-${String(i + 1).padStart(2, '0')}T08:00:00Z`,
+    logged_at: `2026-06-0${i + 1}T08:00:00Z`,
     food_brand: 'Anifit', food_type: 'Nautilus Ragout',
   }))
   const m = finde(ausHistorie([], fuetterungen, KATZEN), 'futter nautilus ragout')
   assert.equal(m.subjectType, 'household')
   assert.equal(m.subjectId, null)
   assert.equal(m.occurrenceCount, 6)
+})
+
+test('Futter ist niemals eine Vorliebe der Katzen', () => {
+  // Was im Napf landet, entscheiden die Menschen. In diesem Haushalt ist die
+  // am häufigsten gefütterte Sorte sogar die am schlechtesten vertragene –
+  // sie eine Vorliebe zu nennen wäre nicht nur ungenau, sondern falsch.
+  const fuetterungen = Array.from({ length: 25 }, (_, i) => ({
+    logged_at: `2026-06-${String((i % 30) + 1).padStart(2, '0')}T08:00:00Z`,
+    food_brand: 'Anifit', food_type: 'Ente',
+  }))
+  const m = finde(ausHistorie([], fuetterungen, KATZEN), 'futter ente')
+  assert.equal(m.memoryType, 'fact')
+  assert.ok(!m.description.includes('Vorliebe'), m.description)
+})
+
+test('nur die drei häufigsten Sorten kommen ins Gedächtnis', () => {
+  // Fünf Futterstatistiken auf der Seite sind kein Wissen über die Katzen,
+  // sondern eine Tabelle, die das Dashboard ohnehin besser zeigt.
+  const fuetterungen = []
+  for (const sorte of ['A', 'B', 'C', 'D', 'E']) {
+    for (let i = 1; i <= 6; i++) {
+      fuetterungen.push({
+        logged_at: `2026-06-0${i}T08:00:00Z`,
+        food_brand: 'Anifit', food_type: sorte,
+      })
+    }
+  }
+  const futter = ausHistorie([], fuetterungen, KATZEN).filter(m => m.title.startsWith('futter '))
+  assert.equal(futter.length, 3)
+})
+
+test('Beschreibungen nennen Daten auf Deutsch, nicht in Maschinenform', () => {
+  const m = finde(ausHistorie([foto({ taken_at: '2026-06-25T12:00:00Z' })], [], KATZEN), 'erstes foto von joschi')
+  assert.ok(m.description.includes('25. Juni 2026'), m.description)
+  assert.ok(!m.description.includes('2026-06-25'), m.description)
+})
+
+test('Beschreibungen wiederholen die Anzahl nicht', () => {
+  // Sie steht bereits im Beleg darunter. Zweimal dieselbe Zahl im selben
+  // Kasten liest sich wie ein Fehler.
+  const m = finde(ausHistorie(anTagen(7, { place: 'Sofa' }), [], KATZEN), 'sofa')
+  assert.ok(!/d/.test(m.description), m.description)
+  assert.equal(m.occurrenceCount, 7)
 })
 
 test('selten gefütterte Sorten landen nicht im Gedächtnis', () => {

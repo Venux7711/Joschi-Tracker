@@ -86,18 +86,21 @@ export async function POST() {
   const admin = makeAdmin()
   const heute = berlinDateKey(new Date())
 
-  const [{ data: catRows }, { data: fotoRows }, { data: feedRows }] = await Promise.all([
+  const [{ data: catRows }, { data: fotoRows }, { data: feedRows }, { data: absenceRows }] = await Promise.all([
     admin.from('cats').select('id, name, birthday').order('created_at', { ascending: true }),
     admin.from('photos').select('id, taken_at, place, cat_ids, cat_id')
       .order('taken_at', { ascending: true }).limit(2000),
     admin.from('feeding_logs').select('*').order('logged_at', { ascending: true }).limit(4000),
+    // Ohne die Betreuungszeiträume würde ein achttägiger Aufenthalt in
+    // Külsheim als Gewohnheit der Katze gelten statt als das, was er war.
+    admin.from('absences').select('starts_on, ends_on, label'),
   ])
 
   const katzen = (catRows ?? []) as { id: string; name: string }[]
   // Geteilte Mahlzeiten nur einmal zählen – sie stehen für beide Katzen drin
   const fuetterungen = dedupeSharedFeedings((feedRows ?? []) as FeedingLog[])
 
-  const abgeleitet = ausHistorie(fotoRows ?? [], fuetterungen, katzen)
+  const abgeleitet = ausHistorie(fotoRows ?? [], fuetterungen, katzen, absenceRows ?? [])
 
   const bestand = await ladeBrauchbare(admin, 500)
   const zuSchreiben = verbindeMitBestand(abgeleitet, bestand)

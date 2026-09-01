@@ -134,22 +134,25 @@ export default function GedaechtnisSeite() {
           <h1 className="text-xl font-bold text-gray-800">🧠 Was die App weiß</h1>
         </div>
 
-        <div className="card" style={{ padding: '14px 18px' }}>
-          <p style={{ fontSize: 13, color: 'rgba(60,60,67,0.6)', lineHeight: 1.55 }}>
-            Alles hier ist aus euren eigenen Daten beobachtet – aus Fotos, Orten und
-            Fütterungen. Nichts davon ist ausgedacht. Was nicht stimmt, könnt ihr
-            richtigstellen; eine Korrektur wiegt danach schwerer als jede weitere
-            Beobachtung.
-          </p>
-          <div className="flex items-center gap-3 mt-3 flex-wrap">
+        {/* Steht schon etwas da, gehört der Einleitungstext nicht mehr nach
+            oben – dann will man die Erinnerungen sehen, nicht die Erklärung. */}
+        <p style={{ fontSize: 13, color: 'rgba(60,60,67,0.55)', lineHeight: 1.55 }}>
+          Alles hier ist aus euren eigenen Daten beobachtet – aus Fotos, Orten und
+          Fütterungen. Nichts davon ist ausgedacht. Was nicht stimmt, könnt ihr
+          richtigstellen; eine Korrektur wiegt danach schwerer als jede weitere
+          Beobachtung.
+        </p>
+
+        {erinnerungen && erinnerungen.length === 0 && (
+          <div className="card" style={{ padding: '14px 18px' }}>
             <button onClick={ableiten} disabled={busy} className="btn-primary">
               {busy ? 'Wertet aus…' : 'Historie auswerten'}
             </button>
             {meldung && (
-              <span style={{ fontSize: 12, color: 'rgba(60,60,67,0.55)' }}>{meldung}</span>
+              <p style={{ fontSize: 12, color: 'rgba(60,60,67,0.55)', marginTop: 8 }}>{meldung}</p>
             )}
           </div>
-        </div>
+        )}
 
         {fehler && (
           <div className="card" style={{ padding: '14px 18px' }}>
@@ -280,6 +283,26 @@ export default function GedaechtnisSeite() {
             </div>
           </div>
         ))}
+
+        {/* Neu auswerten gehört ans Ende: Es ist Wartung, nicht der Zweck
+            der Seite. Neue Fotos und Fütterungen kommen dadurch hinzu. */}
+        {erinnerungen && erinnerungen.length > 0 && (
+          <div className="flex items-center gap-3 flex-wrap" style={{ paddingBottom: 8 }}>
+            <button
+              onClick={ableiten}
+              disabled={busy}
+              style={{
+                fontSize: 12, fontWeight: 600, padding: '7px 13px', borderRadius: 9,
+                border: 'none', background: 'rgba(60,60,67,0.06)', color: 'rgba(60,60,67,0.6)',
+              }}
+            >
+              {busy ? 'Wertet aus…' : 'Historie erneut auswerten'}
+            </button>
+            {meldung && (
+              <span style={{ fontSize: 12, color: 'rgba(60,60,67,0.5)' }}>{meldung}</span>
+            )}
+          </div>
+        )}
       </main>
     </div>
   )

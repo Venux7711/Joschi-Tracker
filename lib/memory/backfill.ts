@@ -34,6 +34,19 @@ export type FuetterungsZeile = {
 
 export type KatzenZeile = { id: string; name: string; birthday?: string | null }
 
+export type AbwesenheitsZeile = { starts_on: string; ends_on: string; label: string | null }
+
+/** Deutsches Datum ohne Bibliothek – nur für die Beschreibungstexte. */
+const MONATE = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+]
+
+function deutschesDatum(tag: string): string {
+  const [j, m, t] = tag.split('-')
+  return `${Number(t)}. ${MONATE[Number(m) - 1] ?? m} ${j}`
+}
+
 /** Datumsschlüssel eines Zeitpunkts – hier reicht der UTC-Tag. */
 const tagVon = (iso: string) => iso.slice(0, 10)
 
@@ -51,9 +64,28 @@ function zuversicht(tage: number): number {
   return Math.min(0.9, Math.round((0.3 + tage * 0.06) * 100) / 100)
 }
 
-/** Ab welcher Anzahl Tage wird aus wiederholtem Vorkommen ein Muster bzw. eine Vorliebe. */
+/** Ab welcher Anzahl Tage wiederholtes Vorkommen als Muster gilt. */
 const MUSTER_AB = 3
-const VORLIEBE_AB = 8
+
+/**
+ * Fiel dieser Aufenthalt überwiegend in eine Betreuung?
+ *
+ * Der Unterschied ist bedeutsam: „Joschi ist häufig an der Bronnbacher Straße"
+ * klingt nach einer Gewohnheit. Tatsächlich war er dort, weil die Menschen weg
+ * waren und ihn jemand betreut hat. Ohne diesen Zusatz behauptet das
+ * Gedächtnis etwas über die Katze, das in Wahrheit etwas über den Kalender der
+ * Menschen ist.
+ *
+ * Mehrheitlich, nicht vollständig: Ein einzelner Tag davor oder danach ändert
+ * nichts am Anlass.
+ */
+function betreuungFuer(tage: string[], abwesenheiten: AbwesenheitsZeile[]): boolean {
+  if (abwesenheiten.length === 0 || tage.length === 0) return false
+  const drin = tage.filter(t =>
+    abwesenheiten.some(a => t >= a.starts_on && t <= a.ends_on),
+  ).length
+  return drin > tage.length / 2
+}
 
 function bau(
   subjectType: SubjektTyp,
@@ -95,6 +127,7 @@ export function ausHistorie(
   fotos: FotoZeile[],
   fuetterungen: FuetterungsZeile[],
   katzen: KatzenZeile[],
+  abwesenheiten: AbwesenheitsZeile[] = [],
 ): Memory[] {
   const raus: Memory[] = []
   const nameVon = new Map(katzen.map(c => [c.id, c.name]))
@@ -119,12 +152,46 @@ export function ausHistorie(
     const anzahl = e.tage.size
     if (anzahl < MUSTER_AB) continue
     const name = nameVon.get(e.katze) ?? 'Die Katze'
+    const tage = [...e.tage].sort()
+
+    // Fiel der Aufenthalt in eine Betreuung, gehört das dazugesagt. Ohne den
+    // Zusatz liest sich "war acht Tage in Külsheim" wie eine Gewohnheit,
+    // dabei war es ein einmaliger Anlass.
+    const betreuung = betreuungFuer(tage, abwesenheiten)
+
     raus.push(bau(
       'cat', e.katze,
-      anzahl >= VORLIEBE_AB ? 'preference' : 'pattern',
+      // Niemals "Vorliebe": Eine Katze sucht sich ihren Aufenthaltsort nicht
+      // aus. Wo sie war, ist ein Muster – keine Neigung.
+      'pattern',
       e.ort,
-      `${name} war an ${anzahl} Tagen am Ort „${e.ort}"`,
-      [...e.tage], e.fotos,
+      betreuung
+        ? `${name} war während der Betreuung am Ort „${e.ort}"`
+        : `${name} ist häufig am Ort „${e.ort}"`,
+      tage, e.fotos,
+    ))
+  }
+
+  // ── Neue Orte ────────────────────────────────────────────────────────
+  // Das erste Mal an einem Ort ist der eigentlich interessante Teil – und die
+  // Grundlage dafür, dass ein Gedanke später "erstmals" sagen darf.
+  const ortErstesMal = new Map<string, { tag: string; fotoId: string; ort: string }>()
+  for (const f of [...fotos].sort((a, b) => a.taken_at.localeCompare(b.taken_at))) {
+    if (!f.place) continue
+    const key = normalisiere(f.place)
+    if (!ortErstesMal.has(key)) {
+      ortErstesMal.set(key, { tag: tagVon(f.taken_at), fotoId: f.id, ort: f.place })
+    }
+  }
+
+  // Der allererste Ort überhaupt ist kein Ereignis – das ist einfach der Anfang
+  const nachDatum = [...ortErstesMal.values()].sort((a, b) => a.tag.localeCompare(b.tag))
+  for (const e of nachDatum.slice(1)) {
+    raus.push(bau(
+      'household', null, 'event',
+      `erstmals am ort ${e.ort}`,
+      `Erstmals am Ort „${e.ort}", am ${deutschesDatum(e.tag)}`,
+      [e.tag], [e.fotoId], 0.9,
     ))
   }
 
@@ -139,7 +206,7 @@ export function ausHistorie(
     raus.push(bau(
       'cat', katze.id, 'milestone',
       `erstes foto von ${katze.name}`,
-      `Das erste Foto von ${katze.name} im Album, vom ${tagVon(erstes.taken_at)}`,
+      `Das erste Foto von ${katze.name} im Album, vom ${deutschesDatum(tagVon(erstes.taken_at))}`,
       [tagVon(erstes.taken_at)], [erstes.id], 0.95,
     ))
   }
@@ -154,7 +221,7 @@ export function ausHistorie(
     raus.push(bau(
       'pair', null, 'relationship',
       'gemeinsam auf einem foto',
-      `An ${new Set(tage).size} Tagen waren beide auf demselben Foto`,
+      'Beide waren gemeinsam auf einem Foto zu sehen',
       tage, zusammen.map(f => f.id),
     ))
 
@@ -162,7 +229,7 @@ export function ausHistorie(
     raus.push(bau(
       'pair', null, 'milestone',
       'erstmals gemeinsam auf einem foto',
-      `Das erste Foto mit beiden zusammen, vom ${tagVon(erstes.taken_at)}`,
+      `Das erste Foto mit beiden zusammen, vom ${deutschesDatum(tagVon(erstes.taken_at))}`,
       [tagVon(erstes.taken_at)], [erstes.id], 0.95,
     ))
   }
@@ -179,14 +246,20 @@ export function ausHistorie(
     futterTage.set(key, eintrag)
   }
 
-  for (const e of futterTage.values()) {
-    const anzahl = e.tage.size
-    if (anzahl < 5) continue
+  // Nur die häufigsten Sorten, und ausdrücklich nicht als Vorliebe: Was im
+  // Napf landet, entscheiden die Menschen. Die am häufigsten gefütterte Sorte
+  // ist bei diesem Haushalt sogar die am schlechtesten vertragene – sie eine
+  // Vorliebe der Katzen zu nennen wäre schlicht falsch.
+  const haeufigste = [...futterTage.values()]
+    .filter(e => e.tage.size >= 5)
+    .sort((a, b) => b.tage.size - a.tage.size)
+    .slice(0, 3)
+
+  for (const e of haeufigste) {
     raus.push(bau(
-      'household', null,
-      anzahl >= 15 ? 'preference' : 'pattern',
+      'household', null, 'fact',
       `futter ${e.name}`,
-      `„${e.name}" gab es an ${anzahl} Tagen`,
+      `„${e.name}" gehört zu den am häufigsten gefütterten Sorten`,
       [...e.tage], [],
     ))
   }
