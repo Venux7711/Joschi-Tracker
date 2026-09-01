@@ -74,16 +74,58 @@ export async function GET() {
 }
 
 /**
- * Aus der vorhandenen Historie ableiten, was ableitbar ist.
+ * Etwas eintragen oder die Historie auswerten.
  *
- * Kein Modellaufruf: Orte, Fütterungen und Markierungen stehen in der
- * Datenbank, die Zahlen werden gezählt. Wiederholtes Ausführen schadet nicht –
- * die Ableitung ist bei gleichem Datenstand dieselbe.
+ * Zwei Wege im selben Aufruf, weil beide dasselbe Ergebnis füllen. Mit einem
+ * Text im Rumpf entsteht eine Nutzerangabe, ohne wird abgeleitet.
  */
-export async function POST() {
+export async function POST(req: NextRequest) {
   if (!await nutzer()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = makeAdmin()
+
+  // ── Eine Angabe des Menschen ─────────────────────────────────────────
+  // "Bella hasst den Staubsauger" steht auf keinem Foto. Solche Sätze sind
+  // das wertvollste Wissen über die beiden und lassen sich nicht ableiten.
+  const rumpf = await req.json().catch(() => ({}))
+  if (typeof rumpf?.text === 'string' && rumpf.text.trim()) {
+    const text = rumpf.text.trim().slice(0, 300)
+    const subjectType = ['cat', 'pair', 'household'].includes(rumpf.subjectType)
+      ? rumpf.subjectType as 'cat' | 'pair' | 'household'
+      : 'household'
+    const subjectId = subjectType === 'cat' && typeof rumpf.subjectId === 'string'
+      ? rumpf.subjectId
+      : null
+
+    if (subjectType === 'cat' && !subjectId) {
+      return NextResponse.json({ error: 'Bitte eine Katze auswählen' }, { status: 400 })
+    }
+
+    const jetzt = new Date().toISOString()
+    const { error } = await admin.from('cat_memories').upsert({
+      subject_type: subjectType,
+      subject_id: subjectId,
+      memory_type: 'user_fact',
+      // Der Titel ist der Wiedererkennungsschlüssel. Beim Nutzerwissen ist
+      // das der Satz selbst – zweimal dasselbe einzutragen soll nichts
+      // Doppeltes erzeugen.
+      title: text.toLowerCase(),
+      description: text,
+      evidence: { fotoIds: [], tage: [] },
+      source_photo_ids: [],
+      confidence: 1,
+      occurrence_count: 1,
+      first_seen_at: jetzt,
+      last_seen_at: jetzt,
+      status: 'user_confirmed',
+      source: 'nutzer',
+      prompt_version: 'nutzereingabe',
+      updated_at: jetzt,
+    }, { onConflict: 'subject_type,subject_id,title' })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, angelegt: 1 })
+  }
   const heute = berlinDateKey(new Date())
 
   const [{ data: catRows }, { data: fotoRows }, { data: feedRows }, { data: absenceRows }] = await Promise.all([

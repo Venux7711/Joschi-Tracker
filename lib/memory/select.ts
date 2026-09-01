@@ -32,6 +32,9 @@ export const GAG_SPERRE_TAGE = 12
  * unten: dass zweimal gefüttert wurde, steht ohnehin in den Tagesdaten.
  */
 const GEWICHT: Record<MemoryTyp, number> = {
+  // Ganz oben: Der Mensch sieht seine Katzen jeden Tag, die App sieht Fotos.
+  // Was er ausdrücklich gesagt hat, wiegt schwerer als jede Ableitung.
+  user_fact: 6,
   milestone: 5,
   event: 4,
   running_gag: 3.5,
@@ -121,7 +124,9 @@ export function waehleRelevante(
   hoechstens = HOECHSTENS,
 ): Memory[] {
   return bestand
-    .filter(m => m.status === 'active')
+    // user_confirmed zählt wie active: Es ist bestätigtes Wissen, nur aus
+    // einer anderen Quelle.
+    .filter(m => m.status === 'active' || m.status === 'user_confirmed')
     .filter(m => !gagGesperrt(m, kontext))
     .map(m => ({ m, punkte: bewerte(m, kontext) }))
     .sort((a, b) => b.punkte - a.punkte)
@@ -178,7 +183,8 @@ export function alsText(memories: Memory[], namen: Record<string, string>): stri
       : (m.subjectId && namen[m.subjectId]) || 'Katze'
     const wie = m.occurrenceCount > 1 ? `, ${m.occurrenceCount}× beobachtet` : ''
     const seit = m.firstSeenAt !== m.lastSeenAt ? `, seit ${m.firstSeenAt}` : ''
-    const art = m.memoryType === 'running_gag' ? ' [wiederkehrendes Thema]'
+    const art = m.memoryType === 'user_fact' ? ' [vom Haushalt mitgeteilt]'
+      : m.memoryType === 'running_gag' ? ' [wiederkehrendes Thema]'
       : m.memoryType === 'milestone' ? ' [Meilenstein]'
       : m.memoryType === 'event' ? ' [Ereignis]'
       : ''

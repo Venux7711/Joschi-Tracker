@@ -33,6 +33,7 @@ type Erinnerung = {
 }
 
 const ART_LABEL: Record<string, string> = {
+  user_fact: 'Von euch',
   milestone: 'Meilenstein',
   event: 'Ereignis',
   running_gag: 'Wiederkehrendes Thema',
@@ -45,7 +46,8 @@ const ART_LABEL: Record<string, string> = {
 }
 
 /** Die Reihenfolge, in der Gruppen erscheinen – Wichtigstes zuerst. */
-const ART_RANG = ['milestone', 'event', 'running_gag', 'relationship', 'preference', 'pattern', 'temporal_pattern', 'observation', 'fact']
+// Von euch Gesagtes steht oben: Es ist das verlässlichste Wissen auf der Seite.
+const ART_RANG = ['user_fact', 'milestone', 'event', 'running_gag', 'relationship', 'preference', 'pattern', 'temporal_pattern', 'observation', 'fact']
 
 export default function GedaechtnisSeite() {
   const [erinnerungen, setErinnerungen] = useState<Erinnerung[] | null>(null)
@@ -54,12 +56,15 @@ export default function GedaechtnisSeite() {
   const [meldung, setMeldung] = useState<string | null>(null)
   const [bearbeitet, setBearbeitet] = useState<string | null>(null)
   const [entwurf, setEntwurf] = useState('')
+  const [katzen, setKatzen] = useState<{ id: string; name: string }[]>([])
+  const [neuText, setNeuText] = useState('')
+  const [neuWer, setNeuWer] = useState('household')
 
   const laden = () => {
     setFehler(null)
     fetch('/api/memory')
       .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then(d => setErinnerungen(d.erinnerungen ?? []))
+      .then(d => { setErinnerungen(d.erinnerungen ?? []); setKatzen(d.katzen ?? []) })
       .catch(() => setFehler('Konnte nicht geladen werden.'))
   }
 
@@ -82,6 +87,24 @@ export default function GedaechtnisSeite() {
       setMeldung('Das Ableiten hat nicht geklappt.')
     }
     setBusy(false)
+  }
+
+  /** Etwas eintragen, das die App nie beobachten könnte. */
+  const eintragen = async () => {
+    const text = neuText.trim()
+    if (!text) return
+    setBusy(true); setMeldung(null)
+    const res = await fetch('/api/memory', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        subjectType: neuWer === 'household' || neuWer === 'pair' ? neuWer : 'cat',
+        subjectId: neuWer === 'household' || neuWer === 'pair' ? null : neuWer,
+      }),
+    })
+    setBusy(false)
+    if (res.ok) { setNeuText(''); laden() }
+    else setMeldung('Konnte nicht gespeichert werden.')
   }
 
   const speichern = async (id: string) => {
@@ -142,6 +165,41 @@ export default function GedaechtnisSeite() {
           richtigstellen; eine Korrektur wiegt danach schwerer als jede weitere
           Beobachtung.
         </p>
+
+        {/* Was die App nie sehen kann, muss man ihr sagen können. "Bella
+            hasst den Staubsauger" steht auf keinem Foto. */}
+        <div className="card" style={{ padding: '14px 18px' }}>
+          <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(60,60,67,0.4)', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 8 }}>
+            Selbst etwas beibringen
+          </p>
+          <input
+            value={neuText}
+            onChange={e => setNeuText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') eintragen() }}
+            placeholder="z.B. Bella hasst den Staubsauger"
+            maxLength={300}
+            className="input-field"
+          />
+          <div className="flex gap-2 flex-wrap mt-2 items-center">
+            <select
+              value={neuWer}
+              onChange={e => setNeuWer(e.target.value)}
+              className="input-field"
+              style={{ width: 'auto', flex: '0 1 auto' }}
+            >
+              <option value="household">Zuhause</option>
+              <option value="pair">Beide</option>
+              {katzen.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
+            </select>
+            <button onClick={eintragen} disabled={!neuText.trim() || busy} className="btn-primary">
+              Merken
+            </button>
+          </div>
+          <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.4)', marginTop: 8 }}>
+            Was ihr hier eintragt, wiegt schwerer als alles, was die App selbst
+            beobachtet – und veraltet nicht von allein.
+          </p>
+        </div>
 
         {erinnerungen && erinnerungen.length === 0 && (
           <div className="card" style={{ padding: '14px 18px' }}>

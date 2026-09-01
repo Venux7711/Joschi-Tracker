@@ -23,8 +23,13 @@ export type MemoryTyp =
   | 'running_gag'
   | 'relationship'
   | 'temporal_pattern'
+  /**
+   * Was ein Mensch der App gesagt hat und sie nie beobachten könnte.
+   * Kategorisch etwas anderes als eine Beobachtung mit hoher Zuversicht.
+   */
+  | 'user_fact'
 
-export type MemoryStatus = 'tentative' | 'active' | 'stale' | 'superseded'
+export type MemoryStatus = 'tentative' | 'active' | 'stale' | 'superseded' | 'user_confirmed'
 export type MemoryQuelle = 'beobachtung' | 'nutzer'
 export type SubjektTyp = 'cat' | 'pair' | 'household'
 

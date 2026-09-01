@@ -213,3 +213,18 @@ test('der Beleg wächst mit, bleibt aber begrenzt', () => {
   // Das jüngste Vorkommnis muss dabei sein
   assert.equal(bestand[0].evidence.tage[0], '2026-09-30')
 })
+
+test('Nutzerwissen veraltet nicht von allein', () => {
+  // Es zu widerrufen ist die Entscheidung des Menschen, nicht die des Kalenders
+  const gesagt = {
+    subjectType: 'cat', subjectId: 'bella-id', memoryType: 'user_fact',
+    title: 'staubsauger', description: 'Bella hasst den Staubsauger',
+    evidence: { fotoIds: [], tage: ['2026-01-01'] }, sourcePhotoIds: [],
+    confidence: 1, occurrenceCount: 1,
+    firstSeenAt: '2026-01-01', lastSeenAt: '2026-01-01',
+    status: 'user_confirmed', source: 'nutzer',
+  }
+  assert.equal(HALTBARKEIT_TAGE.user_fact, null)
+  assert.equal(veralte([gesagt], '2028-01-01')[0].status, 'user_confirmed')
+  assert.equal(widersprich(gesagt).confidence, 1)
+})

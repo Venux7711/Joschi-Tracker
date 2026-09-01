@@ -210,3 +210,27 @@ test('unbrauchbare Modellantworten ergeben keine Beobachtungen', () => {
   assert.deepEqual(leseBeobachtungen('text', [], '2026-09-01'), [])
   assert.deepEqual(leseBeobachtungen([{}], [], '2026-09-01'), [])
 })
+
+// ── Nutzerwissen ─────────────────────────────────────────────────────────
+
+test('Nutzerwissen wiegt schwerer als jede Ableitung', () => {
+  // Der Mensch sieht seine Katzen jeden Tag, die App sieht drei Fotos.
+  const gesagt = mem({ id: 'u', memoryType: 'user_fact', status: 'user_confirmed',
+    confidence: 1, occurrenceCount: 1, title: 'staubsauger' })
+  const beobachtet = mem({ id: 'b', memoryType: 'preference', confidence: 0.9, occurrenceCount: 20 })
+  assert.ok(bewerte(gesagt, kontext()) > bewerte(beobachtet, kontext()))
+})
+
+test('user_confirmed fließt in Gedanken ein wie active', () => {
+  // Es ist bestätigtes Wissen, nur aus einer anderen Quelle
+  const auswahl = waehleRelevante([
+    mem({ id: 'u', memoryType: 'user_fact', status: 'user_confirmed' }),
+  ], kontext())
+  assert.equal(auswahl.length, 1)
+})
+
+test('Nutzerwissen wird als solches gekennzeichnet', () => {
+  // Damit das Modell den Unterschied zwischen Gesagtem und Gefolgertem kennt
+  const text = alsText([mem({ memoryType: 'user_fact', description: 'Bella hasst den Staubsauger' })], {})
+  assert.ok(text.includes('vom Haushalt mitgeteilt'), text)
+})

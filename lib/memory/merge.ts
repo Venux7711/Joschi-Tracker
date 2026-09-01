@@ -53,6 +53,9 @@ export const HALTBARKEIT_TAGE: Record<MemoryTyp, number | null> = {
   running_gag: 150,
   relationship: 120,
   temporal_pattern: 400,
+  // Was ein Mensch gesagt hat, veraltet nicht von selbst. Es zu widerrufen
+  // ist seine Entscheidung, nicht die des Kalenders.
+  user_fact: null,
 }
 
 const tagAbstand = (a: string, b: string): number =>
