@@ -9,6 +9,7 @@ import {
   leseAntwort, leseBeobachtungsteil,
   type Stimme, type Tagesbild,
 } from '@/lib/thoughts'
+import { technikFuer, tagesAnweisung, gleicheForm } from '@/lib/humor'
 import { leseBeobachtungen, zuKandidaten } from '@/lib/memory/observe'
 import { verschmelze, veralte } from '@/lib/memory/merge'
 import { waehleRelevante, alsText, zuAehnlich, type Kontext } from '@/lib/memory/select'
@@ -351,12 +352,50 @@ async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: 
     console.error('Gedächtnis nicht verfügbar, Gedanke entsteht ohne:', e)
   }
 
-  const antwort = await frageKi(
-    `${SYSTEM_PROMPT}${eigeneStimmen}\n\nDATEN VON GESTERN\n${beschreibeTag(bild)}${hinweis}` +
-    `\n\nERINNERUNGEN\n${erinnerungsText}`,
-    bildteile,
-  )
-  const gelesen = antwort ? leseAntwort(antwort) : null
+  /**
+   * Der Versuch, einen Satz zu bekommen, der nicht wie gestern klingt.
+   *
+   * Zwei Anläufe: Beim zweiten wird eine andere Technik vorgegeben und
+   * ausdrücklich benannt, was am ersten nicht taugte. Das ist deutlich besser
+   * als der frühere Weg, bei dem ein zu ähnlicher Satz durch einen Ersatz aus
+   * fester Liste ausgetauscht wurde – der klang zuverlässig schlechter als
+   * das, was er ersetzte.
+   */
+  const basis = (versatz: number, tadel = '') => {
+    const technik = technikFuer(tag, versatz)
+    return `${SYSTEM_PROMPT}${eigeneStimmen}\n\n${tagesAnweisung(technik, letzteSaetze)}${tadel}` +
+      `\n\nDATEN VON GESTERN\n${beschreibeTag(bild)}${hinweis}` +
+      `\n\nERINNERUNGEN\n${erinnerungsText}`
+  }
+
+  let antwort = await frageKi(basis(0), bildteile)
+  let gelesen = antwort ? leseAntwort(antwort) : null
+
+  // Kommt dieselbe Satzform wie zuletzt heraus, einmal nachfassen. Genau das
+  // war der Befund: fünf von sechs Sätzen in der Form "Ich + Verb + Ort".
+  const formGleich = gelesen
+    ? STIMMEN.filter(s => gelesen?.[s] && gleicheForm(gelesen[s]!.text, letzteSaetze)).length
+    : 0
+
+  if (gelesen && formGleich >= 2) {
+    console.log(`Gedanken: ${formGleich} Sätze in alter Form – zweiter Anlauf`)
+    const zweite = await frageKi(
+      basis(3, '\n\nDein erster Entwurf hatte dieselbe Satzform wie die letzten Tage. ' +
+        'Fang anders an und bau die Sätze anders.'),
+      bildteile,
+    )
+    const zweiteGelesen = zweite ? leseAntwort(zweite) : null
+    // Nur übernehmen, wenn der zweite Anlauf wirklich besser ist
+    if (zweiteGelesen) {
+      const nochGleich = STIMMEN.filter(
+        s => zweiteGelesen[s] && gleicheForm(zweiteGelesen[s]!.text, letzteSaetze),
+      ).length
+      if (nochGleich < formGleich) {
+        antwort = zweite
+        gelesen = zweiteGelesen
+      }
+    }
+  }
 
   // Beobachtungen ins Gedächtnis einarbeiten. Getrennt abgesichert: Ein Fehler
   // hier darf den fertigen Gedanken nicht kosten.
@@ -405,9 +444,10 @@ async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: 
     const g = gelesen?.[s]
     const foto = bildFuer(g?.bild ?? null)
 
-    // Sagt der neue Satz im Kern dasselbe wie einer der letzten, wird der
-    // Ersatz genommen. Lieber ein schlichter Satz als zum fünften Mal
-    // dieselbe Pointe in anderen Worten.
+    // Nur bei wörtlicher Wiederholung auf den Ersatz ausweichen. Die
+    // Formgleichheit ist oben schon behandelt worden, und dafür einen Satz aus
+    // fester Liste einzusetzen wäre der falsche Weg: Er klingt zuverlässig
+    // schlechter als das, was er ersetzt.
     const text = g?.text && !zuAehnlich(g.text, letzteSaetze) ? g.text : ersatz[s]
 
     return {

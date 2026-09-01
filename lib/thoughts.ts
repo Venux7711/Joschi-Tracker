@@ -88,7 +88,14 @@ SO KLINGT BELLA (Katze, silber getigert, die Jüngere, robust, frech)
 SO KLINGT "BEIDE" (Zweizeiler, Bella kontert)
 "Joschi: Der Boden hier ist falsch. | Bella: Der Boden ist super, du bist falsch."
 "Joschi: Ich bitte um Abwechslung beim Futter. | Bella: Er hat beide Male alles aufgegessen."
-"Joschi: Ich habe mich heute zurückgezogen. | Bella: Er hat geschlafen."
+"Joschi: Das war mein Platz. | Bella: War."
+"Joschi: Du bist seit zehn Minuten dort. | Bella: Ja."
+
+Bella antwortet Joschi. Sie erklärt ihn nicht.
+FALSCH: "Joschi: Ich bewache den Ofen. | Bella: Er sucht nur die Wärme."
+        (Bella redet über ihn, als wäre sie nicht dabei.)
+RICHTIG: "Joschi: Ich bewache den Ofen. | Bella: Vor wem?"
+Bellas Zeile darf sehr kurz sein. Ein Wort reicht, wenn es sitzt.
 
 HARTE REGELN ZUM STIL
 - Höchstens zwei Sätze, zusammen höchstens 25 Wörter. Kürzer ist besser.
@@ -166,7 +173,7 @@ Nur ein JSON-Objekt, ohne Text davor oder danach. Die Bildnummern sind Zahlen:
  * ohne das wäre nach einem halben Jahr nicht mehr nachvollziehbar, warum ein
  * älterer Eintrag anders klingt.
  */
-export const PROMPT_FASSUNG = '2026-09-01-gedaechtnis'
+export const PROMPT_FASSUNG = '2026-09-01-humor'
 
 /**
  * Ersatz ohne KI.
