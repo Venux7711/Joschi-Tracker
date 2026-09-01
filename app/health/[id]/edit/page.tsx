@@ -66,12 +66,13 @@ export default function EditHealthPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      // Ohne Filter auf den Eintragenden – siehe Fütterungen: Trägt Marion
+      // während der Betreuung etwas ein, muss es zuhause zu öffnen sein.
       const { data: entry } = await supabase
         .from('health_logs')
         .select('*')
         .eq('id', id)
-        .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
 
       if (!entry) { setNotFound(true); return }
 

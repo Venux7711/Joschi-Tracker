@@ -74,12 +74,15 @@ export default function EditFeedingPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      // Ohne Filter auf den Eintragenden: Gefüttert wird gemeinsam, und wer
+      // einen Eintrag angelegt hat, ist zufällig die Person, die gerade das
+      // Handy in der Hand hatte. Genau daran ließ sich ein Eintrag von Eva
+      // oder Marion nicht öffnen.
       const { data: entry } = await supabase
         .from('feeding_logs')
         .select('*')
         .eq('id', id)
-        .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
 
       if (!entry) { setNotFound(true); return }
 
@@ -107,10 +110,11 @@ export default function EditFeedingPage() {
       const nameById = new Map((catRows ?? []).map((c) => [c.id, c.name as string]))
       setMealCatNames(mealRows.map((r) => nameById.get(r.cat_id)).filter((n): n is string => !!n))
 
+      // Auch die Vorschlagsliste über den ganzen Haushalt: Eine Sorte, die
+      // Marion zuletzt gefüttert hat, muss hier auswählbar sein.
       const { data: logs } = await supabase
         .from('feeding_logs')
         .select('food_brand, food_type')
-        .eq('user_id', user.id)
         .order('logged_at', { ascending: false })
         .limit(100)
 

@@ -713,14 +713,42 @@ export default async function DashboardPage({
     ? `${feedingsRange[feedingsRange.length - 1].food_brand}||${feedingsRange[feedingsRange.length - 1].food_type}`
     : null
   const quickPantry = pantry.map(p => ({ id: p.id, brand: p.brand, type: p.type, quantity: p.quantity }))
-  const quickSorts = [...quickPantry]
-    .sort((a, b) => {
+
+  /**
+   * Die Sorten für die Schnellerfassung.
+   *
+   * Nicht nur der Vorrat – genau daran ist es gescheitert: Eine Sorte, die
+   * seit Tagen gefüttert wird, deren Dose aber unterwegs oder aufgebraucht
+   * ist, stand nicht zur Auswahl. Wer sie trotzdem füttert, trägt dann
+   * notgedrungen etwas Falsches ein, und die Verträglichkeitsrechnung stimmt
+   * hinterher nicht mehr.
+   *
+   * Reihenfolge: zuletzt Gefüttertes zuerst (in den meisten Fällen wiederholt
+   * sich die Sorte), dann der Vorrat nach Bestand, dann kürzlich Gefüttertes
+   * ohne Bestand.
+   */
+  const kuerzlichGefuettert = Array.from(
+    new Map(
+      [...feedingsRange]
+        .reverse()
+        .map(f => [`${f.food_brand}||${f.food_type}`, { brand: f.food_brand, type: f.food_type }]),
+    ).entries(),
+  ).map(([, wert]) => wert)
+
+  const vorratsSchluessel = new Set(quickPantry.map(p => `${p.brand}||${p.type}`))
+  const ohneBestand = kuerzlichGefuettert
+    .filter(s => !vorratsSchluessel.has(`${s.brand}||${s.type}`))
+    .map(s => ({ id: null, brand: s.brand, type: s.type, quantity: 0 }))
+
+  const quickSorts = [
+    ...[...quickPantry].sort((a, b) => {
       const aLast = `${a.brand}||${a.type}` === lastFedKey
       const bLast = `${b.brand}||${b.type}` === lastFedKey
       if (aLast !== bLast) return aLast ? -1 : 1
       return b.quantity - a.quantity
-    })
-    .slice(0, 4)
+    }),
+    ...ohneBestand,
+  ].slice(0, 5)
 
   return (
     <div className="min-h-screen">

@@ -103,10 +103,11 @@ function NewFeedingForm() {
       // Standard: für alle Katzen (sie werden immer gemeinsam gefüttert)
       setSelectedCatIds(new Set(catList.map((c) => c.id)))
 
+      // Über den ganzen Haushalt: Eine Sorte, die jemand anderes zuletzt
+      // gefüttert hat, muss auch hier vorgeschlagen werden.
       const { data: logs } = await supabase
         .from('feeding_logs')
         .select('food_brand, food_type')
-        .eq('user_id', user.id)
         .order('logged_at', { ascending: false })
         .limit(100)
 

@@ -4,9 +4,14 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { consumePreviousCan } from '@/lib/pantry'
+import { consumePreviousCan , type PantryLike } from '@/lib/pantry'
 
-export type QuickFeedSort = { id: string; brand: string; type: string; quantity: number }
+/**
+ * id ist null bei Sorten, die gerade nicht im Vorrat stehen. Die gibt es hier
+ * bewusst: Eine Sorte, die seit Tagen gefüttert wird, deren Dose aber
+ * unterwegs oder aufgebraucht ist, muss eintragbar bleiben.
+ */
+export type QuickFeedSort = { id: string | null; brand: string; type: string; quantity: number }
 
 /**
  * Ein-Tipp-Erfassung fürs Dashboard.
@@ -70,13 +75,15 @@ export default function QuickFeed({
       return
     }
 
-    // Sortenwechsel = vorherige Dose war leer (gleiche Regel wie im Formular)
+    // Sortenwechsel = vorherige Dose war leer (gleiche Regel wie im Formular).
+    // Nur echte Vorratseinträge übergeben: Sorten ohne Bestand haben keine
+    // Kennung und können auch nicht abgezogen werden.
     await consumePreviousCan(supabase, {
       catId: catIds[0],
       loggedAt,
       newBrand: sort.brand,
       newType: sort.type,
-      pantry,
+      pantry: pantry.filter((p): p is PantryLike => p.id !== null),
     })
 
     setSaving(null)
@@ -106,7 +113,11 @@ export default function QuickFeed({
               }}
             >
               {busy ? '⏳ ' : '🍽️ '}{s.type || s.brand}
-              <span style={{ fontWeight: 500, color: 'rgba(60,60,67,0.4)' }}> · {s.quantity}</span>
+              {/* Bestand nur zeigen, wenn es einen gibt – eine "· 0" hinter
+                  einer Sorte sieht nach Fehler aus, nicht nach Angebot. */}
+              {s.quantity > 0 && (
+                <span style={{ fontWeight: 500, color: 'rgba(60,60,67,0.4)' }}> · {s.quantity}</span>
+              )}
             </button>
           )
         })}
