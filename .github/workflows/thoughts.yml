@@ -1,0 +1,58 @@
+name: Katzengedanken
+
+# Erzeugt nachts die Gedanken für gestern und arbeitet das Gedächtnis fort.
+#
+# Der Grund ist kein Komfort, sondern ein Datenverlust: Bis hierher entstanden
+# Gedanken und Beobachtungen nur, wenn jemand das Dashboard öffnete – und die
+# Erzeugung fragt immer nach gestern. Wer drei Tage nicht hineinsah, verlor die
+# Beobachtungen dieser drei Tage endgültig, samt der Muster, die daraus hätten
+# wachsen können.
+#
+# Dieser Lauf holt versäumte Tage nach, höchstens drei je Nacht. Nach einem
+# längeren Ausfall arbeitet er sich über mehrere Nächte durch, statt auf einen
+# Schlag zu bezahlen und ins Zeitlimit zu laufen.
+#
+# Nebeneffekt: Morgens steht der Gedanke schon da, statt beim ersten Öffnen
+# zehn Sekunden lang zu entstehen.
+
+on:
+  schedule:
+    # 04:20 UTC – tief in der Nacht, lange nach Mitternacht Berliner Zeit, damit
+    # "gestern" auch wirklich abgeschlossen ist. Der ungerade Minutenwert ist
+    # Absicht: Zur vollen Stunde sind die GitHub-Runner am stärksten ausgelastet
+    # und Läufe verzögern sich um bis zu einer halben Stunde.
+    - cron: '20 4 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: thoughts
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gedanken erzeugen und Gedächtnis fortschreiben
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "⏸ CRON_SECRET ist nicht gesetzt – übersprungen."
+            echo "  Ohne das Secret erzeugt die App die Gedanken weiterhin beim"
+            echo "  ersten Öffnen des Dashboards; versäumte Tage bleiben dann leer."
+            exit 0
+          fi
+
+          # Grosszuegiges Zeitlimit: Bis zu drei Tage mit Bildanalyse
+          response=$(curl -sS --fail-with-body -m 320 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "https://joschi-tracker.vercel.app/api/thoughts/cron")
+
+          echo "$response"
+
+          echo "$response" | node -e "
+            let d=''; process.stdin.on('data',c=>c&&(d+=c)).on('end',()=>{
+              const r = JSON.parse(d)
+              console.log('erzeugt      :', (r.erledigt ?? []).join(', ') || 'nichts offen')
+              console.log('uebersprungen:', (r.uebersprungen ?? []).join(', ') || 'keine leeren Tage')
+            })"
