@@ -192,6 +192,7 @@ test('die Tagesanweisung verlangt einen Vorschlag je Bild', () => {
   assert.ok(text.includes('einen Vorschlag zu jedem beiliegenden Bild'), text)
   assert.ok(text.includes('falschen Bild'), text)
   assert.ok(text.includes('ich stehe'), 'verbrauchte Satzanfänge fehlen')
+  assert.ok(text.includes('wer darauf markiert ist'), text)
   assert.ok(text.includes('status'), 'verbrauchte Ansätze fehlen')
   // Und ausdrücklich keine Kalender-Vorgabe mehr
   assert.ok(text.includes('nicht der Kalender'), text)

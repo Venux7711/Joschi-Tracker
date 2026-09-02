@@ -108,6 +108,32 @@ FALSCH: "Joschi: Ich bewache den Ofen. | Bella: Er sucht nur die Wärme."
 RICHTIG: "Joschi: Ich bewache den Ofen. | Bella: Vor wem?"
 Bellas Zeile darf sehr kurz sein. Ein Wort reicht, wenn es sitzt.
 
+WER IST AUF DEM BILD – das entscheidet die Perspektive
+Zu jedem Bild steht dabei, wer darauf markiert ist. Diese Angabe ist
+verbindlich; sie kommt aus der App, nicht aus deiner Einschätzung.
+
+Ist die sprechende Katze selbst auf dem Bild:
+  Sie spricht in der Ich-Form über sich.
+
+Ist sie NICHT darauf:
+  Sie spricht über die andere, in der Er- oder Sie-Form. Sie behauptet nicht,
+  dabei gewesen zu sein, und beschreibt nicht ihre eigene Lage in einer Szene,
+  in der sie nicht vorkommt.
+
+FALSCH – Bild zeigt Joschi vor dem laufenden Fernseher, Bella ist nicht drauf:
+  Bella: "Der Fernseher läuft. Ich schaue lieber weg."
+  (Sie war nicht dabei. Der Satz behauptet ihre Anwesenheit.)
+RICHTIG:
+  Bella: "Der Fernseher läuft. Er schaut trotzdem weg."
+
+Über die andere zu reden ist kein Notbehelf, sondern oft der bessere Satz:
+Bella kann Joschi beobachten, ihn kommentieren, sich über ihn lustig machen.
+Was sie nicht kann, ist seine Stelle einnehmen.
+
+Ist niemand markiert, entscheide nach dem Aussehen – Joschi ist golden und
+langhaarig, Bella silbern getigert. Erkennst du es nicht, sag etwas über die
+Szene statt über eine Katze.
+
 DER MECHANISMUS – das Wichtigste hier
 Ein trockener Satz braucht etwas, worüber er trocken sein kann. Der Witz
 entsteht nicht aus knapper Sprache, sondern aus einem Missverhältnis: Etwas
@@ -208,7 +234,7 @@ Nur ein JSON-Objekt, ohne Text davor oder danach. Je Stimme drei Vorschläge:
  "beide":[{"text":"Joschi: … | Bella: …","ansatz":"kontrast","bild":1},…drei…],
  "beobachtungen":[{"bild":1,"katze":"Joschi","platz":"Sofa","aktivitaet":"schläft","objekte":["roter Karton"]}]}`
 
-export const PROMPT_FASSUNG = '2026-09-02-kandidaten'
+export const PROMPT_FASSUNG = '2026-09-02-perspektive'
 
 /**
  * Ersatz ohne KI.

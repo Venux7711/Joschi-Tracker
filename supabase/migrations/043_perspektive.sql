@@ -1,0 +1,22 @@
+-- Wer nicht auf dem Bild ist, redet ueber die andere - nicht an ihrer Stelle.
+--
+-- Befund aus der App: Auf einem Foto sitzt Joschi vor dem laufenden Fernseher
+-- und schaut nach links weg. Bella sagte dazu "Der Fernseher laeuft, ich
+-- schaue lieber weg" - sie war gar nicht darauf. Der Satz haette lauten
+-- muessen: "Der Fernseher laeuft. Er schaut trotzdem weg."
+--
+-- Zwei Ursachen, beide behoben:
+--
+-- 1. Das Modell erfuhr nie, wer auf welchem Bild markiert ist, obwohl es in
+--    photos.cat_ids steht. Es musste raten. Jetzt liegt zu jedem Bild die
+--    Markierung bei, und die Anweisung regelt die Perspektive.
+--
+-- 2. Liess sich eines der Bilder nicht laden, wurde es beim Verschicken
+--    uebersprungen, die Nummerierung danach aber weiter aus der urspruenglichen
+--    Auswahl gebildet. Bild 3 der Antwort meinte dann Foto 4. Jeder Satz ab dem
+--    Ausfall stand unter dem falschen Bild.
+--
+-- Die vorhandenen Gedanken sind mit der alten Anweisung entstanden.
+-- (idempotent)
+
+DELETE FROM cat_thoughts;

@@ -132,3 +132,14 @@ test('kein Eintrag wird als "war alles gut" beschrieben, nicht als Lücke', () =
   assert.ok(text.includes('keine Auffälligkeiten'), text)
   assert.ok(!text.includes('nicht eingetragen') || text.includes('Futter'), text)
 })
+
+test('die Anweisung regelt, wer aus welcher Perspektive spricht', () => {
+  // Der Befund: Auf einem Foto sitzt Joschi vor dem laufenden Fernseher und
+  // schaut weg – Bella sagte dazu "Der Fernseher läuft, ich schaue lieber
+  // weg". Sie war nicht dabei. Wer nicht auf dem Bild ist, redet über die
+  // andere, nicht an ihrer Stelle.
+  const { SYSTEM_PROMPT } = require('../.test-build/thoughts')
+  assert.ok(SYSTEM_PROMPT.includes('WER IST AUF DEM BILD'), 'Abschnitt fehlt')
+  assert.ok(SYSTEM_PROMPT.includes('Er schaut trotzdem weg.'), 'das richtige Beispiel fehlt')
+  assert.ok(SYSTEM_PROMPT.includes('Ich schaue lieber weg.'), 'das falsche Beispiel fehlt')
+})

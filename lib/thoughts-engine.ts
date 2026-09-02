@@ -54,6 +54,8 @@ async function baueTagesbild(
 ): Promise<{
   bild: Tagesbild
   bilder: Bildquelle[]
+  /** Foto-Kennung → wer darauf markiert ist. Bestimmt die Perspektive der Sätze. */
+  bildInfo: Map<string, string>
   /** Katzenname klein → Kennung. Das Modell nennt Namen, das Gedächtnis braucht Kennungen. */
   katzenIds: Record<string, string>
   /** Umgekehrt, für die Formulierung der Erinnerungen. */
@@ -125,6 +127,30 @@ async function baueTagesbild(
    */
   const bilder: Bildquelle[] = waehleFotos(fotos, 5, versatz)
 
+  /**
+   * Wer ist auf welchem Bild markiert?
+   *
+   * Ohne diese Angabe schrieb jede Stimme zu jedem Foto in der Ich-Form –
+   * auch zu Bildern, auf denen sie gar nicht war. Bella kommentierte einen
+   * laufenden Fernseher mit "ich schaue lieber weg", während in Wahrheit
+   * Joschi davorsaß und wegsah. Die Markierung steht in der Datenbank; sie
+   * dem Modell vorzuenthalten hieß, es raten zu lassen.
+   */
+  const bildInfo = new Map<string, string>()
+  for (const b of bilder) {
+    const zeile = fotos.find(f => f.id === b.id)
+    if (!zeile) continue
+    const markiert: string[] = zeile.cat_ids?.length
+      ? zeile.cat_ids
+      : zeile.cat_id ? [zeile.cat_id] : []
+    const namen = markiert.map(id => nameVon(id))
+    const wer = namen.length === 0
+      ? 'niemand markiert – entscheide nach dem Aussehen'
+      : `markiert: ${namen.join(' und ')}`
+    const uhrzeit = formatBerlin(zeile.taken_at, { hour: '2-digit', minute: '2-digit' })
+    bildInfo.set(b.id, `${wer}, ${uhrzeit}${zeile.place ? `, ${zeile.place}` : ''}`)
+  }
+
   return {
     bild: {
       datum: formatBerlin(gestern, { day: 'numeric', month: 'long' }),
@@ -141,6 +167,7 @@ async function baueTagesbild(
       besonderes,
     },
     bilder,
+    bildInfo,
     katzenIds: Object.fromEntries(cats.map(c => [c.name.toLowerCase(), c.id])),
     katzenNamen: Object.fromEntries(cats.map(c => [c.id, c.name])),
   }
@@ -180,9 +207,22 @@ async function holeMitLimit(url: string, ms: number): Promise<Response | null> {
 }
 
 /** Lädt die Fotos herunter und macht Bildteile für die Anfrage daraus. */
-async function ladeBilder(urls: string[]): Promise<Bildteil[]> {
-  const teile: Bildteil[] = []
-  for (const url of urls) {
+/**
+ * Ein geladenes Bild – zusammen mit dem Foto, aus dem es stammt.
+ *
+ * Die Verbindung muss erhalten bleiben. Vorher gab ladeBilder nur die Teile
+ * zurück und übersprang, was sich nicht laden ließ; die Zuordnung "Bild 2 der
+ * Anfrage" zu "zweites Foto der Auswahl" stimmte danach nicht mehr. Scheiterte
+ * das zweite von fünf Fotos, sah das Modell vier Bilder, und jeder Satz ab dem
+ * zweiten landete unter dem falschen Foto. Bei einer Karte, die den Satz neben
+ * sein Bild stellt, ist das genau der Fehler, den man sieht.
+ */
+type Geladen = { quelle: Bildquelle; teil: Bildteil }
+
+async function ladeBilder(quellen: Bildquelle[]): Promise<Geladen[]> {
+  const geladen: Geladen[] = []
+  for (const quelle of quellen) {
+    const url = quelle.url
     // Erst die verkleinerte Fassung, sonst das Original
     let res = await holeMitLimit(kleinereFassung(url), 8_000)
     if (!res?.ok) res = await holeMitLimit(url, 8_000)
@@ -195,9 +235,12 @@ async function ladeBilder(urls: string[]): Promise<Bildteil[]> {
     // Kam trotzdem etwas Großes zurück, wird es übersprungen statt die
     // Anfrage damit über die Zeit zu bringen.
     if (puffer.byteLength > 2 * 1024 * 1024) continue
-    teile.push({ inline_data: { mime_type: typ, data: puffer.toString('base64') } })
+    geladen.push({
+      quelle,
+      teil: { inline_data: { mime_type: typ, data: puffer.toString('base64') } },
+    })
   }
-  return teile
+  return geladen
 }
 
 async function frageKi(prompt: string, bilder: Bildteil[]): Promise<string | null> {
@@ -252,13 +295,26 @@ export async function erzeuge(
    */
   versatz = 0,
 ) {
-  const { bild, bilder, katzenIds, katzenNamen } = await baueTagesbild(admin, gestern, versatz)
-  const bildteile = await ladeBilder(bilder.map(b => b.url))
+  const { bild, bilder, bildInfo, katzenIds, katzenNamen } = await baueTagesbild(admin, gestern, versatz)
+  const geladen = await ladeBilder(bilder)
+  const bildteile = geladen.map(g => g.teil)
+
+  /**
+   * Die Bildliste, die dem Modell beiliegt.
+   *
+   * Nummeriert wird über die geladenen Bilder, nicht über die ausgewählten:
+   * Nur so meint "Bild 3" in der Antwort dasselbe Foto wie "Bild 3" in der
+   * Anfrage, auch wenn eines nicht geladen werden konnte.
+   */
+  const bildListe = geladen
+    .map((g, i) => `Bild ${i + 1}: ${bildInfo.get(g.quelle.id) ?? 'niemand markiert – entscheide nach dem Aussehen'}`)
+    .join('\n')
+
   const hinweis = bildteile.length > 0
     // Die Gesamtzahl mitzunennen ist nicht kosmetisch: Bei fünfzehn Fotos und
     // drei Bildern soll das Modell wissen, dass es einen Ausschnitt sieht, und
     // nicht behaupten, das sei alles gewesen.
-    ? `\n\nDazu ${bildteile.length} von ${bild.fotos.anzahl} Fotos des Tages – sieh sie dir an.`
+    ? `\n\nDazu ${bildteile.length} von ${bild.fotos.anzahl} Fotos des Tages – sieh sie dir an.\n${bildListe}`
     : '\n\nEs liegen keine Fotos bei.'
 
   /**
@@ -393,11 +449,18 @@ export async function erzeuge(
    * dem Satz schlicht falsch. Dann lieber das erste als gar keins: Die Karte
    * soll nicht mal mit und mal ohne Bild dastehen.
    */
-  const bildFuer = (nummer: number | null) => {
-    const verfuegbar = bilder.slice(0, bildteile.length)
-    if (verfuegbar.length === 0) return null
-    if (nummer === null || nummer > verfuegbar.length) return verfuegbar[0]
-    return verfuegbar[nummer - 1] ?? verfuegbar[0]
+  /**
+   * Die Bildnummer aus der Antwort auf das Foto, das das Modell unter dieser
+   * Nummer gesehen hat.
+   *
+   * Ohne Nummer oder mit einer, die es nicht gibt, kommt nichts zurück. Früher
+   * fiel das auf das erste Bild zurück, und das erzeugte lautlos genau den
+   * Fehler, den es verstecken sollte: einen Satz unter einem Foto, über das er
+   * nicht geschrieben wurde.
+   */
+  const bildFuer = (nummer: number | null): Bildquelle | null => {
+    if (nummer === null || nummer < 1) return null
+    return geladen[nummer - 1]?.quelle ?? null
   }
 
   /**
@@ -431,7 +494,9 @@ export async function erzeuge(
     // einen schwachen Satz. Er klingt zuverlässig schlechter als das, was er
     // ersetzt.
     const text = gewaehlt?.kandidat.text ?? ersatz[s]
-    const foto = bildFuer(gewaehlt?.kandidat.bild ?? null)
+    // Für das Kopfbild der Karte ist ein Rückfall vertretbar: Dort steht der
+    // Satz über der Karte, nicht neben dem Bild.
+    const foto = bildFuer(gewaehlt?.kandidat.bild ?? null) ?? geladen[0]?.quelle ?? null
 
     /**
      * Je Bild der beste Satz.
@@ -457,7 +522,8 @@ export async function erzeuge(
       }
     }
 
-    const bildZeilen = bilder
+    const bildZeilen = geladen
+      .map(g => g.quelle)
       .filter(b => proBild.has(b.id))
       .map(b => ({
         fotoId: b.id,
