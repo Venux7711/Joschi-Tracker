@@ -111,10 +111,19 @@ async function baueTagesbild(
     besonderes.push(`Besonderes: Die Katzen sind gerade nicht zuhause (${abwesenheit.label ?? 'Betreuung'}), jemand anderes füttert.`)
   }
 
-  // Drei Bilder – eines je Stimme. Die Auswahl gruppiert vorher nach
-  // Situationen, damit nicht drei Aufnahmen derselben Minute drei Plätze
-  // belegen, und der Versatz holt beim Würfeln andere Bilder nach vorn.
-  const bilder: Bildquelle[] = waehleFotos(fotos, 3, versatz)
+  /**
+   * Bis zu fünf Bilder statt drei.
+   *
+   * An einem gewöhnlichen Tag entstehen hier vier bis sechs Fotos. Bei drei
+   * ausgewählten sah das Modell also nur die Hälfte, und auf die Klage
+   * "immer dieselben drei" gab es eine unbequeme Antwort: Es waren fast alle,
+   * die es gab. Mit fünf sieht es an den meisten Tagen alles – und hat
+   * entsprechend mehr, worüber es schreiben kann.
+   *
+   * Seit die Bilder auf 640 Pixel verkleinert übertragen werden, kosten zwei
+   * weitere kaum Zeit. Das war bei acht Megabyte je Bild noch anders.
+   */
+  const bilder: Bildquelle[] = waehleFotos(fotos, 5, versatz)
 
   return {
     bild: {

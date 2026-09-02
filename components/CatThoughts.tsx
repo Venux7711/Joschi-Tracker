@@ -58,7 +58,36 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
 
   useEffect(laden, [])
 
+  /**
+   * Die Fotos des besprochenen Tages nachladen.
+   *
+   * Das Modell sieht eine Auswahl, der Mensch soll den ganzen Tag sehen
+   * können. An einem gewöhnlichen Tag sind das vier bis sechs Bilder – zu
+   * wenige, um sie zu verstecken.
+   */
+  useEffect(() => {
+    if (!daten?.tag) return
+    fetch(`/api/photos?date=${daten.tag}&limit=40`)
+      .then(r => (r.ok ? r.json() : Promise.reject()))
+      .then(d => setTagesFotos(
+        (d.photos ?? [])
+          .map((p: { id: string; public_url: string; poster_url: string | null; media_type: string | null }) => ({
+            id: p.id,
+            url: p.media_type === 'video' ? p.poster_url : p.public_url,
+          }))
+          .filter((p: { url: string | null }) => !!p.url),
+      ))
+      .catch(() => setTagesFotos([]))
+  }, [daten?.tag])
+
+  // Beim Stimmenwechsel zurück auf das Bild, über das geredet wird
+  useEffect(() => { setGewaehltesFoto(null) }, [aktiv])
+
   const [wuerfelt, setWuerfelt] = useState(false)
+  // Alle Fotos des besprochenen Tages, nicht nur das eine der Stimme.
+  const [tagesFotos, setTagesFotos] = useState<{ id: string; url: string }[]>([])
+  // Welches Bild gerade groß zu sehen ist. null = das der Stimme.
+  const [gewaehltesFoto, setGewaehltesFoto] = useState<string | null>(null)
 
   /** Nochmal würfeln – ein misslungener Satz stünde sonst bis morgen da. */
   const nochmal = async () => {
@@ -81,7 +110,15 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
   const akzent = aktiv === 'bella' ? '#6E8090' : aktiv === 'joschi' ? '#D97706' : '#8B7BA8'
 
   const aktuellerGedanke = daten?.gedanken?.[aktiv] ?? null
-  const aktuellesFoto = aktuellerGedanke?.foto ?? null
+
+  // Das Bild der Stimme – oder das, was von Hand ausgewählt wurde
+  const gewaehlt = gewaehltesFoto
+    ? tagesFotos.find(f => f.id === gewaehltesFoto) ?? null
+    : null
+  const aktuellesFoto = gewaehlt?.url ?? aktuellerGedanke?.foto ?? null
+  const aktuelleFotoId = gewaehlt?.id ?? aktuellerGedanke?.fotoId ?? null
+  /** Nur solange das Bild der Stimme gezeigt wird, stimmt die Marke. */
+  const redetDarueber = !gewaehlt && !!aktuellerGedanke?.foto
 
   // Bewusst kein stilles Verschwinden mehr: Beim ersten Anlauf lief die
   // Erzeugung in eine Zeitüberschreitung, die Karte war schlicht weg, und von
@@ -147,7 +184,7 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
       {aktuellesFoto && (
         <div style={{ padding: '10px 18px 0' }}>
           <a
-            href={aktuellerGedanke?.fotoId ? `/fotos?photo=${aktuellerGedanke.fotoId}` : '/fotos'}
+            href={aktuelleFotoId ? `/fotos?photo=${aktuelleFotoId}` : '/fotos'}
             className="relative block overflow-hidden"
             style={{
               width: '100%', aspectRatio: '4 / 3', borderRadius: 12,
@@ -157,23 +194,58 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
             <Image
               key={aktuellesFoto}
               src={aktuellesFoto}
-              alt="Das Foto, über das gesprochen wird"
+              alt={redetDarueber ? 'Das Foto, über das gesprochen wird' : 'Foto des Tages'}
               fill
               className="object-cover"
               sizes="(max-width: 640px) 100vw, 600px"
               style={{ animation: 'fadeIn 0.35s ease' }}
             />
-            {/* Kein Rätselraten, worauf sich der Satz bezieht */}
-            <span
-              style={{
-                position: 'absolute', left: 8, bottom: 8,
-                fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 999,
-                background: 'rgba(0,0,0,0.55)', color: 'white',
-              }}
-            >
-              Darüber wird geredet
-            </span>
+            {/* Die Marke nur, solange sie auch stimmt: Wer selbst ein anderes
+                Bild angetippt hat, bekommt keine falsche Zuordnung. */}
+            {redetDarueber && (
+              <span
+                style={{
+                  position: 'absolute', left: 8, bottom: 8,
+                  fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 999,
+                  background: 'rgba(0,0,0,0.55)', color: 'white',
+                }}
+              >
+                Darüber wird geredet
+              </span>
+            )}
           </a>
+
+          {/* Der ganze Tag als Streifen.
+              Das Modell sieht eine Auswahl – der Mensch soll alles sehen
+              können. An einem gewöhnlichen Tag sind das vier bis sechs Bilder;
+              die zu verstecken, während die Karte „Rückblick" heißt, wäre
+              eigenartig. Erst ab zwei Bildern, sonst ist es Zierrat. */}
+          {tagesFotos.length > 1 && (
+            <div
+              className="flex gap-1.5 mt-2"
+              style={{ overflowX: 'auto', paddingBottom: 2 }}
+            >
+              {tagesFotos.map(f => {
+                const aktivesBild = f.url === aktuellesFoto
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => setGewaehltesFoto(f.id === gewaehltesFoto ? null : f.id)}
+                    aria-label="Dieses Foto zeigen"
+                    className="relative flex-shrink-0 overflow-hidden"
+                    style={{
+                      width: 46, height: 46, borderRadius: 8,
+                      border: aktivesBild ? `2px solid ${akzent}` : '1px solid rgba(60,60,67,0.1)',
+                      opacity: aktivesBild ? 1 : 0.6,
+                      transition: 'opacity 0.2s ease',
+                    }}
+                  >
+                    <Image src={f.url} alt="" fill className="object-cover" sizes="46px" />
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
