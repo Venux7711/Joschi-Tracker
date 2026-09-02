@@ -30,8 +30,8 @@ export const STIMMEN: Stimme[] = ['joschi', 'bella', 'beide']
  * einem Monat. Gibt es beides nicht, wird der Knopf nicht angeboten – ein
  * Zeitraum, der leer bleibt, ist schlimmer als keiner.
  */
-export type Zeitraum = 'tag' | 'woche' | 'damals'
-export const ZEITRAEUME: Zeitraum[] = ['tag', 'woche', 'damals']
+export type Zeitraum = 'tag' | 'woche' | 'monat' | 'damals'
+export const ZEITRAEUME: Zeitraum[] = ['tag', 'woche', 'monat', 'damals']
 
 export function istZeitraum(wert: unknown): wert is Zeitraum {
   return typeof wert === 'string' && (ZEITRAEUME as string[]).includes(wert)
@@ -149,6 +149,29 @@ export function zeitraumAnweisung(zeitraum: Zeitraum): string {
       'der Woche, jedes mit seinem Wochentag dabei – ein Satz dazu darf sich',
       'auf den Moment beziehen, aber er soll wissen, dass eine Woche drumherum',
       'liegt.',
+    ].join('\n')
+  }
+
+  if (zeitraum === 'monat') {
+    return [
+      '',
+      'DIESE KARTE IST EIN MONAT, KEIN TAG',
+      'Vergiss den Satz oben über "gestern". Du schreibst über dreißig Tage.',
+      '',
+      'Ein Monat kann etwas, das eine Woche noch nicht kann: Er zeigt, was',
+      'geblieben ist. Brauchbar ist der lange Bogen – was zur Gewohnheit wurde,',
+      'was aufgehört hat, was einmal neu war und jetzt nicht mehr auffällt, was',
+      'sich verschoben hat, ohne dass es jemand gemerkt hat.',
+      '',
+      'Damit ist auch gesagt, was hier nicht hingehört: eine einzelne Episode.',
+      'Ein Satz über einen Nachmittag ist in einem Monatsrückblick verloren,',
+      'egal wie gut er ist. Und die Aufzählung der Wochen ist ein Protokoll,',
+      'kein Rückblick.',
+      '',
+      'DAS FAZIT',
+      'Gib je Stimme zuerst einen Vorschlag mit "bild": 0 – ein Satz über den',
+      'ganzen Monat. Danach je Bild einen. Die Bilder sind weit auseinander,',
+      'jedes mit seinem Datum dabei.',
     ].join('\n')
   }
 

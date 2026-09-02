@@ -5,7 +5,7 @@ import { addBerlinDays } from '@/lib/time'
 import { STIMMEN, istZeitraum, type Zeitraum } from '@/lib/thoughts'
 import {
   erzeuge, makeAdmin, alsAntwort,
-  tagesFenster, wochenFenster, damalsFenster,
+  tagesFenster, wochenFenster, monatsFenster, damalsFenster,
   type Fenster, type Karte,
 } from '@/lib/thoughts-engine'
 
@@ -37,7 +37,12 @@ async function fensterHeute(admin: ReturnType<typeof makeAdmin>): Promise<Fenste
   const jetzt = new Date()
   const gestern = addBerlinDays(jetzt, -1)
   const damals = await damalsFenster(admin, jetzt).catch(() => null)
-  return [tagesFenster(gestern), wochenFenster(gestern), ...(damals ? [damals] : [])]
+  return [
+    tagesFenster(gestern),
+    wochenFenster(gestern),
+    monatsFenster(gestern),
+    ...(damals ? [damals] : []),
+  ]
 }
 
 /** Das Gespeicherte zu einem Fenster – oder null, wenn es noch nichts gibt. */

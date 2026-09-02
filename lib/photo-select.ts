@@ -196,14 +196,38 @@ export function waehleFotosUeberTage(
     tage.map(t => [t, waehleFotos(proTag.get(t)!, Math.min(3, proTag.get(t)!.length), versatz)]),
   )
 
+  /**
+   * In welcher Reihenfolge die Tage drankommen.
+   *
+   * Nicht der Reihe nach. Bei sieben Tagen und fünf Plätzen kämen sonst immer
+   * die fünf ältesten dran – der Wochenrückblick endete jedes Mal zwei Tage
+   * vor gestern, und weil sich das Fenster täglich nur um einen Tag
+   * verschiebt, wären es am nächsten Tag fast dieselben fünf.
+   *
+   * Stattdessen über die Spanne verteilt, mit dem Versatz als Startpunkt. Der
+   * jüngste Tag ist gesetzt: Ein Wochenrückblick ohne gestern ist keiner.
+   */
+  const reihe: string[] = []
+  if (tage.length <= anzahl) {
+    for (let i = 0; i < tage.length; i++) reihe.push(tage[(i + versatz) % tage.length])
+  } else {
+    reihe.push(tage[tage.length - 1])
+    const schritt = tage.length / anzahl
+    for (let i = 0; i < anzahl; i++) {
+      const tag = tage[Math.floor(i * schritt + versatz) % tage.length]
+      if (!reihe.includes(tag)) reihe.push(tag)
+    }
+    // Der Rest hintendran, falls Plätze frei bleiben – etwa weil an einem der
+    // verteilten Tage nur ein einziges Bild liegt.
+    for (const tag of tage) if (!reihe.includes(tag)) reihe.push(tag)
+  }
+
   const gewaehlt: { id: string; url: string }[] = []
   const genommen = new Set<string>()
 
   for (let runde = 0; runde < 3 && gewaehlt.length < anzahl; runde++) {
-    for (let i = 0; i < tage.length && gewaehlt.length < anzahl; i++) {
-      // Der Versatz verschiebt auch, mit welchem Tag begonnen wird – sonst
-      // fiele beim Kürzen immer das Ende der Woche weg.
-      const tag = tage[(i + versatz) % tage.length]
+    for (const tag of reihe) {
+      if (gewaehlt.length >= anzahl) break
       const kandidat = rangfolge.get(tag)?.[runde]
       if (!kandidat || genommen.has(kandidat.id)) continue
       genommen.add(kandidat.id)

@@ -186,3 +186,35 @@ test('der Tagesschlüssel lässt sich austauschen', () => {
 test('ohne Fotos kommt nichts zurück', () => {
   assert.deepEqual(waehleFotosUeberTage([], 3), [])
 })
+
+test('der jüngste Tag ist immer dabei', () => {
+  // Bei sieben Tagen und fünf Plätzen nahm die erste Fassung die fünf
+  // ältesten. Der Wochenrückblick endete damit zwei Tage vor gestern – und
+  // weil sich das Fenster täglich nur um einen Tag verschiebt, waren es am
+  // nächsten Tag fast dieselben fünf Bilder.
+  const fotos = [1, 2, 3, 4, 5, 6, 7].map(t => anTag(`tag${t}`, t, 12))
+  const auswahl = ids(waehleFotosUeberTage(fotos, 5))
+  assert.ok(auswahl.includes('tag7'), auswahl.join())
+})
+
+test('die Auswahl ist über die Spanne verteilt, nicht am Anfang geballt', () => {
+  const fotos = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(t => anTag(`tag${t}`, t, 12))
+  const auswahl = ids(waehleFotosUeberTage(fotos, 3))
+  const nummern = auswahl.map(i => Number(i.replace('tag', '')))
+  // Der Abstand zwischen erstem und letztem gewählten Tag muss die halbe
+  // Spanne überschreiten – sonst liegt alles beieinander.
+  assert.ok(Math.max(...nummern) - Math.min(...nummern) >= 4, auswahl.join())
+})
+
+test('ein anderer Versatz ergibt eine andere Auswahl', () => {
+  // Der Grund, warum es den Versatz gibt: Ein rollendes Fenster verschiebt
+  // sich täglich nur um einen Tag. Ohne Versatz sähe der Rückblick am
+  // nächsten Tag aus wie der von gestern.
+  const fotos = []
+  for (const t of [1, 2, 3, 4, 5, 6, 7]) {
+    fotos.push(anTag(`t${t}-a`, t, 9), anTag(`t${t}-b`, t, 15), anTag(`t${t}-c`, t, 20))
+  }
+  const ohne = ids(waehleFotosUeberTage(fotos, 5, 0)).join()
+  const mit = ids(waehleFotosUeberTage(fotos, 5, 3)).join()
+  assert.notEqual(ohne, mit)
+})

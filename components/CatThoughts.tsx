@@ -63,7 +63,8 @@ const STIMMEN: { key: Stimme; label: string }[] = [
 
 const ZEITRAUM_LABEL: Record<Zeitraum, string> = {
   tag: 'Gestern',
-  woche: 'Die Woche',
+  woche: 'Woche',
+  monat: 'Monat',
   damals: 'Damals',
 }
 
@@ -74,6 +75,7 @@ const ZEITRAUM_LABEL: Record<Zeitraum, string> = {
  */
 const FAZIT_LABEL: Partial<Record<Zeitraum, string>> = {
   woche: 'Die Woche',
+  monat: 'Der Monat',
   damals: 'Der Tag',
 }
 
@@ -217,6 +219,7 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
   const zeitraeume: Antwort['zeitraeume'] = daten?.zeitraeume ?? [
     { key: 'tag', titel: '', bereit: false },
     { key: 'woche', titel: '', bereit: false },
+    { key: 'monat', titel: '', bereit: false },
   ]
 
   return (
@@ -293,7 +296,9 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
           <p style={{ fontSize: 13, color: 'rgba(60,60,67,0.55)' }}>
             {zeitraum === 'woche'
               ? 'Die Woche wird zusammengestellt – sieben Tage wollen erst angesehen werden.'
-              : 'Der alte Tag wird herausgesucht.'}
+              : zeitraum === 'monat'
+                ? 'Der Monat wird zusammengestellt – das dauert einen Moment länger.'
+                : 'Der alte Tag wird herausgesucht.'}
           </p>
           <div className="space-y-2" style={{ marginTop: 10 }}>
             <div className="h-4 bg-gray-100 rounded animate-pulse" style={{ width: '88%' }} />

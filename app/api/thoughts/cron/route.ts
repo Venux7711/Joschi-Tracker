@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { addBerlinDays, berlinDateKey } from '@/lib/time'
 import { isAuthorizedCron } from '@/lib/cron-auth'
 import {
-  erzeuge, makeAdmin, tagesFenster, wochenFenster, damalsFenster, type Fenster,
+  erzeuge, makeAdmin, tagesFenster, wochenFenster, monatsFenster, damalsFenster,
+  type Fenster,
 } from '@/lib/thoughts-engine'
 import { STIMMEN } from '@/lib/thoughts'
 
@@ -116,7 +117,11 @@ export async function GET(req: NextRequest) {
    */
   const gestern = addBerlinDays(jetzt, -1)
   const damals = await damalsFenster(admin, jetzt).catch(() => null)
-  const rueckblicke: Fenster[] = [wochenFenster(gestern), ...(damals ? [damals] : [])]
+  const rueckblicke: Fenster[] = [
+    wochenFenster(gestern),
+    monatsFenster(gestern),
+    ...(damals ? [damals] : []),
+  ]
 
   for (const fenster of rueckblicke) {
     if (!nochZeit()) break

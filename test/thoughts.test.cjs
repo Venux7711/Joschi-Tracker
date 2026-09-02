@@ -164,7 +164,7 @@ const woche = {
 
 test('istZeitraum nimmt nur die bekannten Zeiträume an', () => {
   for (const z of ZEITRAEUME) assert.equal(istZeitraum(z), true)
-  assert.equal(istZeitraum('monat'), false)
+  assert.equal(istZeitraum('jahrzehnt'), false)
   assert.equal(istZeitraum(null), false)
 })
 
@@ -197,6 +197,13 @@ test('die Wochenanweisung hebt den Tagesauftrag ausdrücklich auf', () => {
   assert.ok(text.includes('"bild": 0'), text)
   // Und die Aufzählung ist ausdrücklich verboten
   assert.ok(text.toLowerCase().includes('aufzählung'), text)
+})
+
+test('die Monatsanweisung verlangt den langen Bogen, keine Episode', () => {
+  const text = zeitraumAnweisung('monat')
+  assert.ok(text.includes('EIN MONAT, KEIN TAG'), text)
+  assert.ok(text.includes('geblieben ist'), text)
+  assert.ok(text.includes('"bild": 0'), text)
 })
 
 test('die Damals-Anweisung verbietet erfundene Veränderungen', () => {

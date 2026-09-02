@@ -62,6 +62,23 @@ export type Fenster = {
   tag: string
   /** Wie der Zeitraum in der App heißt, z. B. "Vor einem Jahr". */
   titel: string
+  /**
+   * Verschiebt die Fotoauswahl, ohne dass jemand würfelt.
+   *
+   * Ein rollendes Fenster verschiebt sich täglich nur um einen Tag – sechs von
+   * sieben Tagen sind dieselben wie gestern. Ohne diesen Wert läge deshalb an
+   * jedem Tag fast dieselbe Bildauswahl vor, und der Rückblick sähe aus wie
+   * der von gestern. Aus dem Schlüsseldatum abgeleitet: verlässlich derselbe
+   * Wert innerhalb eines Tages, ein anderer am nächsten.
+   */
+  grundversatz: number
+}
+
+/** Aus einem Datum eine kleine, aber täglich wechselnde Zahl. */
+function versatzAus(tag: string): number {
+  let summe = 0
+  for (let i = 0; i < tag.length; i++) summe += tag.charCodeAt(i) * (i + 1)
+  return summe % 7
 }
 
 /** Gestern – der Zeitraum, mit dem alles angefangen hat. */
@@ -72,6 +89,8 @@ export function tagesFenster(gestern: Date): Fenster {
     bis: gestern,
     tag: berlinDateKey(gestern),
     titel: formatBerlin(gestern, { weekday: 'long', day: 'numeric', month: 'long' }),
+    // Ein einzelner Tag verschiebt sich nicht; hier gibt es nichts auszugleichen.
+    grundversatz: 0,
   }
 }
 
@@ -90,65 +109,119 @@ export function wochenFenster(gestern: Date): Fenster {
     bis: gestern,
     tag: berlinDateKey(gestern),
     titel: `${formatBerlin(von, { day: 'numeric', month: 'short' })} – ${formatBerlin(gestern, { day: 'numeric', month: 'short' })}`,
+    grundversatz: versatzAus(berlinDateKey(gestern)),
   }
 }
 
 /**
- * Der Griff ins Archiv: derselbe Tag vor einem Jahr, sonst vor einem Monat.
+ * Die dreißig Tage bis gestern.
  *
- * Bewusst deterministisch aus dem heutigen Datum abgeleitet und nicht zufällig
- * gezogen. Ein zufälliger Tag müsste festgehalten werden, damit die Karte beim
- * nächsten Aufruf dieselbe ist – und wäre trotzdem nicht erklärbar. "Vor einem
- * Jahr" erklärt sich von selbst.
+ * Was ein Monat kann und eine Woche noch nicht: Er zeigt, was geblieben ist.
+ * Eine Woche zeigt, dass sich etwas geändert hat; ein Monat zeigt, dass etwas
+ * zur Gewohnheit geworden ist – oder dass es aufgehört hat, ohne dass es
+ * jemand gemerkt hat.
+ */
+export function monatsFenster(gestern: Date): Fenster {
+  const von = addBerlinDays(gestern, -29)
+  return {
+    zeitraum: 'monat',
+    von,
+    bis: gestern,
+    tag: berlinDateKey(gestern),
+    titel: `${formatBerlin(von, { day: 'numeric', month: 'long' })} – ${formatBerlin(gestern, { day: 'numeric', month: 'long' })}`,
+    grundversatz: versatzAus(berlinDateKey(gestern)),
+  }
+}
+
+/** Ab wann ein Tag als "damals" gilt, und wie viel auf ihm los gewesen sein muss. */
+const DAMALS_AB_TAGEN = 30
+const DAMALS_MINDESTFOTOS = 3
+
+/**
+ * Wie ein Tag benannt wird, der lange zurückliegt.
  *
- * Weil an genau diesem Datum nichts passiert sein muss, wird ein Fenster von
- * ±3 Tagen durchsucht und der Tag mit den meisten Fotos genommen. Gibt es in
- * beiden Fenstern nichts, kommt null zurück und die App bietet den Zeitraum
- * gar nicht erst an: Ein Knopf, der ins Leere führt, ist schlimmer als keiner.
+ * Aus dem Abstand statt aus dem Datum: "Vor einem Jahr" trifft, "am 3. Mai
+ * 2025" muss man erst ausrechnen.
+ */
+export function damalsTitel(abstandTage: number): string {
+  if (abstandTage >= 350 && abstandTage <= 380) return 'Vor einem Jahr'
+  if (abstandTage >= 700) return `Vor ${Math.round(abstandTage / 365)} Jahren`
+  if (abstandTage >= 60) return `Vor ${Math.round(abstandTage / 30)} Monaten`
+  return `Vor ${abstandTage} Tagen`
+}
+
+/**
+ * Der Griff ins Archiv.
+ *
+ * Die erste Fassung nahm den Tag mit den meisten Fotos rund um den Jahrestag.
+ * Das klang gut und war stehengeblieben: Weil sich das Suchfenster täglich nur
+ * um einen Tag verschiebt, gewann tagelang derselbe Tag, und weil die Karte
+ * unter seinem Datum abgelegt wird, war es dann auch buchstäblich dieselbe
+ * Karte. Ein Rückblick, der eine Woche lang derselbe ist, ist kein Rückblick.
+ *
+ * Jetzt wandert die Auswahl. Alle Tage des Archivs, an denen genug passiert
+ * ist, bilden eine Reihe, und der heutige Tag zeigt auf eine Stelle darin –
+ * morgen auf die nächste. Deterministisch, also innerhalb eines Tages stabil,
+ * und über Monate hinweg kommt jeder Tag einmal dran.
+ *
+ * Der Jahrestag hat Vorrang, wenn es ihn gibt: "Heute vor einem Jahr" ist der
+ * eine Fall, in dem ein bestimmter Tag mehr wert ist als ein beliebiger.
+ *
+ * Gibt es kein Archiv, kommt null zurück und die App bietet den Zeitraum gar
+ * nicht erst an: Ein Knopf, der ins Leere führt, ist schlimmer als keiner.
  */
 export async function damalsFenster(
   admin: ReturnType<typeof makeAdmin>,
   heute: Date,
 ): Promise<Fenster | null> {
-  const versuche: { zurueck: number; titel: string }[] = [
-    { zurueck: 365, titel: 'Vor einem Jahr' },
-    { zurueck: 30, titel: 'Vor einem Monat' },
-  ]
+  const { data } = await admin.from('photos')
+    .select('taken_at')
+    .lte('taken_at', berlinDayEnd(addBerlinDays(heute, -DAMALS_AB_TAGEN)).toISOString())
+    .order('taken_at', { ascending: false })
+    .limit(5000)
 
-  for (const versuch of versuche) {
-    const mitte = addBerlinDays(heute, -versuch.zurueck)
-    const { data } = await admin.from('photos')
-      .select('taken_at')
-      .gte('taken_at', berlinDayStart(addBerlinDays(mitte, -3)).toISOString())
-      .lte('taken_at', berlinDayEnd(addBerlinDays(mitte, 3)).toISOString())
+  if (!data?.length) return null
 
-    if (!data?.length) continue
-
-    const proTag = new Map<string, number>()
-    for (const p of data) {
-      const schluessel = berlinDateKey((p as { taken_at: string }).taken_at)
-      proTag.set(schluessel, (proTag.get(schluessel) ?? 0) + 1)
-    }
-
-    // Der Tag mit den meisten Fotos; bei Gleichstand der dem Jahrestag nähere.
-    const zielZeit = berlinDayStart(mitte).getTime()
-    const abstand = (schluessel: string) =>
-      Math.abs(berlinDayStart(`${schluessel}T12:00:00Z`).getTime() - zielZeit)
-    const [bester] = [...proTag.entries()]
-      .sort((a, b) => b[1] - a[1] || abstand(a[0]) - abstand(b[0]))
-
-    if (!bester) continue
-    const datum = berlinDayStart(`${bester[0]}T12:00:00Z`)
-    return {
-      zeitraum: 'damals',
-      von: datum,
-      bis: datum,
-      tag: bester[0],
-      titel: `${versuch.titel} · ${formatBerlin(datum, { day: 'numeric', month: 'long', year: 'numeric' })}`,
-    }
+  const proTag = new Map<string, number>()
+  for (const p of data) {
+    const schluessel = berlinDateKey((p as { taken_at: string }).taken_at)
+    proTag.set(schluessel, (proTag.get(schluessel) ?? 0) + 1)
   }
 
-  return null
+  // Tage mit einem einzelnen Foto ergeben keinen Rückblick. Gibt es keinen
+  // ergiebigen Tag, ist ein magerer immer noch besser als kein Zeitraum.
+  const ergiebig = [...proTag.entries()].filter(([, n]) => n >= DAMALS_MINDESTFOTOS)
+  const kandidaten = (ergiebig.length > 0 ? ergiebig : [...proTag.entries()])
+    .map(([t]) => t)
+    .sort()
+
+  if (kandidaten.length === 0) return null
+
+  /** Der Jahrestag, wenn an ihm (oder tags daneben) etwas los war. */
+  const jahrestag = () => {
+    for (const jahre of [1, 2, 3]) {
+      const ziel = berlinDayStart(addBerlinDays(heute, -365 * jahre)).getTime()
+      const treffer = kandidaten.find(t =>
+        Math.abs(berlinDayStart(`${t}T12:00:00Z`).getTime() - ziel) <= 30 * 3_600_000)
+      if (treffer) return treffer
+    }
+    return null
+  }
+
+  // Sonst wandert die Auswahl Tag für Tag durch das Archiv.
+  const stelle = Math.floor(berlinDayStart(heute).getTime() / 86_400_000)
+  const gewaehlt = jahrestag() ?? kandidaten[((stelle % kandidaten.length) + kandidaten.length) % kandidaten.length]
+
+  const datum = berlinDayStart(`${gewaehlt}T12:00:00Z`)
+  return {
+    zeitraum: 'damals',
+    von: datum,
+    bis: datum,
+    tag: gewaehlt,
+    titel: `${damalsTitel(berlinDaysBetween(datum, heute))} · ${formatBerlin(datum, { day: 'numeric', month: 'long', year: 'numeric' })}`,
+    // Der Tag selbst wechselt schon; die Bilder daraus müssen es nicht auch.
+    grundversatz: 0,
+  }
 }
 
 /** Trägt zusammen, was im Fenster passiert ist – samt der Bilder dazu. */
@@ -244,11 +317,13 @@ async function baueBild(
    * Seit die Bilder auf 640 Pixel verkleinert übertragen werden, kosten zwei
    * weitere kaum Zeit. Das war bei acht Megabyte je Bild noch anders.
    */
+  // Ein Monat ist weiter auseinander als eine Woche und verträgt ein Bild mehr.
+  const anzahlBilder = fenster.zeitraum === 'monat' ? 6 : 5
   const bilder: Bildquelle[] = mehrtaegig
     // Über mehrere Tage zuerst nach Tagen aufteilen. Sonst bestünde eine
     // Woche mit einer Sonntagsserie von dreißig Bildern nur aus Sonntag.
-    ? waehleFotosUeberTage(fotos, 5, versatz, f => berlinDateKey(f.taken_at))
-    : waehleFotos(fotos, 5, versatz)
+    ? waehleFotosUeberTage(fotos, anzahlBilder, versatz, f => berlinDateKey(f.taken_at))
+    : waehleFotos(fotos, anzahlBilder, versatz)
 
   /**
    * Wer ist auf welchem Bild markiert?
@@ -467,7 +542,10 @@ export async function erzeuge(
   versatz = 0,
 ) {
   const { zeitraum, tag } = fenster
-  const { bild, bilder, bildInfo, bildDatum, katzenIds, katzenNamen } = await baueBild(admin, fenster, versatz)
+  // Der Grundversatz sorgt dafür, dass ein rollendes Fenster nicht täglich
+  // fast dieselben Bilder vorlegt; das Würfeln kommt oben drauf.
+  const { bild, bilder, bildInfo, bildDatum, katzenIds, katzenNamen } =
+    await baueBild(admin, fenster, versatz + fenster.grundversatz)
   const geladen = await ladeBilder(bilder)
   const bildteile = geladen.map(g => g.teil)
 
