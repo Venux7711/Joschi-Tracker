@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { addBerlinDays, berlinDateKey } from '@/lib/time'
 import { isAuthorizedCron } from '@/lib/cron-auth'
-import { erzeuge, makeAdmin } from '@/lib/thoughts-engine'
+import {
+  erzeuge, makeAdmin, tagesFenster, wochenFenster, damalsFenster, type Fenster,
+} from '@/lib/thoughts-engine'
+import { STIMMEN } from '@/lib/thoughts'
 
 /**
  * Der nächtliche Lauf.
@@ -33,10 +36,23 @@ export const maxDuration = 300
 const RUECKSCHAU_TAGE = 7
 const HOECHSTENS_JE_LAUF = 3
 
+/**
+ * Ab wann nichts Neues mehr begonnen wird.
+ *
+ * Die Funktion darf 300 Sekunden laufen, ein Durchgang mit Bildern kostet
+ * zwanzig bis vierzig. Ohne Bremse würde der letzte Durchgang mitten im
+ * Modellaufruf abgeschnitten – und weil erst am Ende gespeichert wird, wäre
+ * die Zeit dann vollständig verloren.
+ */
+const SPAETESTENS_MS = 210_000
+
 export async function GET(req: NextRequest) {
   if (!await isAuthorizedCron(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  const begonnen = Date.now()
+  const nochZeit = () => Date.now() - begonnen < SPAETESTENS_MS
 
   const admin = makeAdmin()
   const jetzt = new Date()
@@ -46,6 +62,7 @@ export async function GET(req: NextRequest) {
   const { data: vorhandene } = await admin
     .from('cat_thoughts')
     .select('tag')
+    .eq('zeitraum', 'tag')
     .gte('tag', aeltester)
 
   const fertig = new Set((vorhandene ?? []).map(z => String((z as { tag: string }).tag).slice(0, 10)))
@@ -56,7 +73,7 @@ export async function GET(req: NextRequest) {
   // Von gestern rückwärts: Der jüngste Tag ist der wichtigste, er steht
   // morgen früh auf dem Dashboard.
   for (let zurueck = 1; zurueck <= RUECKSCHAU_TAGE; zurueck++) {
-    if (erledigt.length >= HOECHSTENS_JE_LAUF) break
+    if (erledigt.length >= HOECHSTENS_JE_LAUF || !nochZeit()) break
 
     const datum = addBerlinDays(jetzt, -zurueck)
     const tag = berlinDateKey(datum)
@@ -78,11 +95,43 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      await erzeuge(admin, datum, tag)
+      await erzeuge(admin, tagesFenster(datum))
       erledigt.push(tag)
       console.log(`Gedanken für ${tag} erzeugt`)
     } catch (e) {
       console.error(`Gedanken für ${tag} fehlgeschlagen:`, e)
+    }
+  }
+
+  /**
+   * Die Rückblicke danach – und ausdrücklich danach.
+   *
+   * Der gestrige Tag ist das, was morgens auf dem Dashboard steht; er hat
+   * Vorrang vor allem anderen. Die Woche und der Griff ins Archiv sind
+   * Zugaben, die auch eine Nacht später entstehen dürfen.
+   *
+   * Nachts erzeugt statt beim ersten Antippen: Ein Wochenrückblick kostet
+   * denselben Modellaufruf wie ein Tag. Wer auf "Die Woche" tippt, soll den
+   * Text sofort sehen.
+   */
+  const gestern = addBerlinDays(jetzt, -1)
+  const damals = await damalsFenster(admin, jetzt).catch(() => null)
+  const rueckblicke: Fenster[] = [wochenFenster(gestern), ...(damals ? [damals] : [])]
+
+  for (const fenster of rueckblicke) {
+    if (!nochZeit()) break
+
+    const { count } = await admin.from('cat_thoughts')
+      .select('id', { count: 'exact', head: true })
+      .eq('tag', fenster.tag).eq('zeitraum', fenster.zeitraum)
+    if ((count ?? 0) >= STIMMEN.length) continue
+
+    try {
+      await erzeuge(admin, fenster)
+      erledigt.push(`${fenster.zeitraum}/${fenster.tag}`)
+      console.log(`Rückblick ${fenster.zeitraum} für ${fenster.tag} erzeugt`)
+    } catch (e) {
+      console.error(`Rückblick ${fenster.zeitraum} fehlgeschlagen:`, e)
     }
   }
 

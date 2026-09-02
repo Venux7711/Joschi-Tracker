@@ -1,6 +1,9 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const { leseAntwort, teileDialog, ersatzGedanken, beschreibeTag } = require('../.test-build/thoughts')
+const {
+  leseAntwort, teileDialog, ersatzGedanken, beschreibeTag,
+  zeitraumAnweisung, istZeitraum, ZEITRAEUME,
+} = require('../.test-build/thoughts')
 
 const tag = {
   datum: '30. August',
@@ -142,4 +145,72 @@ test('die Anweisung regelt, wer aus welcher Perspektive spricht', () => {
   assert.ok(SYSTEM_PROMPT.includes('WER IST AUF DEM BILD'), 'Abschnitt fehlt')
   assert.ok(SYSTEM_PROMPT.includes('Er schaut trotzdem weg.'), 'das richtige Beispiel fehlt')
   assert.ok(SYSTEM_PROMPT.includes('Ich schaue lieber weg.'), 'das falsche Beispiel fehlt')
+})
+
+// ── Zeiträume ───────────────────────────────────────────────────
+
+const woche = {
+  ...tag,
+  spanne: {
+    tage: 7,
+    vonBis: 'Mi, 26. August bis Di, 1. September',
+    verlauf: [
+      { wochentag: 'Mittwoch', datum: '26. August', futter: ['Nautilus Ragout'], fotos: 3 },
+      { wochentag: 'Donnerstag', datum: '27. August', futter: [], fotos: 0 },
+      { wochentag: 'Freitag', datum: '28. August', futter: ['Huhn Deluxe'], fotos: 2 },
+    ],
+  },
+}
+
+test('istZeitraum nimmt nur die bekannten Zeiträume an', () => {
+  for (const z of ZEITRAEUME) assert.equal(istZeitraum(z), true)
+  assert.equal(istZeitraum('monat'), false)
+  assert.equal(istZeitraum(null), false)
+})
+
+test('ein Tag beschreibt sich als Tag, ein Zeitraum als Zeitraum', () => {
+  assert.ok(beschreibeTag(tag).startsWith('Tag:'), beschreibeTag(tag))
+  assert.ok(beschreibeTag(woche).startsWith('Zeitraum:'), beschreibeTag(woche))
+})
+
+test('der Verlauf über die Tage steht mit im Text', () => {
+  // Aus "14× Nautilus" wird kein Rückblick, aus "an vier Tagen dasselbe,
+  // dann nicht mehr" schon. Die Verteilung muss also mitgeliefert werden.
+  const text = beschreibeTag(woche)
+  assert.ok(text.includes('VERLAUF ÜBER DIE TAGE'), text)
+  assert.ok(text.includes('Donnerstag, 27. August: nichts eingetragen'), text)
+  assert.ok(text.includes('keine Fotos'), text)
+})
+
+test('das Tagesfenster bekommt keine Zusatzanweisung', () => {
+  assert.equal(zeitraumAnweisung('tag'), '')
+})
+
+test('die Wochenanweisung hebt den Tagesauftrag ausdrücklich auf', () => {
+  // Der Grundtext beginnt mit "du kommentierst deinen gestrigen Tag". Ohne
+  // Widerspruch schreibt das Modell auch über sieben Tage einen Tagessatz.
+  const text = zeitraumAnweisung('woche')
+  assert.ok(text.includes('EINE WOCHE, KEIN TAG'), text)
+  assert.ok(text.includes('Vergiss den Satz oben'), text)
+  // Das Fazit kommt ohne Bildnummer – sonst wäre der Rückblick wieder
+  // ein Satz über ein einzelnes Foto.
+  assert.ok(text.includes('"bild": 0'), text)
+  // Und die Aufzählung ist ausdrücklich verboten
+  assert.ok(text.toLowerCase().includes('aufzählung'), text)
+})
+
+test('die Damals-Anweisung verbietet erfundene Veränderungen', () => {
+  const text = zeitraumAnweisung('damals')
+  assert.ok(text.includes('EIN ALTER TAG'), text)
+  assert.ok(text.includes('ERINNERUNGEN'), text)
+  assert.ok(text.includes('"bild": 0'), text)
+})
+
+test('ein Fazit trägt Bild 0 und wird als bildlos gelesen', () => {
+  // So kommt das Fazit ohne eigenes Antwortformat aus: bild 0 ist keine
+  // gültige Bildnummer und wird zu null.
+  const gelesen = leseAntwort(JSON.stringify({
+    joschi: [{ text: 'Sieben Tage, kein einziger Fehler.', ansatz: 'status', bild: 0 }],
+  }))
+  assert.equal(gelesen.joschi[0].bild, null)
 })

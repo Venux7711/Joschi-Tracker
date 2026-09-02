@@ -16,6 +16,27 @@ import { istPremisse, type Premisse } from './humor'
 export type Stimme = 'joschi' | 'bella' | 'beide'
 export const STIMMEN: Stimme[] = ['joschi', 'bella', 'beide']
 
+/**
+ * Über welchen Ausschnitt der Vergangenheit geredet wird.
+ *
+ * Nicht bloß drei Fenstergrößen über denselben Daten. Ein Tag hat Situationen,
+ * eine Woche hat Veränderung – "dreimal Nautilus, dann nie wieder" lässt sich
+ * an einem Dienstag gar nicht sagen. Genau diesen Stoff bewertet die
+ * Humor-Engine am höchsten (Rückgriff) und bekommt ihn aus einem einzelnen Tag
+ * am seltensten. Und ein Tag ohne Fotos ergibt gar nichts, eine Woche immer
+ * etwas.
+ *
+ * 'damals' ist der Griff ins Archiv: derselbe Tag vor einem Jahr, sonst vor
+ * einem Monat. Gibt es beides nicht, wird der Knopf nicht angeboten – ein
+ * Zeitraum, der leer bleibt, ist schlimmer als keiner.
+ */
+export type Zeitraum = 'tag' | 'woche' | 'damals'
+export const ZEITRAEUME: Zeitraum[] = ['tag', 'woche', 'damals']
+
+export function istZeitraum(wert: unknown): wert is Zeitraum {
+  return typeof wert === 'string' && (ZEITRAEUME as string[]).includes(wert)
+}
+
 /** Die Fakten eines Tages, so wie die Katzen sie erlebt hätten. */
 export type Tagesbild = {
   datum: string
@@ -28,11 +49,28 @@ export type Tagesbild = {
   /** Wer hat gefüttert, kommentiert, reagiert */
   menschen: string[]
   besonderes: string[]
+  /**
+   * Nur bei mehrtägigen Zeiträumen gesetzt.
+   *
+   * Der Verlauf über die Tage ist der eigentliche Stoff eines Rückblicks: An
+   * einer nackten Wochensumme ("14× Nautilus") ist nichts zu erkennen, an der
+   * Verteilung schon – dass es an vier Tagen dasselbe gab und dann nicht mehr,
+   * dass an zwei Tagen keine Fotos entstanden.
+   */
+  spanne?: {
+    tage: number
+    /** Menschenlesbare Spanne, z. B. "Mi, 27. August bis Di, 2. September". */
+    vonBis: string
+    /** Je Tag ein Eintrag, chronologisch. */
+    verlauf: { wochentag: string; datum: string; futter: string[]; fotos: number }[]
+  }
 }
 
 /** Kurzform für die KI – bewusst Stichpunkte statt Prosa. */
 export function beschreibeTag(t: Tagesbild): string {
-  const zeilen: string[] = [`Tag: ${t.wochentag}, ${t.datum}`]
+  const zeilen: string[] = t.spanne
+    ? [`Zeitraum: ${t.spanne.vonBis} (${t.spanne.tage} Tage)`]
+    : [`Tag: ${t.wochentag}, ${t.datum}`]
 
   zeilen.push(
     t.futter.length === 0
@@ -60,7 +98,77 @@ export function beschreibeTag(t: Tagesbild): string {
   if (t.menschen.length > 0) zeilen.push(`Beteiligte Menschen: ${t.menschen.join(', ')}`)
   for (const b of t.besonderes) zeilen.push(b)
 
+  // Der Verlauf steht am Ende und ausdrücklich als Tabelle: Aus einer Summe
+  // lässt sich keine Veränderung ablesen, und Veränderung ist das Einzige,
+  // was ein Rückblick vor einem Tagesbericht voraushat.
+  if (t.spanne) {
+    zeilen.push('')
+    zeilen.push('VERLAUF ÜBER DIE TAGE (daraus entsteht das Fazit)')
+    for (const d of t.spanne.verlauf) {
+      const futter = d.futter.length > 0 ? d.futter.join(', ') : 'nichts eingetragen'
+      const fotos = d.fotos === 0 ? 'keine Fotos' : `${d.fotos} Fotos`
+      zeilen.push(`${d.wochentag}, ${d.datum}: ${futter} · ${fotos}`)
+    }
+  }
+
   return zeilen.join('\n')
+}
+
+/**
+ * Was für diesen Zeitraum anders gilt als für einen einzelnen Tag.
+ *
+ * Wird hinter den Grundcharakter gehängt und schreibt ihn absichtlich um: Der
+ * Grundtext beginnt mit "du kommentierst deinen gestrigen Tag", und ohne
+ * Widerspruch schreibt das Modell auch über sieben Tage einen Tagessatz.
+ */
+export function zeitraumAnweisung(zeitraum: Zeitraum): string {
+  if (zeitraum === 'tag') return ''
+
+  if (zeitraum === 'woche') {
+    return [
+      '',
+      'DIESE KARTE IST EINE WOCHE, KEIN TAG',
+      'Vergiss den Satz oben über "gestern". Du schreibst über sieben Tage.',
+      '',
+      'Der Unterschied ist alles. Ein Tag hat Situationen, eine Woche hat',
+      'Veränderung. Brauchbar ist nur, was über die Tage hinweg sichtbar wird:',
+      'dass etwas dreimal passierte und dann nicht mehr, dass sich etwas',
+      'verschoben hat, dass jemand etwas durchgehalten oder aufgegeben hat,',
+      'dass zwei Tage lang niemand fotografiert hat.',
+      '',
+      'Unbrauchbar ist zweierlei, und beides fällt sofort auf:',
+      '- die Aufzählung ("Montag Fisch, Dienstag Huhn, Mittwoch wieder Fisch").',
+      '  Eine Woche nachzuerzählen ist kein Rückblick, sondern ein Protokoll.',
+      '- der Satz, der genauso über einen einzelnen Tag stehen könnte. Wenn er',
+      '  ohne die Woche funktioniert, gehört er nicht hierher.',
+      '',
+      'DAS FAZIT',
+      'Gib je Stimme zuerst einen Vorschlag mit "bild": 0. Das ist das Fazit:',
+      'ein Satz über die Woche als Ganzes, das Erste, was gelesen wird.',
+      'Danach wie gewohnt je Bild einen Vorschlag. Die Bilder sind Stationen',
+      'der Woche, jedes mit seinem Wochentag dabei – ein Satz dazu darf sich',
+      'auf den Moment beziehen, aber er soll wissen, dass eine Woche drumherum',
+      'liegt.',
+    ].join('\n')
+  }
+
+  return [
+    '',
+    'DIESE KARTE IST EIN ALTER TAG',
+    'Vergiss den Satz oben über "gestern". Der Tag, über den du schreibst,',
+    'liegt lange zurück – das Datum steht bei den Daten.',
+    '',
+    'Das Reizvolle daran ist der Abstand, nicht der Tag selbst. Brauchbar ist,',
+    'was von damals aus gesehen anders war oder unverändert geblieben ist:',
+    'ein Ort, an dem heute niemand mehr liegt, eine Sorte, die es nicht mehr',
+    'gibt, eine Gewohnheit, die es immer noch gibt.',
+    'Tu aber nicht so, als wüsstest du, was seither passiert ist – behaupte',
+    'eine Veränderung nur, wenn sie in den ERINNERUNGEN belegt ist.',
+    '',
+    'DAS FAZIT',
+    'Gib je Stimme zuerst einen Vorschlag mit "bild": 0 – ein Satz über den',
+    'Tag als Ganzes aus dem Abstand von heute. Danach je Bild einen.',
+  ].join('\n')
 }
 
 /**
@@ -234,7 +342,7 @@ Nur ein JSON-Objekt, ohne Text davor oder danach. Je Stimme drei Vorschläge:
  "beide":[{"text":"Joschi: … | Bella: …","ansatz":"kontrast","bild":1},…drei…],
  "beobachtungen":[{"bild":1,"katze":"Joschi","platz":"Sofa","aktivitaet":"schläft","objekte":["roter Karton"]}]}`
 
-export const PROMPT_FASSUNG = '2026-09-02-perspektive'
+export const PROMPT_FASSUNG = '2026-09-03-zeitraeume'
 
 /**
  * Ersatz ohne KI.

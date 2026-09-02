@@ -154,3 +154,66 @@ export function waehleFotos(
     .sort((a, b) => a.taken_at.localeCompare(b.taken_at))
     .map(f => ({ id: f.id, url: bildAdresse(f)! }))
 }
+
+/**
+ * Dieselbe Auswahl, aber über mehrere Tage.
+ *
+ * Für einen Wochenrückblick reicht waehleFotos nicht: Es gruppiert nach
+ * Situationen, und eine Situation kennt keine Tagesgrenze. Wer am Sonntag
+ * dreißig Fotos macht und sonst zwei, bekäme eine Woche, die aus einem Sonntag
+ * besteht – und damit genau den Rückblick, der nichts über die Woche sagt.
+ *
+ * Also erst nach Tagen aufteilen, dann reihum je Tag eines nehmen. Jeder Tag,
+ * an dem überhaupt fotografiert wurde, ist damit vertreten, bevor ein Tag ein
+ * zweites Bild bekommt. Erst innerhalb eines Tages entscheidet wieder die
+ * Situationslogik, welches Bild das aussagekräftigste ist.
+ *
+ * tagVon ist herausgezogen, weil "welcher Tag" von der Zeitzone abhängt und
+ * diese Datei nichts davon wissen soll. Die Voreinstellung schneidet das
+ * ISO-Datum ab; der Aufrufer reicht die Berliner Fassung herein.
+ */
+export function waehleFotosUeberTage(
+  fotos: FotoKandidat[],
+  anzahl: number,
+  versatz = 0,
+  tagVon: (f: FotoKandidat) => string = f => f.taken_at.slice(0, 10),
+): { id: string; url: string }[] {
+  const brauchbar = fotos.filter(f => bildAdresse(f))
+  if (brauchbar.length === 0) return []
+
+  const proTag = new Map<string, FotoKandidat[]>()
+  for (const f of brauchbar) {
+    const schluessel = tagVon(f)
+    const liste = proTag.get(schluessel)
+    if (liste) liste.push(f)
+    else proTag.set(schluessel, [f])
+  }
+
+  const tage = [...proTag.keys()].sort()
+  // Je Tag die Rangfolge einmal bestimmen: das beste Bild vorn. Der Versatz
+  // wandert mit, damit beim Würfeln auch hier andere Bilder nach vorn kommen.
+  const rangfolge = new Map(
+    tage.map(t => [t, waehleFotos(proTag.get(t)!, Math.min(3, proTag.get(t)!.length), versatz)]),
+  )
+
+  const gewaehlt: { id: string; url: string }[] = []
+  const genommen = new Set<string>()
+
+  for (let runde = 0; runde < 3 && gewaehlt.length < anzahl; runde++) {
+    for (let i = 0; i < tage.length && gewaehlt.length < anzahl; i++) {
+      // Der Versatz verschiebt auch, mit welchem Tag begonnen wird – sonst
+      // fiele beim Kürzen immer das Ende der Woche weg.
+      const tag = tage[(i + versatz) % tage.length]
+      const kandidat = rangfolge.get(tag)?.[runde]
+      if (!kandidat || genommen.has(kandidat.id)) continue
+      genommen.add(kandidat.id)
+      gewaehlt.push(kandidat)
+    }
+  }
+
+  // Chronologisch ausliefern: Ein Rückblick, der die Woche durcheinander
+  // zeigt, liest sich wie ein Zufallsstapel.
+  const zeitVon = new Map(brauchbar.map(f => [f.id, f.taken_at]))
+  return gewaehlt.sort((a, b) =>
+    (zeitVon.get(a.id) ?? '').localeCompare(zeitVon.get(b.id) ?? ''))
+}

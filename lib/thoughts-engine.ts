@@ -14,16 +14,16 @@
  */
 
 import { createServerClient } from '@supabase/ssr'
-import { addBerlinDays, berlinDateKey, berlinDayStart, berlinDayEnd, formatBerlin } from '@/lib/time'
+import { addBerlinDays, berlinDateKey, berlinDayStart, berlinDayEnd, berlinDaysBetween, formatBerlin } from '@/lib/time'
 import { dedupeSharedFeedings } from '@/lib/utils'
 import { birthdayInfo } from '@/lib/birthday'
 import {
   STIMMEN, SYSTEM_PROMPT, PROMPT_FASSUNG, beschreibeTag, ersatzGedanken,
-  leseAntwort, leseBeobachtungsteil,
-  type Stimme, type Tagesbild,
+  leseAntwort, leseBeobachtungsteil, zeitraumAnweisung,
+  type Stimme, type Tagesbild, type Zeitraum,
 } from '@/lib/thoughts'
 import { tagesAnweisung, waehleBesten, bewerte, istPremisse, type Premisse } from '@/lib/humor'
-import { waehleFotos } from '@/lib/photo-select'
+import { waehleFotos, waehleFotosUeberTage } from '@/lib/photo-select'
 import { leseBeobachtungen, zuKandidaten } from '@/lib/memory/observe'
 import { verschmelze, veralte } from '@/lib/memory/merge'
 import { waehleRelevante, alsText, zuAehnlich, type Kontext } from '@/lib/memory/select'
@@ -46,23 +46,132 @@ export function makeAdmin() {
 
 type Bildquelle = { id: string; url: string }
 
-/** Trägt zusammen, was gestern passiert ist – samt der Bilder dazu. */
-async function baueTagesbild(
+/**
+ * Der Ausschnitt, über den geredet wird.
+ *
+ * Alles darunter arbeitet mit diesem Fenster statt mit einem einzelnen Datum.
+ * Der Schlüssel `tag` bleibt der letzte Tag des Fensters – so bleibt die
+ * Sortierung im Archiv chronologisch, egal wie breit das Fenster war.
+ */
+export type Fenster = {
+  zeitraum: Zeitraum
+  /** Erster Tag, einschließlich. */
+  von: Date
+  /** Letzter Tag, einschließlich. Zugleich der Schlüssel in der Datenbank. */
+  bis: Date
+  tag: string
+  /** Wie der Zeitraum in der App heißt, z. B. "Vor einem Jahr". */
+  titel: string
+}
+
+/** Gestern – der Zeitraum, mit dem alles angefangen hat. */
+export function tagesFenster(gestern: Date): Fenster {
+  return {
+    zeitraum: 'tag',
+    von: gestern,
+    bis: gestern,
+    tag: berlinDateKey(gestern),
+    titel: formatBerlin(gestern, { weekday: 'long', day: 'numeric', month: 'long' }),
+  }
+}
+
+/**
+ * Die sieben Tage bis gestern.
+ *
+ * Rollend statt Kalenderwoche. Eine Kalenderwoche wäre montags vollständig und
+ * bis dahin ein Fragment – am Dienstag stünde ein "Rückblick" über anderthalb
+ * Tage da. Rollend ist die Karte an jedem Tag gleich viel wert.
+ */
+export function wochenFenster(gestern: Date): Fenster {
+  const von = addBerlinDays(gestern, -6)
+  return {
+    zeitraum: 'woche',
+    von,
+    bis: gestern,
+    tag: berlinDateKey(gestern),
+    titel: `${formatBerlin(von, { day: 'numeric', month: 'short' })} – ${formatBerlin(gestern, { day: 'numeric', month: 'short' })}`,
+  }
+}
+
+/**
+ * Der Griff ins Archiv: derselbe Tag vor einem Jahr, sonst vor einem Monat.
+ *
+ * Bewusst deterministisch aus dem heutigen Datum abgeleitet und nicht zufällig
+ * gezogen. Ein zufälliger Tag müsste festgehalten werden, damit die Karte beim
+ * nächsten Aufruf dieselbe ist – und wäre trotzdem nicht erklärbar. "Vor einem
+ * Jahr" erklärt sich von selbst.
+ *
+ * Weil an genau diesem Datum nichts passiert sein muss, wird ein Fenster von
+ * ±3 Tagen durchsucht und der Tag mit den meisten Fotos genommen. Gibt es in
+ * beiden Fenstern nichts, kommt null zurück und die App bietet den Zeitraum
+ * gar nicht erst an: Ein Knopf, der ins Leere führt, ist schlimmer als keiner.
+ */
+export async function damalsFenster(
   admin: ReturnType<typeof makeAdmin>,
-  gestern: Date,
+  heute: Date,
+): Promise<Fenster | null> {
+  const versuche: { zurueck: number; titel: string }[] = [
+    { zurueck: 365, titel: 'Vor einem Jahr' },
+    { zurueck: 30, titel: 'Vor einem Monat' },
+  ]
+
+  for (const versuch of versuche) {
+    const mitte = addBerlinDays(heute, -versuch.zurueck)
+    const { data } = await admin.from('photos')
+      .select('taken_at')
+      .gte('taken_at', berlinDayStart(addBerlinDays(mitte, -3)).toISOString())
+      .lte('taken_at', berlinDayEnd(addBerlinDays(mitte, 3)).toISOString())
+
+    if (!data?.length) continue
+
+    const proTag = new Map<string, number>()
+    for (const p of data) {
+      const schluessel = berlinDateKey((p as { taken_at: string }).taken_at)
+      proTag.set(schluessel, (proTag.get(schluessel) ?? 0) + 1)
+    }
+
+    // Der Tag mit den meisten Fotos; bei Gleichstand der dem Jahrestag nähere.
+    const zielZeit = berlinDayStart(mitte).getTime()
+    const abstand = (schluessel: string) =>
+      Math.abs(berlinDayStart(`${schluessel}T12:00:00Z`).getTime() - zielZeit)
+    const [bester] = [...proTag.entries()]
+      .sort((a, b) => b[1] - a[1] || abstand(a[0]) - abstand(b[0]))
+
+    if (!bester) continue
+    const datum = berlinDayStart(`${bester[0]}T12:00:00Z`)
+    return {
+      zeitraum: 'damals',
+      von: datum,
+      bis: datum,
+      tag: bester[0],
+      titel: `${versuch.titel} · ${formatBerlin(datum, { day: 'numeric', month: 'long', year: 'numeric' })}`,
+    }
+  }
+
+  return null
+}
+
+/** Trägt zusammen, was im Fenster passiert ist – samt der Bilder dazu. */
+async function baueBild(
+  admin: ReturnType<typeof makeAdmin>,
+  fenster: Fenster,
   versatz: number,
 ): Promise<{
   bild: Tagesbild
   bilder: Bildquelle[]
   /** Foto-Kennung → wer darauf markiert ist. Bestimmt die Perspektive der Sätze. */
   bildInfo: Map<string, string>
+  /** Foto-Kennung → Beschriftung in der App, z. B. "Mi, 27. Aug". Nur mehrtägig. */
+  bildDatum: Map<string, string>
   /** Katzenname klein → Kennung. Das Modell nennt Namen, das Gedächtnis braucht Kennungen. */
   katzenIds: Record<string, string>
   /** Umgekehrt, für die Formulierung der Erinnerungen. */
   katzenNamen: Record<string, string>
 }> {
-  const von = berlinDayStart(gestern).toISOString()
-  const bis = berlinDayEnd(gestern).toISOString()
+  const { von: erster, bis: letzter } = fenster
+  const mehrtaegig = berlinDateKey(erster) !== berlinDateKey(letzter)
+  const von = berlinDayStart(erster).toISOString()
+  const bis = berlinDayEnd(letzter).toISOString()
 
   const { data: catRows } = await admin.from('cats').select('*').order('created_at', { ascending: true })
   const cats = (catRows ?? []) as Cat[]
@@ -76,8 +185,10 @@ async function baueTagesbild(
     // beide zu sehen sind – dafür muss sie die Markierung kennen.
     admin.from('photos').select('id, taken_at, place, cat_ids, cat_id, public_url, poster_url, media_type, caption')
       .gte('taken_at', von).lte('taken_at', bis).order('taken_at', { ascending: true }),
+    // Überlappung statt Punkttreffer: Bei einem Wochenfenster zählt jede
+    // Betreuung, die irgendwann in diese sieben Tage hineinragt.
     admin.from('absences').select('starts_on, ends_on, label')
-      .lte('starts_on', berlinDateKey(gestern)).gte('ends_on', berlinDateKey(gestern)).limit(1),
+      .lte('starts_on', berlinDateKey(letzter)).gte('ends_on', berlinDateKey(erster)).limit(1),
   ])
 
   // Gemeinsame Mahlzeiten nur einmal zählen – sonst stünde jede Fütterung
@@ -105,8 +216,16 @@ async function baueTagesbild(
 
   const besonderes: string[] = []
   for (const c of cats) {
-    const info = birthdayInfo(c.birthday, gestern)
-    if (info?.isToday) besonderes.push(`Besonderes: ${c.name} hatte Geburtstag und wurde ${info.age}.`)
+    // Bei einem mehrtägigen Fenster jeden Tag prüfen – ein Geburtstag am
+    // Mittwoch gehört in den Wochenrückblick, auch wenn er nicht der letzte
+    // Tag war.
+    for (let i = 0; i <= berlinDaysBetween(erster, letzter); i++) {
+      const info = birthdayInfo(c.birthday, addBerlinDays(erster, i))
+      if (info?.isToday) {
+        besonderes.push(`Besonderes: ${c.name} hatte Geburtstag und wurde ${info.age}.`)
+        break
+      }
+    }
   }
   const abwesenheit = absenceRaw?.[0]
   if (abwesenheit) {
@@ -125,7 +244,11 @@ async function baueTagesbild(
    * Seit die Bilder auf 640 Pixel verkleinert übertragen werden, kosten zwei
    * weitere kaum Zeit. Das war bei acht Megabyte je Bild noch anders.
    */
-  const bilder: Bildquelle[] = waehleFotos(fotos, 5, versatz)
+  const bilder: Bildquelle[] = mehrtaegig
+    // Über mehrere Tage zuerst nach Tagen aufteilen. Sonst bestünde eine
+    // Woche mit einer Sonntagsserie von dreißig Bildern nur aus Sonntag.
+    ? waehleFotosUeberTage(fotos, 5, versatz, f => berlinDateKey(f.taken_at))
+    : waehleFotos(fotos, 5, versatz)
 
   /**
    * Wer ist auf welchem Bild markiert?
@@ -148,13 +271,60 @@ async function baueTagesbild(
       ? 'niemand markiert – entscheide nach dem Aussehen'
       : `markiert: ${namen.join(' und ')}`
     const uhrzeit = formatBerlin(zeile.taken_at, { hour: '2-digit', minute: '2-digit' })
-    bildInfo.set(b.id, `${wer}, ${uhrzeit}${zeile.place ? `, ${zeile.place}` : ''}`)
+    // Bei mehreren Tagen ist der Wochentag die wichtigere Angabe: Ein Satz
+    // über eine Woche muss wissen, ob das Bild vom Anfang oder vom Ende ist.
+    const wann = mehrtaegig
+      ? `${formatBerlin(zeile.taken_at, { weekday: 'long' })}, ${uhrzeit}`
+      : uhrzeit
+    bildInfo.set(b.id, `${wer}, ${wann}${zeile.place ? `, ${zeile.place}` : ''}`)
+  }
+
+  /** Je Bild die Beschriftung, die in der App darüber steht. */
+  const bildDatum = new Map<string, string>()
+  if (mehrtaegig) {
+    for (const b of bilder) {
+      const zeile = fotos.find(f => f.id === b.id)
+      if (zeile) bildDatum.set(b.id, formatBerlin(zeile.taken_at, { weekday: 'short', day: 'numeric', month: 'short' }))
+    }
+  }
+
+  /**
+   * Der Verlauf über die Tage.
+   *
+   * Nur bei mehrtägigen Fenstern. Er ist der eigentliche Stoff: Aus "14×
+   * Nautilus" wird kein Rückblick, aus "an vier Tagen dasselbe, dann nicht
+   * mehr" schon.
+   */
+  let spanne: Tagesbild['spanne']
+  if (mehrtaegig) {
+    const tage = berlinDaysBetween(erster, letzter)
+    const verlauf: NonNullable<Tagesbild['spanne']>['verlauf'] = []
+    for (let i = 0; i <= tage; i++) {
+      const datum = addBerlinDays(erster, i)
+      const schluessel = berlinDateKey(datum)
+      const sorten = Array.from(new Set(
+        feedings
+          .filter(f => berlinDateKey(f.logged_at) === schluessel)
+          .map(f => f.food_type || f.food_brand),
+      ))
+      verlauf.push({
+        wochentag: formatBerlin(datum, { weekday: 'long' }),
+        datum: formatBerlin(datum, { day: 'numeric', month: 'long' }),
+        futter: sorten,
+        fotos: fotos.filter(p => berlinDateKey(p.taken_at) === schluessel).length,
+      })
+    }
+    spanne = {
+      tage: tage + 1,
+      vonBis: `${formatBerlin(erster, { weekday: 'short', day: 'numeric', month: 'long' })} bis ${formatBerlin(letzter, { weekday: 'short', day: 'numeric', month: 'long' })}`,
+      verlauf,
+    }
   }
 
   return {
     bild: {
-      datum: formatBerlin(gestern, { day: 'numeric', month: 'long' }),
-      wochentag: formatBerlin(gestern, { weekday: 'long' }),
+      datum: formatBerlin(letzter, { day: 'numeric', month: 'long', ...(fenster.zeitraum === 'damals' ? { year: 'numeric' } : {}) }),
+      wochentag: formatBerlin(letzter, { weekday: 'long' }),
       futter: [...zaehler.entries()].map(([name, mal]) => ({ name, mal })),
       befinden,
       fotos: {
@@ -165,9 +335,11 @@ async function baueTagesbild(
       },
       menschen: [],
       besonderes,
+      spanne,
     },
     bilder,
     bildInfo,
+    bildDatum,
     katzenIds: Object.fromEntries(cats.map(c => [c.name.toLowerCase(), c.id])),
     katzenNamen: Object.fromEntries(cats.map(c => [c.id, c.name])),
   }
@@ -285,8 +457,7 @@ async function frageKi(prompt: string, bilder: Bildteil[]): Promise<string | nul
 
 export async function erzeuge(
   admin: ReturnType<typeof makeAdmin>,
-  gestern: Date,
-  tag: string,
+  fenster: Fenster,
   /**
    * Verschiebt die Fotoauswahl. Beim Würfeln kommt hier ein anderer Wert
    * herein, damit derselbe Tag eine andere Geschichte erzählen kann – vorher
@@ -295,7 +466,8 @@ export async function erzeuge(
    */
   versatz = 0,
 ) {
-  const { bild, bilder, bildInfo, katzenIds, katzenNamen } = await baueTagesbild(admin, gestern, versatz)
+  const { zeitraum, tag } = fenster
+  const { bild, bilder, bildInfo, bildDatum, katzenIds, katzenNamen } = await baueBild(admin, fenster, versatz)
   const geladen = await ladeBilder(bilder)
   const bildteile = geladen.map(g => g.teil)
 
@@ -390,8 +562,9 @@ export async function erzeuge(
   }
 
   const antwort = await frageKi(
-    `${SYSTEM_PROMPT}${eigeneStimmen}\n\n${tagesAnweisung(letzteSaetze, letztePremissen)}` +
-    `\n\nDATEN VON GESTERN\n${beschreibeTag(bild)}${hinweis}` +
+    `${SYSTEM_PROMPT}${eigeneStimmen}${zeitraumAnweisung(zeitraum)}` +
+    `\n\n${tagesAnweisung(letzteSaetze, letztePremissen)}` +
+    `\n\n${zeitraum === 'tag' ? 'DATEN VON GESTERN' : 'DATEN DES ZEITRAUMS'}\n${beschreibeTag(bild)}${hinweis}` +
     `\n\nERINNERUNGEN\n${erinnerungsText}`,
     bildteile,
   )
@@ -413,9 +586,19 @@ export async function erzeuge(
   /** Bella redet knapper als Joschi – das gehört zu ihrer Stimme. */
   const zielLaenge: Record<Stimme, number> = { joschi: 14, bella: 10, beide: 16 }
 
-  // Beobachtungen ins Gedächtnis einarbeiten. Getrennt abgesichert: Ein Fehler
-  // hier darf den fertigen Gedanken nicht kosten.
-  if (antwort) {
+  /**
+   * Beobachtungen ins Gedächtnis einarbeiten – nur beim Tagesfenster.
+   *
+   * Ein Wochenrückblick sieht Fotos, die als Tage längst verarbeitet wurden.
+   * Würde er sie erneut einspeisen, bestätigte sich jede Beobachtung ein
+   * zweites Mal, und die Zähler, an denen die Sicherheit einer Erinnerung
+   * hängt, wären systematisch zu hoch. Ein Muster gilt ab drei Beobachtungen
+   * als gesichert – das wäre dann nach anderthalb echten erreicht.
+   *
+   * Getrennt abgesichert: Ein Fehler hier darf den fertigen Gedanken nicht
+   * kosten.
+   */
+  if (antwort && zeitraum === 'tag') {
     try {
       const beobachtungen = leseBeobachtungen(
         leseBeobachtungsteil(antwort),
@@ -442,14 +625,6 @@ export async function erzeuge(
   const quelle = gelesen ? 'ki' : 'ersatz'
 
   /**
-   * Das Bild, auf das sich diese Stimme bezieht.
-   *
-   * Nur die Bilder, die tatsächlich mitgeschickt wurden, kommen infrage –
-   * nennt das Modell eine Nummer, die es gar nicht gibt, wäre das Bild neben
-   * dem Satz schlicht falsch. Dann lieber das erste als gar keins: Die Karte
-   * soll nicht mal mit und mal ohne Bild dastehen.
-   */
-  /**
    * Die Bildnummer aus der Antwort auf das Foto, das das Modell unter dieser
    * Nummer gesehen hat.
    *
@@ -472,8 +647,25 @@ export async function erzeuge(
    */
   const zeilen = STIMMEN.map(s => {
     const vorschlaege = gelesen?.[s] ?? []
-    const gewaehlt = vorschlaege.length > 0
-      ? waehleBesten(vorschlaege, {
+
+    /**
+     * Woraus der Hauptsatz gewählt wird.
+     *
+     * Beim Tagesfenster aus allem: Dort ist der Hauptsatz derselbe wie der
+     * beste Bildsatz, und die Karte zeigt ihn neben seinem Foto.
+     *
+     * Bei einem Rückblick nicht. Dort ist der Hauptsatz das Fazit über den
+     * ganzen Zeitraum, und das Modell liefert es ausdrücklich ohne Bildnummer.
+     * Käme hier ein Satz über ein einzelnes Foto nach oben, wäre der Rückblick
+     * wieder ein Tagesbericht – und genau das soll er nicht sein.
+     */
+    const fazitKandidaten = zeitraum === 'tag'
+      ? vorschlaege
+      : vorschlaege.filter(v => v.bild === null)
+    const fuersFazit = fazitKandidaten.length > 0 ? fazitKandidaten : vorschlaege
+
+    const gewaehlt = fuersFazit.length > 0
+      ? waehleBesten(fuersFazit, {
           anker,
           letzteSaetze,
           letztePremissen,
@@ -481,7 +673,7 @@ export async function erzeuge(
         })
       : null
 
-    if (vorschlaege.length > 0 && !gewaehlt) {
+    if (fuersFazit.length > 0 && !gewaehlt) {
       console.log(`Gedanken/${s}: alle ${vorschlaege.length} Vorschläge abgelehnt`)
     } else if (gewaehlt) {
       console.log(
@@ -530,10 +722,13 @@ export async function erzeuge(
         fotoUrl: b.url,
         text: proBild.get(b.id)!.text,
         premise: proBild.get(b.id)!.premisse,
+        // Bei einem Rückblick steht über dem Bild, von wann es ist. Ohne das
+        // sind fünf Stationen einer Woche fünf beliebige Fotos.
+        datum: bildDatum.get(b.id) ?? null,
       }))
 
     return {
-      tag, stimme: s,
+      tag, zeitraum, stimme: s,
       text,
       zeilen: bildZeilen,
       grundlage: `${beschreibeTag(bild)}\n(${bildteile.length} Bild(er) angesehen)`.slice(0, 1000),
@@ -551,14 +746,38 @@ export async function erzeuge(
 
   // onConflict: Zwei Personen können die Seite gleichzeitig öffnen; die zweite
   // Einfügung darf dann nicht mit einem Fehler abbrechen.
-  await admin.from('cat_thoughts').upsert(zeilen, { onConflict: 'tag,stimme' })
+  await admin.from('cat_thoughts').upsert(zeilen, { onConflict: 'tag,zeitraum,stimme' })
 
+  return alsAntwort(fenster, quelle, zeilen)
+}
+
+/** Die Form, in der eine Karte über die Schnittstelle geht. */
+export type Karte = {
+  zeitraum: Zeitraum
+  tag: string
+  titel: string
+  quelle: string
+  gedanken: Record<string, {
+    text: string
+    foto: string | null
+    fotoId: string | null
+    zeilen: unknown
+  }>
+}
+
+export function alsAntwort(
+  fenster: Fenster,
+  quelle: string,
+  zeilen: { stimme: string; text: string; foto_url: string | null; foto_id: string | null; zeilen: unknown }[],
+): Karte {
   return {
-    tag,
+    zeitraum: fenster.zeitraum,
+    tag: fenster.tag,
+    titel: fenster.titel,
     quelle,
     gedanken: Object.fromEntries(
       zeilen.map(z => [z.stimme, {
-        text: z.text, foto: z.foto_url, fotoId: z.foto_id, zeilen: z.zeilen,
+        text: z.text, foto: z.foto_url, fotoId: z.foto_id, zeilen: z.zeilen ?? [],
       }]),
     ),
   }

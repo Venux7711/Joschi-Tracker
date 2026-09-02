@@ -1,6 +1,6 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const { waehleFotos, zuSituationen, bildAdresse } = require('../.test-build/photo-select')
+const { waehleFotos, waehleFotosUeberTage, zuSituationen, bildAdresse } = require('../.test-build/photo-select')
 
 /** Ein Foto zu einer Uhrzeit des 1. September. */
 const foto = (id, stunde, minute = 0, ueber = {}) => ({
@@ -130,4 +130,59 @@ test('keine Dubletten in der Auswahl', () => {
     const auswahl = ids(waehleFotos(fotos, 3, v))
     assert.equal(new Set(auswahl).size, auswahl.length, `Versatz ${v}: ${auswahl}`)
   }
+})
+
+// ── Über mehrere Tage ─────────────────────────────────────────────
+
+/** Ein Foto an einem bestimmten Tag. */
+const anTag = (id, tag, stunde) => ({
+  ...foto(id, stunde),
+  taken_at: `2026-09-0${tag}T${String(stunde).padStart(2, '0')}:00:00Z`,
+})
+
+test('ein einzelner Tag kann die Woche nicht übernehmen', () => {
+  // Der Anlass: Wer sonntags eine Serie von zehn Bildern macht und sonst zwei,
+  // bekäme eine Woche, die aus einem Sonntag besteht – also genau den
+  // Rückblick, der nichts über die Woche sagt.
+  const viele = [1, 2, 3, 4, 5, 6, 7, 8].map(i => anTag(`serie${i}`, 1, 9 + i))
+  const einzeln = [anTag('dienstag', 2, 14), anTag('mittwoch', 3, 11)]
+
+  const auswahl = ids(waehleFotosUeberTage([...viele, ...einzeln], 3))
+  assert.ok(auswahl.includes('dienstag'), auswahl.join())
+  assert.ok(auswahl.includes('mittwoch'), auswahl.join())
+})
+
+test('erst bekommt jeder Tag eines, dann erst ein Tag ein zweites', () => {
+  const fotos = [
+    anTag('mo-a', 1, 9), anTag('mo-b', 1, 18),
+    anTag('di-a', 2, 9), anTag('di-b', 2, 18),
+  ]
+  const auswahl = ids(waehleFotosUeberTage(fotos, 2))
+  assert.equal(auswahl.length, 2)
+  // Ein Bild von jedem Tag, nicht zwei vom Montag
+  assert.ok(auswahl.some(i => i.startsWith('mo-')), auswahl.join())
+  assert.ok(auswahl.some(i => i.startsWith('di-')), auswahl.join())
+})
+
+test('das Ergebnis ist chronologisch, nicht nach Tagen sortiert', () => {
+  const fotos = [anTag('spaet', 1, 20), anTag('frueh', 2, 7)]
+  assert.deepEqual(ids(waehleFotosUeberTage(fotos, 2)), ['spaet', 'frueh'])
+})
+
+test('kein Bild kommt doppelt zurück', () => {
+  const fotos = [anTag('a', 1, 9), anTag('b', 2, 9)]
+  const auswahl = ids(waehleFotosUeberTage(fotos, 5))
+  assert.equal(new Set(auswahl).size, auswahl.length)
+})
+
+test('der Tagesschlüssel lässt sich austauschen', () => {
+  // Weil "welcher Tag" von der Zeitzone abhängt und diese Datei nichts
+  // davon wissen soll – der Aufrufer reicht die Berliner Fassung herein.
+  const fotos = [anTag('a', 1, 23), anTag('b', 2, 1)]
+  const alsEinTag = ids(waehleFotosUeberTage(fotos, 1, 0, () => 'immer-derselbe-tag'))
+  assert.equal(alsEinTag.length, 1)
+})
+
+test('ohne Fotos kommt nichts zurück', () => {
+  assert.deepEqual(waehleFotosUeberTage([], 3), [])
 })
