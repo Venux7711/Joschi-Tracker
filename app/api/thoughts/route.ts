@@ -70,5 +70,10 @@ export async function POST() {
   const tag = berlinDateKey(gestern)
 
   await admin.from('cat_thoughts').delete().eq('tag', tag)
-  return NextResponse.json(await erzeuge(admin, gestern, tag))
+
+  // Beim Würfeln auch andere Fotos vorlegen. Aus der Uhrzeit abgeleitet:
+  // Ein fester Wert brächte beim zweiten Wurf wieder dieselben Bilder, und
+  // genau das war die Klage.
+  const versatz = (Math.floor(Date.now() / 1000) % 7) + 1
+  return NextResponse.json(await erzeuge(admin, gestern, tag, versatz))
 }

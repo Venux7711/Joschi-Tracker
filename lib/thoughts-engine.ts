@@ -23,6 +23,7 @@ import {
   type Stimme, type Tagesbild,
 } from '@/lib/thoughts'
 import { tagesAnweisung, waehleBesten, istPremisse, type Premisse } from '@/lib/humor'
+import { waehleFotos } from '@/lib/photo-select'
 import { leseBeobachtungen, zuKandidaten } from '@/lib/memory/observe'
 import { verschmelze, veralte } from '@/lib/memory/merge'
 import { waehleRelevante, alsText, zuAehnlich, type Kontext } from '@/lib/memory/select'
@@ -49,6 +50,7 @@ type Bildquelle = { id: string; url: string }
 async function baueTagesbild(
   admin: ReturnType<typeof makeAdmin>,
   gestern: Date,
+  versatz: number,
 ): Promise<{
   bild: Tagesbild
   bilder: Bildquelle[]
@@ -68,7 +70,9 @@ async function baueTagesbild(
   const [{ data: feedRaw }, { data: healthRaw }, { data: photoRaw }, { data: absenceRaw }] = await Promise.all([
     admin.from('feeding_logs').select('*').in('cat_id', catIds).gte('logged_at', von).lte('logged_at', bis),
     admin.from('health_logs').select('*').in('cat_id', catIds).gte('logged_at', von).lte('logged_at', bis),
-    admin.from('photos').select('id, taken_at, place, public_url, poster_url, media_type, caption')
+    // cat_ids mitlesen: Die Fotoauswahl bevorzugt eine Situation, auf der
+    // beide zu sehen sind – dafür muss sie die Markierung kennen.
+    admin.from('photos').select('id, taken_at, place, cat_ids, cat_id, public_url, poster_url, media_type, caption')
       .gte('taken_at', von).lte('taken_at', bis).order('taken_at', { ascending: true }),
     admin.from('absences').select('starts_on, ends_on, label')
       .lte('starts_on', berlinDateKey(gestern)).gte('ends_on', berlinDateKey(gestern)).limit(1),
@@ -107,18 +111,10 @@ async function baueTagesbild(
     besonderes.push(`Besonderes: Die Katzen sind gerade nicht zuhause (${abwesenheit.label ?? 'Betreuung'}), jemand anderes füttert.`)
   }
 
-  // Drei Bilder, über den Tag verteilt statt einfach die ersten: Bei fünfzehn
-  // Fotos aus derselben Minute sähe die KI sonst dreimal dasselbe. Drei, weil
-  // jede der drei Stimmen ein eigenes bekommen soll – seit die Bilder
-  // verkleinert übertragen werden, kostet das kaum noch Zeit. Bei Videos das
-  // Standbild, Bewegtbilder kann das Modell hier nicht lesen.
-  const schritt = Math.max(1, Math.floor(fotos.length / 3))
-  const bilder: Bildquelle[] = []
-  for (let i = 0; i < fotos.length && bilder.length < 3; i += schritt) {
-    const f = fotos[i]
-    const url = f.media_type === 'video' ? f.poster_url : f.public_url
-    if (url) bilder.push({ id: f.id, url })
-  }
+  // Drei Bilder – eines je Stimme. Die Auswahl gruppiert vorher nach
+  // Situationen, damit nicht drei Aufnahmen derselben Minute drei Plätze
+  // belegen, und der Versatz holt beim Würfeln andere Bilder nach vorn.
+  const bilder: Bildquelle[] = waehleFotos(fotos, 3, versatz)
 
   return {
     bild: {
@@ -235,11 +231,25 @@ async function frageKi(prompt: string, bilder: Bildteil[]): Promise<string | nul
   return null
 }
 
-export async function erzeuge(admin: ReturnType<typeof makeAdmin>, gestern: Date, tag: string) {
-  const { bild, bilder, katzenIds, katzenNamen } = await baueTagesbild(admin, gestern)
+export async function erzeuge(
+  admin: ReturnType<typeof makeAdmin>,
+  gestern: Date,
+  tag: string,
+  /**
+   * Verschiebt die Fotoauswahl. Beim Würfeln kommt hier ein anderer Wert
+   * herein, damit derselbe Tag eine andere Geschichte erzählen kann – vorher
+   * lagen bei jedem Wurf dieselben drei Bilder vor und nur der Text änderte
+   * sich.
+   */
+  versatz = 0,
+) {
+  const { bild, bilder, katzenIds, katzenNamen } = await baueTagesbild(admin, gestern, versatz)
   const bildteile = await ladeBilder(bilder.map(b => b.url))
   const hinweis = bildteile.length > 0
-    ? `\n\nDazu ${bildteile.length} Foto(s) von gestern – sieh sie dir an.`
+    // Die Gesamtzahl mitzunennen ist nicht kosmetisch: Bei fünfzehn Fotos und
+    // drei Bildern soll das Modell wissen, dass es einen Ausschnitt sieht, und
+    // nicht behaupten, das sei alles gewesen.
+    ? `\n\nDazu ${bildteile.length} von ${bild.fotos.anzahl} Fotos des Tages – sieh sie dir an.`
     : '\n\nEs liegen keine Fotos bei.'
 
   /**
