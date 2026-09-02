@@ -275,11 +275,15 @@ export function waehleBesten(
  */
 export function tagesAnweisung(letzteSaetze: string[], letztePremissen: Premisse[]): string {
   const teile = [
-    'MEHRERE ANSÄTZE LIEFERN',
-    'Gib zu jeder Stimme drei verschiedene Vorschläge, nicht einen. Such dir',
-    'zuerst die Situationen des Tages, die überhaupt etwas hergeben, und mach',
-    'daraus drei unterschiedliche Ansätze – nicht dreimal denselben Satz mit',
-    'anderen Worten. Welcher genommen wird, entscheidet die App.',
+    'EIN VORSCHLAG JE BILD',
+    'Gib zu jeder Stimme einen Vorschlag zu jedem beiliegenden Bild – bei vier',
+    'Bildern also vier Vorschläge, jeder mit der passenden Bildnummer. Die App',
+    'stellt jeden Satz neben sein Bild; ein Satz am falschen Bild macht die',
+    'Karte kaputt.',
+    'Sag zu einem Bild nichts, wenn es nichts hergibt. Lieber drei Sätze zu vier',
+    'Bildern als ein erzwungener zum vierten.',
+    'Und wiederhole dich nicht: Vier Bilder desselben Tages sollen vier',
+    'Beobachtungen ergeben, nicht viermal dieselbe mit anderen Worten.',
     '',
     'Nenn zu jedem Vorschlag den Ansatz:',
     '  untertreibung  – etwas Auffälliges völlig nüchtern behandeln',

@@ -38,14 +38,16 @@ export async function GET(req: NextRequest) {
   }
 
   const { data: vorhanden } = await admin.from('cat_thoughts')
-    .select('stimme, text, erzeugt_von, foto_url, foto_id').eq('tag', tag)
+    .select('stimme, text, erzeugt_von, foto_url, foto_id, zeilen').eq('tag', tag)
 
   if (vorhanden && vorhanden.length >= STIMMEN.length) {
     return NextResponse.json({
       tag,
       quelle: vorhanden[0].erzeugt_von,
       gedanken: Object.fromEntries(
-        vorhanden.map(z => [z.stimme, { text: z.text, foto: z.foto_url, fotoId: z.foto_id }]),
+        vorhanden.map(z => [z.stimme, {
+          text: z.text, foto: z.foto_url, fotoId: z.foto_id, zeilen: z.zeilen ?? [],
+        }]),
       ),
     })
   }

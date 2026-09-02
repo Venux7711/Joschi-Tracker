@@ -185,9 +185,12 @@ test('istPremisse nimmt nur bekannte Ansätze an', () => {
   assert.equal(istPremisse(42), false)
 })
 
-test('die Tagesanweisung verlangt mehrere Vorschläge', () => {
+test('die Tagesanweisung verlangt einen Vorschlag je Bild', () => {
+  // Seit die Karte zu jedem Bild seinen eigenen Satz zeigt, muss auch je Bild
+  // einer entstehen. Ein Satz am falschen Bild macht die Karte kaputt.
   const text = tagesAnweisung(ECHTE_SAETZE, ['status'])
-  assert.ok(text.includes('drei verschiedene Vorschläge'), text)
+  assert.ok(text.includes('einen Vorschlag zu jedem beiliegenden Bild'), text)
+  assert.ok(text.includes('falschen Bild'), text)
   assert.ok(text.includes('ich stehe'), 'verbrauchte Satzanfänge fehlen')
   assert.ok(text.includes('status'), 'verbrauchte Ansätze fehlen')
   // Und ausdrücklich keine Kalender-Vorgabe mehr

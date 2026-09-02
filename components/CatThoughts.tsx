@@ -24,7 +24,20 @@ import type { Cat } from '@/lib/types'
  * Bella redet über den Teppich, Joschi über die Werkbank – dann muss auch das
  * passende Bild danebenstehen, sonst geht die Pointe verloren.
  */
-type Gedanke = { text: string; foto: string | null; fotoId: string | null }
+type Zeile = { fotoId: string; fotoUrl: string; text: string; premise: string | null }
+
+type Gedanke = {
+  text: string
+  foto: string | null
+  fotoId: string | null
+  /**
+   * Je Bild ein eigener Satz.
+   *
+   * Vorher stand unter allen Fotos derselbe Text. Wer das dritte Foto antippte
+   * und den Kommentar zum ersten las, hielt die Karte zu Recht für kaputt.
+   */
+  zeilen: Zeile[]
+}
 
 type Antwort = {
   tag: string
@@ -58,36 +71,12 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
 
   useEffect(laden, [])
 
-  /**
-   * Die Fotos des besprochenen Tages nachladen.
-   *
-   * Das Modell sieht eine Auswahl, der Mensch soll den ganzen Tag sehen
-   * können. An einem gewöhnlichen Tag sind das vier bis sechs Bilder – zu
-   * wenige, um sie zu verstecken.
-   */
-  useEffect(() => {
-    if (!daten?.tag) return
-    fetch(`/api/photos?date=${daten.tag}&limit=40`)
-      .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then(d => setTagesFotos(
-        (d.photos ?? [])
-          .map((p: { id: string; public_url: string; poster_url: string | null; media_type: string | null }) => ({
-            id: p.id,
-            url: p.media_type === 'video' ? p.poster_url : p.public_url,
-          }))
-          .filter((p: { url: string | null }) => !!p.url),
-      ))
-      .catch(() => setTagesFotos([]))
-  }, [daten?.tag])
-
-  // Beim Stimmenwechsel zurück auf das Bild, über das geredet wird
-  useEffect(() => { setGewaehltesFoto(null) }, [aktiv])
-
   const [wuerfelt, setWuerfelt] = useState(false)
-  // Alle Fotos des besprochenen Tages, nicht nur das eine der Stimme.
-  const [tagesFotos, setTagesFotos] = useState<{ id: string; url: string }[]>([])
-  // Welches Bild gerade groß zu sehen ist. null = das der Stimme.
+  // Welches Bild gerade groß zu sehen ist. null = das erste der Stimme.
   const [gewaehltesFoto, setGewaehltesFoto] = useState<string | null>(null)
+
+  // Beim Stimmenwechsel zurück auf das erste Bild dieser Stimme
+  useEffect(() => { setGewaehltesFoto(null) }, [aktiv])
 
   /** Nochmal würfeln – ein misslungener Satz stünde sonst bis morgen da. */
   const nochmal = async () => {
@@ -111,14 +100,30 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
 
   const aktuellerGedanke = daten?.gedanken?.[aktiv] ?? null
 
-  // Das Bild der Stimme – oder das, was von Hand ausgewählt wurde
-  const gewaehlt = gewaehltesFoto
-    ? tagesFotos.find(f => f.id === gewaehltesFoto) ?? null
-    : null
-  const aktuellesFoto = gewaehlt?.url ?? aktuellerGedanke?.foto ?? null
-  const aktuelleFotoId = gewaehlt?.id ?? aktuellerGedanke?.fotoId ?? null
-  /** Nur solange das Bild der Stimme gezeigt wird, stimmt die Marke. */
-  const redetDarueber = !gewaehlt && !!aktuellerGedanke?.foto
+  /**
+   * Die Sätze dieser Stimme, je einer zu einem Bild.
+   *
+   * Ältere Einträge kennen das noch nicht – dann bleibt es beim einen Satz
+   * mit dem einen Bild, so wie es vorher war.
+   */
+  const zeilen: Zeile[] = aktuellerGedanke?.zeilen?.length
+    ? aktuellerGedanke.zeilen
+    : aktuellerGedanke?.foto && aktuellerGedanke.fotoId
+      ? [{
+          fotoId: aktuellerGedanke.fotoId,
+          fotoUrl: aktuellerGedanke.foto,
+          text: aktuellerGedanke.text,
+          premise: null,
+        }]
+      : []
+
+  const aktuelleZeile =
+    zeilen.find(z => z.fotoId === gewaehltesFoto) ?? zeilen[0] ?? null
+
+  const aktuellesFoto = aktuelleZeile?.fotoUrl ?? null
+  const aktuelleFotoId = aktuelleZeile?.fotoId ?? null
+  /** Der Text gehört immer zum gezeigten Bild – das ist jetzt garantiert. */
+  const anzeigeText = aktuelleZeile?.text ?? aktuellerGedanke?.text ?? ''
 
   // Bewusst kein stilles Verschwinden mehr: Beim ersten Anlauf lief die
   // Erzeugung in eine Zeitüberschreitung, die Karte war schlicht weg, und von
@@ -194,25 +199,23 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
             <Image
               key={aktuellesFoto}
               src={aktuellesFoto}
-              alt={redetDarueber ? 'Das Foto, über das gesprochen wird' : 'Foto des Tages'}
+              alt="Das Foto, über das gesprochen wird"
               fill
               className="object-cover"
               sizes="(max-width: 640px) 100vw, 600px"
               style={{ animation: 'fadeIn 0.35s ease' }}
             />
-            {/* Die Marke nur, solange sie auch stimmt: Wer selbst ein anderes
-                Bild angetippt hat, bekommt keine falsche Zuordnung. */}
-            {redetDarueber && (
-              <span
-                style={{
-                  position: 'absolute', left: 8, bottom: 8,
-                  fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 999,
-                  background: 'rgba(0,0,0,0.55)', color: 'white',
-                }}
-              >
-                Darüber wird geredet
-              </span>
-            )}
+            {/* Die Marke stimmt jetzt immer: Zu jedem Bild gehört sein
+                eigener Satz, angezeigt wird nur dieses Paar. */}
+            <span
+              style={{
+                position: 'absolute', left: 8, bottom: 8,
+                fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 999,
+                background: 'rgba(0,0,0,0.55)', color: 'white',
+              }}
+            >
+              Darüber wird geredet
+            </span>
           </a>
 
           {/* Der ganze Tag als Streifen.
@@ -220,27 +223,28 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
               können. An einem gewöhnlichen Tag sind das vier bis sechs Bilder;
               die zu verstecken, während die Karte „Rückblick" heißt, wäre
               eigenartig. Erst ab zwei Bildern, sonst ist es Zierrat. */}
-          {tagesFotos.length > 1 && (
-            <div
-              className="flex gap-1.5 mt-2"
-              style={{ overflowX: 'auto', paddingBottom: 2 }}
-            >
-              {tagesFotos.map(f => {
-                const aktivesBild = f.url === aktuellesFoto
+          {/* Nur Bilder, zu denen diese Stimme etwas gesagt hat.
+              Ein Foto ohne eigenen Satz aufzunehmen hieße, beim Antippen einen
+              fremden Kommentar danebenzustellen – genau der Fehler, den diese
+              Änderung behebt. */}
+          {zeilen.length > 1 && (
+            <div className="flex gap-1.5 mt-2" style={{ overflowX: 'auto', paddingBottom: 2 }}>
+              {zeilen.map(z => {
+                const aktivesBild = z.fotoId === aktuelleFotoId
                 return (
                   <button
-                    key={f.id}
-                    onClick={() => setGewaehltesFoto(f.id === gewaehltesFoto ? null : f.id)}
-                    aria-label="Dieses Foto zeigen"
+                    key={z.fotoId}
+                    onClick={() => setGewaehltesFoto(z.fotoId)}
+                    aria-label="Was die Stimme zu diesem Foto sagt"
                     className="relative flex-shrink-0 overflow-hidden"
                     style={{
                       width: 46, height: 46, borderRadius: 8,
                       border: aktivesBild ? `2px solid ${akzent}` : '1px solid rgba(60,60,67,0.1)',
-                      opacity: aktivesBild ? 1 : 0.6,
+                      opacity: aktivesBild ? 1 : 0.55,
                       transition: 'opacity 0.2s ease',
                     }}
                   >
-                    <Image src={f.url} alt="" fill className="object-cover" sizes="46px" />
+                    <Image src={z.fotoUrl} alt="" fill className="object-cover" sizes="46px" />
                   </button>
                 )
               })}
@@ -259,7 +263,7 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
           // Der Dialog bekommt zwei Blasen, versetzt wie ein Chatverlauf –
           // als eine Zeile gelesen ginge die Pointe des Konterns verloren.
           <div className="space-y-2">
-            {teileDialog(daten.gedanken.beide.text).map((zeile, i) => (
+            {teileDialog(anzeigeText).map((zeile, i) => (
               <Sprechblase
                 key={i}
                 name={zeile.wer}
@@ -274,7 +278,7 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
           <Sprechblase
             name={aktiv === 'joschi' ? 'Joschi' : 'Bella'}
             bild={bildVon(aktiv === 'joschi' ? 'Joschi' : 'Bella')}
-            text={daten.gedanken[aktiv].text}
+            text={anzeigeText}
             rechts={false}
             farbe={akzent}
             gross

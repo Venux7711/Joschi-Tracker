@@ -22,7 +22,7 @@ import {
   leseAntwort, leseBeobachtungsteil,
   type Stimme, type Tagesbild,
 } from '@/lib/thoughts'
-import { tagesAnweisung, waehleBesten, istPremisse, type Premisse } from '@/lib/humor'
+import { tagesAnweisung, waehleBesten, bewerte, istPremisse, type Premisse } from '@/lib/humor'
 import { waehleFotos } from '@/lib/photo-select'
 import { leseBeobachtungen, zuKandidaten } from '@/lib/memory/observe'
 import { verschmelze, veralte } from '@/lib/memory/merge'
@@ -433,9 +433,43 @@ export async function erzeuge(
     const text = gewaehlt?.kandidat.text ?? ersatz[s]
     const foto = bildFuer(gewaehlt?.kandidat.bild ?? null)
 
+    /**
+     * Je Bild der beste Satz.
+     *
+     * Bisher wurde der Gewinner behalten und der Rest weggeworfen. Seit die
+     * Karte alle Fotos des Tages zeigt, ist das falsch: Der Text gehörte zu
+     * einem Bild, angezeigt wurde er zu jedem. Wer das dritte Foto antippt und
+     * den Kommentar zum ersten liest, hält die App zu Recht für kaputt.
+     *
+     * Also je Bildnummer den besten Vorschlag behalten. Ein Bild ohne
+     * brauchbaren Satz bekommt keinen – lieber kein Kommentar als ein
+     * fremder.
+     */
+    const proBild = new Map<string, { text: string; premisse: string | null; punkte: number }>()
+    for (const v of vorschlaege) {
+      const b = bildFuer(v.bild)
+      if (!b) continue
+      const bewertung = bewerte(v, { anker, letzteSaetze, letztePremissen, zielLaenge: zielLaenge[s] })
+      if (bewertung.abgelehnt !== null) continue
+      const bisher = proBild.get(b.id)
+      if (!bisher || bewertung.punkte > bisher.punkte) {
+        proBild.set(b.id, { text: v.text, premisse: v.premisse, punkte: bewertung.punkte })
+      }
+    }
+
+    const bildZeilen = bilder
+      .filter(b => proBild.has(b.id))
+      .map(b => ({
+        fotoId: b.id,
+        fotoUrl: b.url,
+        text: proBild.get(b.id)!.text,
+        premise: proBild.get(b.id)!.premisse,
+      }))
+
     return {
       tag, stimme: s,
       text,
+      zeilen: bildZeilen,
       grundlage: `${beschreibeTag(bild)}\n(${bildteile.length} Bild(er) angesehen)`.slice(0, 1000),
       erzeugt_von: gewaehlt ? quelle : 'ersatz',
       foto_id: foto?.id ?? null,
@@ -457,7 +491,9 @@ export async function erzeuge(
     tag,
     quelle,
     gedanken: Object.fromEntries(
-      zeilen.map(z => [z.stimme, { text: z.text, foto: z.foto_url, fotoId: z.foto_id }]),
+      zeilen.map(z => [z.stimme, {
+        text: z.text, foto: z.foto_url, fotoId: z.foto_id, zeilen: z.zeilen,
+      }]),
     ),
   }
 }
