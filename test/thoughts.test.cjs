@@ -221,3 +221,15 @@ test('ein Fazit trägt Bild 0 und wird als bildlos gelesen', () => {
   }))
   assert.equal(gelesen.joschi[0].bild, null)
 })
+
+test('ein Fazit plus fünf Bilder passt in die Vorschlagsgrenze', () => {
+  // Früher waren fünf Vorschläge je Stimme erlaubt. Ein Rückblick braucht
+  // aber ein Fazit plus einen Satz je Bild – bei sechs Bildern sieben. Die
+  // letzten fielen weg, und die Karte zeigte weniger Stationen als Bilder.
+  const viele = [{ text: 'Fazit über alles.', ansatz: 'status', bild: 0 }]
+  for (let i = 1; i <= 6; i++) viele.push({ text: `Satz zu Bild ${i}.`, ansatz: 'beobachtung', bild: i })
+
+  const gelesen = leseAntwort(JSON.stringify({ bella: viele }))
+  assert.equal(gelesen.bella.length, 7)
+  assert.deepEqual(gelesen.bella.map(v => v.bild), [null, 1, 2, 3, 4, 5, 6])
+})

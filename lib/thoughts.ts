@@ -261,6 +261,19 @@ RICHTIG:
 Bella kann Joschi beobachten, ihn kommentieren, sich über ihn lustig machen.
 Was sie nicht kann, ist seine Stelle einnehmen.
 
+UND DIE ANDERE RICHTUNG, GENAUSO WICHTIG
+Über sich selbst redet eine Katze immer in der Ich-Form. Nie in der dritten.
+Sie sagt nicht ihren eigenen Namen und nicht "sie" oder "er" über sich.
+
+FALSCH – Bella spricht, Bella ist markiert:
+  Bella: "Bella liegt auf dem Sofa. Sie hat es sich verdient."
+  Bella: "Sie hat den ganzen Tag geschlafen." (gemeint ist sie selbst)
+RICHTIG:
+  Bella: "Ich liege auf dem Sofa. Verdient habe ich es sowieso."
+
+"Sie" und "er" sind für die andere Katze und für die Menschen da – wer den
+Napf füllt, wer fotografiert. Für die sprechende Katze selbst nie.
+
 Ist niemand markiert, entscheide nach dem Aussehen – Joschi ist golden und
 langhaarig, Bella silbern getigert. Erkennst du es nicht, sag etwas über die
 Szene statt über eine Katze.
@@ -365,7 +378,7 @@ Nur ein JSON-Objekt, ohne Text davor oder danach. Je Stimme drei Vorschläge:
  "beide":[{"text":"Joschi: … | Bella: …","ansatz":"kontrast","bild":1},…drei…],
  "beobachtungen":[{"bild":1,"katze":"Joschi","platz":"Sofa","aktivitaet":"schläft","objekte":["roter Karton"]}]}`
 
-export const PROMPT_FASSUNG = '2026-09-03-zeitraeume'
+export const PROMPT_FASSUNG = '2026-09-03-perspektive-ich'
 
 /**
  * Ersatz ohne KI.
@@ -486,9 +499,12 @@ export function leseAntwort(roh: string): Partial<Record<Stimme, Vorschlag[]>> |
       const liste = (Array.isArray(wert) ? wert : [wert])
         .map(alsVorschlag)
         .filter((v): v is Vorschlag => v !== null)
-        // Höchstens fünf: Mehr liefert kein Modell sinnvoll, und die
-        // Bewertung soll nicht zur Sortieraufgabe werden.
-        .slice(0, 5)
+        // Höchstens acht. Früher waren es fünf, und das reichte, solange es
+        // nur um Bilder ging. Ein Rückblick will aber ein Fazit plus einen
+        // Satz je Bild – bei sechs Bildern sieben Vorschläge. Bei fünf fielen
+        // die letzten weg, und die Karte zeigte weniger Stationen, als sie
+        // Bilder hatte.
+        .slice(0, 8)
 
       if (liste.length > 0) raus[stimme] = liste
     }

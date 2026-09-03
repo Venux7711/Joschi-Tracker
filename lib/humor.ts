@@ -156,6 +156,50 @@ export type BewertungsKontext = {
   letztePremissen: Premisse[]
   /** Für die Stimme typische Satzlänge – Bella ist knapper als Joschi. */
   zielLaenge: number
+  /**
+   * Wie die sprechende Katze heißt. null beim Zwiegespräch, dort steht der
+   * Name in jeder Zeile davor.
+   *
+   * Gebraucht für eine einzige Prüfung: Niemand redet über sich in der
+   * dritten Person.
+   */
+  sprecher?: string | null
+}
+
+/**
+ * Redet die Stimme über sich selbst, als wäre sie jemand anderes?
+ *
+ * Der Befund: Unter Bella stand ein Satz, in dem über Bella in der Sie-Form
+ * geredet wurde. Das ist kein Geschmacksfehler, sondern ein Bruch – die Karte
+ * stellt den Satz neben Bellas Bild und schreibt ihn ihr zu.
+ *
+ * Als Prüfung statt nur als Bitte im Prompt: Eine Anweisung wird gelegentlich
+ * ignoriert, eine Ablehnung nie. Geprüft wird am Namen, weil der eindeutig
+ * ist; ein bloßes "sie" kann auch den Menschen meinen, der den Napf füllt.
+ *
+ * Beim Zwiegespräch wird jede Hälfte einzeln geprüft: "Joschi: …" darf
+ * Bella nennen, aber nicht Joschi.
+ */
+export function redetUeberSich(text: string, sprecher?: string | null): string | null {
+  // Doppelter Rückstrich: In einer Zeichenkette wäre \b sonst das
+  // Rückschritt-Zeichen und nicht die Wortgrenze.
+  const nennt = (wer: string, wo: string) =>
+    new RegExp('\\b' + wer + '\\b', 'i').test(wo)
+
+  const teile = text.split('|').map(t => t.trim()).filter(Boolean)
+  const mitVorspann = teile
+    .map(t => /^(Joschi|Bella)\s*:\s*([\s\S]+)$/i.exec(t))
+    .filter((t): t is RegExpExecArray => t !== null)
+
+  if (mitVorspann.length > 0) {
+    for (const [, wer, rest] of mitVorspann) {
+      if (nennt(wer, rest)) return wer
+    }
+    return null
+  }
+
+  if (sprecher && nennt(sprecher, text)) return sprecher
+  return null
 }
 
 export type Bewertung = {
@@ -182,6 +226,10 @@ export function bewerte(k: Kandidat, kontext: BewertungsKontext): Bewertung {
   }
   if (!k.text.trim()) {
     return { punkte: -Infinity, gruende: [], abgelehnt: 'leer' }
+  }
+  const ueberSich = redetUeberSich(k.text, kontext.sprecher)
+  if (ueberSich) {
+    return { punkte: -Infinity, gruende: [], abgelehnt: `redet über sich in der dritten Form: ${ueberSich}` }
   }
 
   let punkte = 10

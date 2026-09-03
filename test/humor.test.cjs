@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const {
   PREMISSEN, istPremisse, VERBOTEN, verboteneSprache,
   satzGeruest, gleicheForm, zuAehnlich, hatAnker, letzteAnfaenge,
-  bewerte, waehleBesten, tagesAnweisung,
+  bewerte, waehleBesten, tagesAnweisung, redetUeberSich,
 } = require('../.test-build/humor')
 
 // Die echten Sätze aus dem Befund, der den Umbau ausgelöst hat
@@ -219,4 +219,41 @@ test('das Gerüst erfasst Anfang und Länge, nicht den Inhalt', () => {
 test('ein leerer Verlauf blockiert nichts', () => {
   assert.equal(gleicheForm('Irgendein Satz.', []), false)
   assert.equal(zuAehnlich('Irgendein Satz.', []), false)
+})
+
+// ── Wer redet über wen ──────────────────────────────────────────
+
+test('eine Stimme redet nicht über sich in der dritten Form', () => {
+  // Der Befund: Unter Bella stand ein Satz, in dem über Bella geredet wurde.
+  // Die Karte schreibt den Satz aber Bella zu und stellt ihn neben ihr Bild.
+  assert.equal(redetUeberSich('Bella liegt auf dem Sofa.', 'Bella'), 'Bella')
+  assert.equal(redetUeberSich('Ich liege auf dem Sofa.', 'Bella'), null)
+})
+
+test('über die andere Katze zu reden ist erlaubt', () => {
+  assert.equal(redetUeberSich('Joschi sitzt schon wieder davor.', 'Bella'), null)
+})
+
+test('im Zwiegespräch wird jede Hälfte für sich geprüft', () => {
+  // Der Name vor dem Doppelpunkt gehört zur Form, nicht zum Satz.
+  assert.equal(redetUeberSich('Joschi: Ich sage nichts. | Bella: Er sagt nie was.'), null)
+  assert.equal(redetUeberSich('Joschi: Joschi sagt nichts. | Bella: Passt.'), 'Joschi')
+  assert.equal(redetUeberSich('Joschi: Bella lag da. | Bella: Stimmt.'), null)
+})
+
+test('ohne bekannten Sprecher wird nichts abgelehnt', () => {
+  assert.equal(redetUeberSich('Bella lag auf dem Sofa.'), null)
+  assert.equal(redetUeberSich('Bella lag auf dem Sofa.', null), null)
+})
+
+test('die Bewertung lehnt den Satz hart ab, nicht nur mit Abzug', () => {
+  const b = bewerte(kand({ text: 'Bella liegt auf dem Nautilus.' }), { ...kontext(), sprecher: 'Bella' })
+  assert.equal(b.punkte, -Infinity)
+  assert.ok(b.abgelehnt.includes('dritten Form'), b.abgelehnt)
+})
+
+test('die Anweisung verbietet die dritte Form über sich selbst', () => {
+  const { SYSTEM_PROMPT } = require('../.test-build/thoughts')
+  assert.ok(SYSTEM_PROMPT.includes('immer in der Ich-Form'), 'Regel fehlt')
+  assert.ok(SYSTEM_PROMPT.includes('Bella liegt auf dem Sofa'), 'Gegenbeispiel fehlt')
 })

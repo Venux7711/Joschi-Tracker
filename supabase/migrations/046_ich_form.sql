@@ -1,0 +1,28 @@
+-- Drei Befunde aus der App, alle drei am selben Ort behoben.
+--
+-- 1. Unter Bella stand ein Satz, in dem ueber Bella in der dritten Form
+--    geredet wurde. Das ist die Kehrseite der Regel von gestern: Wer nicht auf
+--    dem Bild ist, redet ueber die andere - aber wer darauf ist, redet ueber
+--    sich in der Ich-Form. Der zweite Teil fehlte. Steht jetzt in der
+--    Anweisung und wird zusaetzlich hart geprueft: Nennt eine Stimme ihren
+--    eigenen Namen, faellt der Vorschlag raus.
+--
+-- 2. Ein Rueckblick will ein Fazit plus einen Satz je Bild - bei sechs Bildern
+--    also sieben Vorschlaege. Erlaubt waren fuenf. Die letzten fielen weg, und
+--    die Karte zeigte weniger Stationen, als sie Bilder hatte. Jetzt acht.
+--
+-- 3. Bei "Damals" blieben die Stationen unbeschriftet, weil die Beschriftung
+--    nur bei mehrtaegigen Fenstern entstand. Ein alter Tag bekommt jetzt die
+--    Uhrzeit, und die Tagesauswahl bevorzugt Tage mit mindestens fuenf Fotos.
+--
+-- Dazu die Luecke im Gedaechtnis: Beobachtungen wurden nur aus dem
+-- Tagesfenster uebernommen. Fuer Woche und Monat ist das richtig - sie sehen
+-- Fotos, die als Tage laengst ausgewertet wurden, und wuerden jede Beobachtung
+-- doppelt zaehlen. Fuer "Damals" war es falsch: Der naechtliche Lauf reicht
+-- sieben Tage zurueck, ein Tag von vor einem Jahr wurde nie ausgewertet. Seine
+-- Bilder werden angesehen und beschrieben; das Ergebnis wurde weggeworfen.
+-- Jetzt wird es uebernommen, sofern fuer diesen Tag noch kein Tagesbild
+-- existiert.
+-- (idempotent)
+
+DELETE FROM cat_thoughts;

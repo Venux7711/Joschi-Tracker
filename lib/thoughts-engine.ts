@@ -136,6 +136,8 @@ export function monatsFenster(gestern: Date): Fenster {
 /** Ab wann ein Tag als "damals" gilt, und wie viel auf ihm los gewesen sein muss. */
 const DAMALS_AB_TAGEN = 30
 const DAMALS_MINDESTFOTOS = 3
+/** Ein Tag, der genug für einen Streifen aus Stationen hergibt. */
+const DAMALS_REICHLICH = 5
 
 /**
  * Wie ein Tag benannt wird, der lange zurückliegt.
@@ -188,12 +190,22 @@ export async function damalsFenster(
     proTag.set(schluessel, (proTag.get(schluessel) ?? 0) + 1)
   }
 
-  // Tage mit einem einzelnen Foto ergeben keinen Rückblick. Gibt es keinen
-  // ergiebigen Tag, ist ein magerer immer noch besser als kein Zeitraum.
-  const ergiebig = [...proTag.entries()].filter(([, n]) => n >= DAMALS_MINDESTFOTOS)
-  const kandidaten = (ergiebig.length > 0 ? ergiebig : [...proTag.entries()])
-    .map(([t]) => t)
-    .sort()
+  /**
+   * Nur Tage, an denen genug los war.
+   *
+   * In Stufen, weil ein einzelnes Foto keinen Rückblick ergibt: Die Karte
+   * zeigt die Bilder als Stationen zum Durchtippen, und bei einem einzigen
+   * sieht sie kaputt aus. Gibt es keine ergiebigen Tage, ist ein magerer immer
+   * noch besser als gar kein Zeitraum.
+   */
+  const alleTage = [...proTag.entries()]
+  const kandidaten = (
+    alleTage.filter(([, n]) => n >= DAMALS_REICHLICH).length > 0
+      ? alleTage.filter(([, n]) => n >= DAMALS_REICHLICH)
+      : alleTage.filter(([, n]) => n >= DAMALS_MINDESTFOTOS).length > 0
+        ? alleTage.filter(([, n]) => n >= DAMALS_MINDESTFOTOS)
+        : alleTage
+  ).map(([t]) => t).sort()
 
   if (kandidaten.length === 0) return null
 
@@ -319,6 +331,7 @@ async function baueBild(
    */
   // Ein Monat ist weiter auseinander als eine Woche und verträgt ein Bild mehr.
   const anzahlBilder = fenster.zeitraum === 'monat' ? 6 : 5
+
   const bilder: Bildquelle[] = mehrtaegig
     // Über mehrere Tage zuerst nach Tagen aufteilen. Sonst bestünde eine
     // Woche mit einer Sonntagsserie von dreißig Bildern nur aus Sonntag.
@@ -354,12 +367,25 @@ async function baueBild(
     bildInfo.set(b.id, `${wer}, ${wann}${zeile.place ? `, ${zeile.place}` : ''}`)
   }
 
-  /** Je Bild die Beschriftung, die in der App darüber steht. */
+  /**
+   * Je Bild die Beschriftung, die in der App unter der Station steht.
+   *
+   * Über mehrere Tage der Wochentag mit Datum, an einem einzelnen alten Tag
+   * die Uhrzeit. Ohne Beschriftung sah der Streifen bei "Damals" aus, als
+   * gäbe es nur ein einziges Bild – die übrigen standen unbeschriftet daneben
+   * und wirkten wie Zierrat.
+   *
+   * Nur beim gestrigen Tag bleibt es leer: Dort ist die Uhrzeit ohnehin
+   * belanglos, und die Marke am großen Bild sagt schon, worum es geht.
+   */
   const bildDatum = new Map<string, string>()
-  if (mehrtaegig) {
+  if (mehrtaegig || fenster.zeitraum !== 'tag') {
     for (const b of bilder) {
       const zeile = fotos.find(f => f.id === b.id)
-      if (zeile) bildDatum.set(b.id, formatBerlin(zeile.taken_at, { weekday: 'short', day: 'numeric', month: 'short' }))
+      if (!zeile) continue
+      bildDatum.set(b.id, mehrtaegig
+        ? formatBerlin(zeile.taken_at, { weekday: 'short', day: 'numeric', month: 'short' })
+        : formatBerlin(zeile.taken_at, { hour: '2-digit', minute: '2-digit' }))
     }
   }
 
@@ -610,7 +636,10 @@ export async function erzeuge(
 
     // Verblasstes vor der Auswahl aussortieren, sonst schleppt ein halbes Jahr
     // altes Muster ewig mit.
-    const frisch = veralte(geladen, tag)
+    //
+    // Gemessen am heutigen Datum, nicht am Fenster: Bei "Damals" ist das
+    // Fenster ein Jahr alt, und danach gerechnet wäre nichts je verblasst.
+    const frisch = veralte(geladen, berlinDateKey(new Date()))
     speichereVeraltet(admin, geladen, frisch).catch(e => console.error('Veralten:', e))
     bestand = frisch
 
@@ -665,18 +694,44 @@ export async function erzeuge(
   const zielLaenge: Record<Stimme, number> = { joschi: 14, bella: 10, beide: 16 }
 
   /**
-   * Beobachtungen ins Gedächtnis einarbeiten – nur beim Tagesfenster.
+   * Wer unter welcher Stimme spricht.
    *
-   * Ein Wochenrückblick sieht Fotos, die als Tage längst verarbeitet wurden.
-   * Würde er sie erneut einspeisen, bestätigte sich jede Beobachtung ein
-   * zweites Mal, und die Zähler, an denen die Sicherheit einer Erinnerung
-   * hängt, wären systematisch zu hoch. Ein Muster gilt ab drei Beobachtungen
-   * als gesichert – das wäre dann nach anderthalb echten erreicht.
-   *
-   * Getrennt abgesichert: Ein Fehler hier darf den fertigen Gedanken nicht
-   * kosten.
+   * Damit die Bewertung einen Satz ablehnen kann, in dem die Stimme über sich
+   * selbst in der dritten Person redet. Beim Zwiegespräch steht der Name in
+   * jeder Zeile davor, dort wird er von dort gelesen.
    */
-  if (antwort && zeitraum === 'tag') {
+  const sprecherVon: Record<Stimme, string | null> = {
+    joschi: katzenNamen[katzenIds['joschi']] ?? 'Joschi',
+    bella: katzenNamen[katzenIds['bella']] ?? 'Bella',
+    beide: null,
+  }
+
+  /**
+   * Kommt aus diesem Durchgang neues Wissen ins Gedächtnis?
+   *
+   * Nicht immer, und der Grund ist der Zähler: Ein Muster gilt ab drei
+   * Beobachtungen als gesichert. Ein Wochen- oder Monatsrückblick sieht Fotos,
+   * die als Tage längst ausgewertet wurden – speiste er sie erneut ein,
+   * bestätigte sich jede Beobachtung ein zweites Mal, und "gesichert" wäre
+   * nach anderthalb echten Beobachtungen erreicht.
+   *
+   * Bei "Damals" liegt es umgekehrt. Der nächtliche Lauf reicht sieben Tage
+   * zurück; ein Tag von vor einem Jahr wurde nie ausgewertet. Seine Bilder
+   * werden hier angesehen und beschrieben – sie danach wegzuwerfen hieße, die
+   * Analyse zu bezahlen und das Ergebnis zu verbrennen. Ob der Tag schon
+   * bekannt ist, verrät das Tagesbild: Es entsteht genau dann, wenn ein Tag
+   * verarbeitet wurde.
+   */
+  let neuesWissen = zeitraum === 'tag'
+  if (antwort && zeitraum === 'damals') {
+    const { count } = await admin.from('cat_day_summaries')
+      .select('tag', { count: 'exact', head: true }).eq('tag', tag)
+    neuesWissen = (count ?? 0) === 0
+    if (!neuesWissen) console.log(`Gedächtnis: ${tag} war schon ausgewertet`)
+  }
+
+  // Getrennt abgesichert: Ein Fehler hier darf den fertigen Gedanken nicht kosten.
+  if (antwort && neuesWissen) {
     try {
       const beobachtungen = leseBeobachtungen(
         leseBeobachtungsteil(antwort),
@@ -748,6 +803,7 @@ export async function erzeuge(
           letzteSaetze,
           letztePremissen,
           zielLaenge: zielLaenge[s],
+          sprecher: sprecherVon[s],
         })
       : null
 
@@ -784,7 +840,10 @@ export async function erzeuge(
     for (const v of vorschlaege) {
       const b = bildFuer(v.bild)
       if (!b) continue
-      const bewertung = bewerte(v, { anker, letzteSaetze, letztePremissen, zielLaenge: zielLaenge[s] })
+      const bewertung = bewerte(v, {
+        anker, letzteSaetze, letztePremissen,
+        zielLaenge: zielLaenge[s], sprecher: sprecherVon[s],
+      })
       if (bewertung.abgelehnt !== null) continue
       const bisher = proBild.get(b.id)
       if (!bisher || bewertung.punkte > bisher.punkte) {

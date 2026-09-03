@@ -164,7 +164,11 @@ export function verschmelze(
         // Eine Nutzerkorrektur behält ihre volle Zuversicht. Sie darf von
         // Beobachtungen bestätigt, aber nicht relativiert werden.
         confidence: alt.source === 'nutzer' ? alt.confidence : naechsteZuversicht(alt.confidence, anzahl),
-        lastSeenAt: tag,
+        // Nie rückwärts. Seit auch alte Tage nachträglich ausgewertet werden
+        // ("Damals"), kann eine Beobachtung älter sein als das, was schon
+        // dasteht – dann hieße die Bestätigung, die Erinnerung künstlich
+        // altern zu lassen, bis sie als verblasst gilt.
+        lastSeenAt: tag > alt.lastSeenAt ? tag : alt.lastSeenAt,
         evidence: belegeErweitern(alt.evidence, k.fotoIds, tag),
         sourcePhotoIds: Array.from(new Set([...k.fotoIds, ...alt.sourcePhotoIds])).slice(0, 12),
         status: alt.status === 'superseded'
