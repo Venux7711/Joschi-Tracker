@@ -240,8 +240,15 @@ RICHTIG: "Joschi: Ich bewache den Ofen. | Bella: Vor wem?"
 Bellas Zeile darf sehr kurz sein. Ein Wort reicht, wenn es sitzt.
 
 WER IST AUF DEM BILD – das entscheidet die Perspektive
-Zu jedem Bild steht dabei, wer darauf markiert ist. Diese Angabe ist
-verbindlich; sie kommt aus der App, nicht aus deiner Einschätzung.
+Zu jedem Bild steht dabei, wer darauf markiert ist. Das ist, was die App
+glaubt – eingetragen von Menschen, und Menschen vertippen sich. Widerspricht
+das Bild der Markierung eindeutig, gilt das Bild: Joschi ist golden und
+langhaarig, Bella silbern getigert, die beiden sind nicht zu verwechseln.
+Schreib dann in die Beobachtung, wen du wirklich siehst.
+
+Entscheide dich je Bild einmal und bleib für alle drei Stimmen dabei. Nichts
+wirkt kaputter als eine Karte, auf der Joschi „ich" sagt und Bella im selben
+Moment über eine andere Katze redet.
 
 Ist die sprechende Katze selbst auf dem Bild:
   Sie spricht in der Ich-Form über sich.
@@ -378,7 +385,7 @@ Nur ein JSON-Objekt, ohne Text davor oder danach. Je Stimme drei Vorschläge:
  "beide":[{"text":"Joschi: … | Bella: …","ansatz":"kontrast","bild":1},…drei…],
  "beobachtungen":[{"bild":1,"katze":"Joschi","platz":"Sofa","aktivitaet":"schläft","objekte":["roter Karton"]}]}`
 
-export const PROMPT_FASSUNG = '2026-09-03-perspektive-ich'
+export const PROMPT_FASSUNG = '2026-09-04-budget-bild'
 
 /**
  * Ersatz ohne KI.

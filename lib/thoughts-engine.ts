@@ -694,6 +694,34 @@ export async function erzeuge(
   const gelesen = antwort ? leseAntwort(antwort) : null
 
   /**
+   * Was das Modell selbst auf jedem Bild gesehen hat.
+   *
+   * Bisher nur fürs Gedächtnis gelesen, jetzt auch für die Perspektive – und
+   * das ist der Punkt: Die Markierung in der Datenbank ist von Hand gesetzt
+   * und war nachweislich schon falsch. Auf dem Ofen-Foto vom 1. September
+   * steht Bella, zu sehen ist Joschi; beide Stimmen redeten übereinstimmend
+   * über ihn und widersprachen damit der Angabe, die die Anweisung für
+   * verbindlich erklärte.
+   *
+   * Die eigene Wahrnehmung des Modells ist hier die verlässlichere Quelle:
+   * Sie stammt aus demselben Blick auf dasselbe Bild, aus dem auch der Satz
+   * entsteht. Damit wird die Prüfung überhaupt erst möglich – steht auf einem
+   * Bild nur die sprechende Katze, muss ihr Satz in der Ich-Form stehen.
+   */
+  const beobachtungen = antwort
+    ? leseBeobachtungen(leseBeobachtungsteil(antwort), geladen.map(g => g.quelle.id), tag)
+    : []
+
+  const gesehenAuf = new Map<string, Set<string>>()
+  for (const b of beobachtungen) {
+    if (!b.fotoId) continue
+    const wer = gesehenAuf.get(b.fotoId) ?? new Set<string>()
+    if (b.subjectType === 'pair') for (const n of Object.keys(katzenIds)) wer.add(n)
+    else if (b.katze) wer.add(b.katze.toLowerCase())
+    gesehenAuf.set(b.fotoId, wer)
+  }
+
+  /**
    * Was heute überhaupt konkret ist.
    *
    * Grundlage für die Prüfung, ob ein Satz nur auf diesen Haushalt zutrifft
@@ -749,15 +777,6 @@ export async function erzeuge(
   // Getrennt abgesichert: Ein Fehler hier darf den fertigen Gedanken nicht kosten.
   if (antwort && neuesWissen) {
     try {
-      const beobachtungen = leseBeobachtungen(
-        leseBeobachtungsteil(antwort),
-        // Über die geschickten Bilder, nicht über die ausgewählten: "Bild 3"
-        // in der Antwort meint das dritte mitgeschickte. Liess sich eines
-        // nicht laden, zeigten die Beobachtungen sonst auf das falsche Foto -
-        // und landeten mit dieser falschen Zuordnung dauerhaft im Gedächtnis.
-        geladen.map(g => g.quelle.id),
-        tag,
-      )
       const kandidaten = zuKandidaten(beobachtungen, katzenIds, tag)
       const aenderungen = verschmelze(bestand, kandidaten, tag)
       const bilanz = await speichere(admin, aenderungen, GEMINI_MODELS[0], PROMPT_FASSUNG)
@@ -856,6 +875,21 @@ export async function erzeuge(
      * brauchbaren Satz bekommt keinen – lieber kein Kommentar als ein
      * fremder.
      */
+    /**
+     * Steht auf diesem Bild nur die sprechende Katze?
+     *
+     * Dann ist "er" oder "sie" darin falsch, gemeint sein kann nur sie selbst.
+     * Nur bei eindeutiger Lage: Sind beide zu sehen oder hat das Modell nichts
+     * erkannt, wird nichts verlangt – eine Ablehnung zu viel kostet dem Bild
+     * seinen Satz.
+     */
+    const nurIchSelbst = (fotoId: string) => {
+      const eigen = sprecherVon[s]?.toLowerCase()
+      if (!eigen) return false
+      const wer = gesehenAuf.get(fotoId)
+      return wer !== undefined && wer.size === 1 && wer.has(eigen)
+    }
+
     const proBild = new Map<string, { text: string; premisse: string | null; punkte: number }>()
     for (const v of vorschlaege) {
       const b = bildFuer(v.bild)
@@ -863,6 +897,7 @@ export async function erzeuge(
       const bewertung = bewerte(v, {
         anker, letzteSaetze, letztePremissen,
         zielLaenge: zielLaenge[s], sprecher: sprecherVon[s],
+        verlangtIchForm: nurIchSelbst(b.id),
       })
       if (bewertung.abgelehnt !== null) continue
       const bisher = proBild.get(b.id)

@@ -164,6 +164,22 @@ export type BewertungsKontext = {
    * dritten Person.
    */
   sprecher?: string | null
+  /**
+   * Ist auf diesem Bild nur die sprechende Katze zu sehen?
+   *
+   * Dann muss der Satz in der Ich-Form stehen. Abgeleitet aus dem, was das
+   * Modell selbst auf dem Bild erkannt hat, nicht aus der Markierung in der
+   * Datenbank: Die ist von Hand gesetzt und war nachweislich schon falsch –
+   * auf dem Ofen-Foto stand Bella, zu sehen war Joschi.
+   */
+  verlangtIchForm?: boolean
+}
+
+/** Spricht der Satz von sich selbst? */
+export function hatIchForm(text: string): boolean {
+  // Wortgrenzen sind hier Pflicht: ohne sie fände "wir" auch in "Wirbel"
+  // und "mir" in "Mirabelle" einen Treffer.
+  return /\b(ich|mich|mir|mein|meine|meinen|meinem|meiner|meins|wir|uns|unser|unsere|unseren|unserem)\b/i.test(text)
 }
 
 /**
@@ -230,6 +246,11 @@ export function bewerte(k: Kandidat, kontext: BewertungsKontext): Bewertung {
   const ueberSich = redetUeberSich(k.text, kontext.sprecher)
   if (ueberSich) {
     return { punkte: -Infinity, gruende: [], abgelehnt: `redet über sich in der dritten Form: ${ueberSich}` }
+  }
+  // Steht auf dem Bild nur die sprechende Katze, ist "er" oder "sie" darin
+  // falsch – gemeint sein kann nur sie selbst.
+  if (kontext.verlangtIchForm && !hatIchForm(k.text)) {
+    return { punkte: -Infinity, gruende: [], abgelehnt: 'dritte Form, obwohl nur die Stimme selbst zu sehen ist' }
   }
 
   let punkte = 10

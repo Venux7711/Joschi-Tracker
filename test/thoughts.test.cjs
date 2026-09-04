@@ -233,3 +233,13 @@ test('ein Fazit plus fünf Bilder passt in die Vorschlagsgrenze', () => {
   assert.equal(gelesen.bella.length, 7)
   assert.deepEqual(gelesen.bella.map(v => v.bild), [null, 1, 2, 3, 4, 5, 6])
 })
+
+test('die Markierung ist ein Hinweis, kein Befehl', () => {
+  // Sie wird von Hand gesetzt und war nachweislich schon falsch. Erklärt man
+  // sie für verbindlich, widerspricht die Karte dem, was auf dem Bild zu
+  // sehen ist.
+  const { SYSTEM_PROMPT } = require('../.test-build/thoughts')
+  assert.ok(SYSTEM_PROMPT.includes('was die App'), SYSTEM_PROMPT.slice(0, 200))
+  assert.ok(SYSTEM_PROMPT.includes('gilt das Bild'), 'Vorrang des Bildes fehlt')
+  assert.ok(SYSTEM_PROMPT.includes('alle drei Stimmen'), 'Konsistenzregel fehlt')
+})

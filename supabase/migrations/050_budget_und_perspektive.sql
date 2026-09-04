@@ -1,0 +1,30 @@
+-- Gemessen statt geraten - und was dabei herauskam.
+--
+-- 047 und 048 haben zwei Ursachen belegt.
+--
+-- 1. "Damals hat nur ein Bild": Die Karte von heute steht in der Datenbank als
+--    erzeugt_von='ersatz' mit zeilen=0. Die KI hat gar nicht geantwortet, also
+--    greift der Ersatztext - und der kennt keine Bildzeilen, weshalb die Karte
+--    genau ein Bild zeigt. Ursache war das Antwortbudget von 2048 Token. Der
+--    Kommentar daneben verriet es: "deckt Denken plus drei kurze Saetze ab".
+--    Das stimmte, als es drei Saetze waren; inzwischen sind es je Stimme ein
+--    Fazit und ein Satz je Bild, also bis zu einundzwanzig, dazu die
+--    Beobachtungen. Die Antwort brach mitten im JSON ab. Dieselbe Ursache
+--    erklaert die schwankenden Zeilenzahlen der uebrigen Karten: zwei bis
+--    fuenf, ohne dass sich an den Fotos etwas geaendert haette.
+--
+-- 2. Die Perspektive: Auf dem Ofen-Foto vom 1. September ist in der Datenbank
+--    Bella markiert, zu sehen ist Joschi - beide Stimmen reden uebereinstimmend
+--    ueber ihn. Die Anweisung erklaerte die Markierung fuer verbindlich, obwohl
+--    sie von Hand gesetzt wird. Jetzt gilt sie als Hinweis, und bei einem
+--    eindeutigen Widerspruch gewinnt das Bild.
+--
+--    Dazu eine Pruefung, die nicht mehr auf die Markierung baut: Erkennt das
+--    Modell auf einem Bild nur die sprechende Katze, muss ihr Satz in der
+--    Ich-Form stehen. Grundlage ist seine eigene Beobachtung - dieselbe
+--    Wahrnehmung desselben Bildes, aus der auch der Satz entsteht.
+--
+-- Die vorhandenen Karten sind mit dem alten Budget entstanden.
+-- (idempotent)
+
+DELETE FROM cat_thoughts;

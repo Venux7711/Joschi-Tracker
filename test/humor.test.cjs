@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const {
   PREMISSEN, istPremisse, VERBOTEN, verboteneSprache,
   satzGeruest, gleicheForm, zuAehnlich, hatAnker, letzteAnfaenge,
-  bewerte, waehleBesten, tagesAnweisung, redetUeberSich,
+  bewerte, waehleBesten, tagesAnweisung, redetUeberSich, hatIchForm,
 } = require('../.test-build/humor')
 
 // Die echten Sätze aus dem Befund, der den Umbau ausgelöst hat
@@ -256,4 +256,34 @@ test('die Anweisung verbietet die dritte Form über sich selbst', () => {
   const { SYSTEM_PROMPT } = require('../.test-build/thoughts')
   assert.ok(SYSTEM_PROMPT.includes('immer in der Ich-Form'), 'Regel fehlt')
   assert.ok(SYSTEM_PROMPT.includes('Bella liegt auf dem Sofa'), 'Gegenbeispiel fehlt')
+})
+
+test('die Ich-Form wird an Wortgrenzen erkannt', () => {
+  assert.equal(hatIchForm('Ich bleibe hier.'), true)
+  assert.equal(hatIchForm('Der Napf ist meiner.'), true)
+  assert.equal(hatIchForm('Wir bewachen das Fenster.'), true)
+  assert.equal(hatIchForm('Er liegt auf dem Ofen.'), false)
+  // Ohne Wortgrenzen fände "wir" auch in "Wirbel" und "mir" in "Mirabelle"
+  assert.equal(hatIchForm('Ein Wirbel aus Staub.'), false)
+  assert.equal(hatIchForm('Die Mirabelle liegt am Boden.'), false)
+})
+
+test('steht nur die Stimme selbst auf dem Bild, ist die dritte Form falsch', () => {
+  // Der gemeldete Befund. Grundlage ist, was das Modell selbst gesehen hat,
+  // nicht die Markierung in der Datenbank – die war nachweislich schon
+  // falsch: Auf dem Ofen-Foto stand Bella, zu sehen war Joschi.
+  const k = { ...kontext(), sprecher: 'Joschi', verlangtIchForm: true }
+  const dritte = bewerte(kand({ text: 'Er liegt auf dem Nautilus.' }), k)
+  assert.equal(dritte.punkte, -Infinity)
+  assert.ok(dritte.abgelehnt.includes('dritte Form'), dritte.abgelehnt)
+
+  const erste = bewerte(kand({ text: 'Ich liege auf dem Nautilus.' }), k)
+  assert.ok(erste.punkte > 0)
+})
+
+test('ist die Lage nicht eindeutig, wird nichts verlangt', () => {
+  // Sind beide zu sehen oder hat das Modell nichts erkannt, kostet eine
+  // Ablehnung dem Bild nur seinen Satz.
+  const b = bewerte(kand({ text: 'Er liegt auf dem Nautilus.' }), { ...kontext(), sprecher: 'Joschi' })
+  assert.ok(b.punkte > 0)
 })
