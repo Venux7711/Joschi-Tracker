@@ -463,7 +463,20 @@ type Bildteil = { inline_data: { mime_type: string; data: string } }
 function kleinereFassung(url: string): string {
   const host = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL
   if (!host) return url
-  return `https://${host}/_next/image?url=${encodeURIComponent(url)}&w=640&q=55`
+  /**
+   * Ohne eigene Qualitätsstufe – und das ist kein Detail.
+   *
+   * Hier stand q=55. Jede Kombination aus Adresse, Breite und Qualität ist
+   * eine eigene Transformation, und die Galerie fragt dasselbe Foto in
+   * derselben Breite mit der Voreinstellung an. Die nächtliche Bildanalyse
+   * verdoppelte damit den Verbrauch für jedes Foto, das sie ansieht: einmal
+   * für die App, einmal für sich.
+   *
+   * Ohne die Angabe trifft sie denselben Zwischenspeicher wie die Galerie und
+   * kostet für ein bereits angesehenes Foto gar nichts mehr. Die paar Kilobyte
+   * mehr fallen bei 640 Pixeln nicht ins Gewicht.
+   */
+  return `https://${host}/_next/image?url=${encodeURIComponent(url)}&w=640`
 }
 
 /** Holt eine Datei mit Zeitlimit – ein hängender Abruf darf nicht alles blockieren. */
