@@ -80,33 +80,38 @@ export default function EmojiPicker({
           autoCapitalize="none"
           spellCheck={false}
           style={{
-            width: '100%', fontSize: 14, padding: '8px 12px', borderRadius: 10,
+            // 16 Pixel ist nicht nur besser lesbar: Darunter zoomt Safari auf
+            // dem iPhone beim Antippen ins Feld hinein.
+            width: '100%', fontSize: 16, padding: '11px 12px', borderRadius: 10,
             border: 'none', background: 'rgba(255,255,255,0.1)', color: 'white', outline: 'none',
           }}
         />
       </div>
 
-      <div style={{ maxHeight: 220, overflowY: 'auto', padding: '6px 8px 10px' }}>
+      <div style={{ maxHeight: 300, overflowY: 'auto', padding: '6px 8px 10px' }}>
         {gefiltert.map(gruppe => (
           <div key={gruppe.titel} style={{ marginTop: 6 }}>
             <p
               style={{
-                fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
-                textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)',
-                margin: '4px 2px 4px',
+                fontSize: 12, fontWeight: 700, letterSpacing: '0.06em',
+                textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)',
+                margin: '6px 2px 5px',
               }}
             >
               {gruppe.titel}
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 2 }}>
+            {/* Sechs Spalten statt acht: Acht ergaben auf einem iPhone
+                Felder von gut vierzig Pixeln, mit dem Emoji darin auf zwanzig.
+                Sechs lassen jedem Feld genug Platz, um es sicher zu treffen. */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 4 }}>
               {gruppe.emojis.map(emoji => (
                 <button
                   key={`${gruppe.titel}-${emoji}`}
                   onClick={() => onWaehlen(emoji)}
                   aria-label={`Mit ${emoji} reagieren`}
                   style={{
-                    fontSize: 20, lineHeight: 1, padding: '7px 0', borderRadius: 8,
-                    border: 'none', background: 'transparent',
+                    fontSize: 26, lineHeight: 1, minHeight: 46, borderRadius: 10,
+                    border: 'none', background: 'rgba(255,255,255,0.06)',
                   }}
                 >
                   {emoji}

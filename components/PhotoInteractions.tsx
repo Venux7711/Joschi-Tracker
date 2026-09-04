@@ -144,15 +144,16 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
               title={alle.length ? alle.map(r => nameOf(r.user_id)).join(', ') : 'Reagieren'}
               aria-label={alle.length ? `${emoji}: ${alle.map(r => nameOf(r.user_id)).join(', ')}` : `Mit ${emoji} reagieren`}
               style={{
-                fontSize: 15, lineHeight: 1, padding: '7px 10px', borderRadius: 999, border: 'none',
-                background: meins ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.14)',
+                fontSize: 20, lineHeight: 1, minHeight: 44, padding: '0 14px',
+                borderRadius: 999, border: 'none',
+                background: meins ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.16)',
                 color: meins ? '#1C1C1E' : 'white',
-                display: 'flex', alignItems: 'center', gap: 5,
+                display: 'flex', alignItems: 'center', gap: 6,
               }}
             >
               {emoji}
               {alle.length > 0 && (
-                <span style={{ fontSize: 12, fontWeight: 700 }}>{alle.length}</span>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>{alle.length}</span>
               )}
             </button>
           )
@@ -162,8 +163,9 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
           aria-label="Weitere Emojis"
           title="Weitere Emojis"
           style={{
-            fontSize: 15, lineHeight: 1, padding: '7px 11px', borderRadius: 999, border: 'none',
-            background: 'rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.75)', fontWeight: 700,
+            fontSize: 20, lineHeight: 1, minHeight: 44, minWidth: 44,
+            borderRadius: 999, border: 'none',
+            background: 'rgba(255,255,255,0.16)', color: 'white', fontWeight: 700,
           }}
         >
           +
@@ -182,7 +184,7 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
       {reactions.length > 0 && (
         <div className="flex gap-x-3 gap-y-1 flex-wrap mt-2">
           {benutzteEmojis.map(emoji => (
-            <span key={emoji} style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+            <span key={emoji} style={{ fontSize: 13, color: 'rgba(255,255,255,0.78)' }}>
               {emoji}{' '}
               {reactions
                 .filter(r => r.emoji === emoji)
@@ -205,26 +207,61 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
 
             return (
               <div key={c.id}>
-                <div className="flex items-start gap-2">
-                  <span style={{ fontSize: 13, color: 'white', lineHeight: 1.4 }}>
-                    <b style={{ color: 'rgba(255,255,255,0.75)' }}>{nameOf(c.user_id)}</b>{' '}
-                    {c.text}
-                  </span>
+                {/* Der Kommentar selbst. 15px statt 13: Er steht auf einem
+                    Foto, und heller Text auf wechselndem Untergrund liest sich
+                    schwerer als auf einer ruhigen Fläche. */}
+                <p style={{ fontSize: 15, color: 'white', lineHeight: 1.45 }}>
+                  <b style={{ color: 'rgba(255,255,255,0.8)' }}>{nameOf(c.user_id)}</b>{' '}
+                  {c.text}
+                </p>
+
+                {/*
+                  Die Knöpfe stehen in einer eigenen Zeile und tragen ihren
+                  Namen.
+
+                  Vorher war "Reagieren" ein zwölf Pixel großes ☺+ bei 40 %
+                  Deckkraft, rechts an den Text gequetscht, ohne Fläche und
+                  ohne Beschriftung. Auf einem Foto war das für jemanden, der
+                  nicht gut sieht, schlicht nicht vorhanden – und die Trefffläche
+                  lag bei etwa vierzehn Pixeln, ein Drittel dessen, was ein
+                  Finger braucht.
+
+                  Ein Wort ist hier besser als ein Zeichen: Ein Symbol muss man
+                  erraten, "Reagieren" liest man.
+                */}
+                <div className="flex items-center gap-2" style={{ marginTop: 6 }}>
                   <button
                     onClick={() => setOffeneAuswahl(offeneAuswahl === c.id ? null : c.id)}
-                    style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', flexShrink: 0, marginLeft: 'auto' }}
+                    aria-expanded={offeneAuswahl === c.id}
                     aria-label="Auf diesen Kommentar reagieren"
-                    title="Reagieren"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      fontSize: 14, fontWeight: 600, lineHeight: 1,
+                      // 44 Pixel ist das Maß, unter dem ein Finger anfängt
+                      // danebenzutippen.
+                      minHeight: 44, padding: '0 16px', borderRadius: 999,
+                      border: '1px solid rgba(255,255,255,0.25)',
+                      background: offeneAuswahl === c.id ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.16)',
+                      color: offeneAuswahl === c.id ? '#1C1C1E' : 'white',
+                    }}
                   >
-                    ☺+
+                    <span style={{ fontSize: 17 }}>🙂</span>
+                    Reagieren
                   </button>
+
                   {c.user_id === me && (
+                    // Sichtbar, aber ruhiger als "Reagieren": Ein Kommentar
+                    // ist schnell gelöscht und kommt nicht zurück.
                     <button
                       onClick={() => loeschen(c.id)}
-                      style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', flexShrink: 0 }}
-                      title="Kommentar löschen"
+                      aria-label="Diesen Kommentar löschen"
+                      style={{
+                        fontSize: 13, lineHeight: 1, minHeight: 44, padding: '0 14px',
+                        borderRadius: 999, border: 'none',
+                        background: 'transparent', color: 'rgba(255,255,255,0.65)',
+                      }}
                     >
-                      ✕
+                      Löschen
                     </button>
                   )}
                 </div>
@@ -232,14 +269,19 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
                 {/* Auswahl nur für den angetippten Kommentar */}
                 {offeneAuswahl === c.id && (
                   <>
-                    <div className="flex gap-1 flex-wrap mt-1.5">
+                    {/* Die Auswahl selbst war mit 15 Pixeln und fünf Pixeln
+                        Rand kaum größer als der Knopf, der sie öffnet. Ein
+                        Emoji ist ein Bild – es darf groß sein. */}
+                    <div className="flex gap-1.5 flex-wrap" style={{ marginTop: 8 }}>
                       {REACTIONS.map(emoji => (
                         <button
                           key={emoji}
                           onClick={() => toggleKommentar(c.id, emoji)}
+                          aria-label={`Mit ${emoji} reagieren`}
                           style={{
-                            fontSize: 15, lineHeight: 1, padding: '5px 8px', borderRadius: 999,
-                            border: 'none', background: 'rgba(255,255,255,0.14)',
+                            fontSize: 24, lineHeight: 1, minHeight: 46, minWidth: 46,
+                            borderRadius: 999, border: 'none',
+                            background: 'rgba(255,255,255,0.16)',
                           }}
                         >
                           {emoji}
@@ -249,9 +291,10 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
                         onClick={() => setPickerFuer(pickerFuer === c.id ? null : c.id)}
                         aria-label="Weitere Emojis"
                         style={{
-                          fontSize: 15, lineHeight: 1, padding: '5px 9px', borderRadius: 999,
-                          border: 'none', background: 'rgba(255,255,255,0.14)',
-                          color: 'rgba(255,255,255,0.75)', fontWeight: 700,
+                          fontSize: 22, lineHeight: 1, minHeight: 46, minWidth: 46,
+                          borderRadius: 999, border: 'none',
+                          background: 'rgba(255,255,255,0.16)',
+                          color: 'white', fontWeight: 700,
                         }}
                       >
                         +
@@ -268,7 +311,7 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
 
                 {/* Was schon dransteht – antippen nimmt die eigene zurück */}
                 {gebuendelt.length > 0 && (
-                  <div className="flex gap-1 flex-wrap mt-1">
+                  <div className="flex gap-1.5 flex-wrap" style={{ marginTop: 6 }}>
                     {gebuendelt.map(({ emoji, leute }) => {
                       const meins = !!me && leute.some(r => r.user_id === me)
                       return (
@@ -277,14 +320,15 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
                           onClick={() => toggleKommentar(c.id, emoji)}
                           aria-label={`${emoji}: ${leute.map(r => (r.user_id === me ? 'du' : nameOf(r.user_id))).join(', ')}`}
                           style={{
-                            fontSize: 12, lineHeight: 1, padding: '4px 8px', borderRadius: 999,
-                            border: 'none', display: 'flex', alignItems: 'center', gap: 4,
-                            background: meins ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.12)',
-                            color: meins ? '#1C1C1E' : 'rgba(255,255,255,0.75)',
+                            fontSize: 17, lineHeight: 1, minHeight: 38, padding: '0 12px',
+                            borderRadius: 999,
+                            border: 'none', display: 'flex', alignItems: 'center', gap: 6,
+                            background: meins ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.16)',
+                            color: meins ? '#1C1C1E' : 'white',
                           }}
                         >
                           {emoji}
-                          <span style={{ fontWeight: 600 }}>
+                          <span style={{ fontWeight: 600, fontSize: 13 }}>
                             {leute.map(r => (r.user_id === me ? 'du' : nameOf(r.user_id))).join(', ')}
                           </span>
                         </button>
@@ -306,24 +350,29 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
           placeholder="Kommentieren…"
           maxLength={500}
           style={{
-            flex: 1, fontSize: 14, padding: '9px 13px', borderRadius: 12, border: 'none',
-            background: 'rgba(255,255,255,0.13)', color: 'white', outline: 'none',
+            // 16 Pixel ist nicht nur besser lesbar: Darunter zoomt Safari auf
+            // dem iPhone beim Antippen ins Feld hinein und der Rest der Seite
+            // rutscht weg.
+            flex: 1, fontSize: 16, minHeight: 44, padding: '0 14px', borderRadius: 12,
+            border: 'none',
+            background: 'rgba(255,255,255,0.15)', color: 'white', outline: 'none',
           }}
         />
         <button
           onClick={senden}
           disabled={!text.trim() || busy}
           style={{
-            fontSize: 14, fontWeight: 700, padding: '9px 15px', borderRadius: 12, border: 'none',
-            background: text.trim() ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.14)',
-            color: text.trim() ? '#1C1C1E' : 'rgba(255,255,255,0.5)',
+            fontSize: 15, fontWeight: 700, minHeight: 44, padding: '0 18px',
+            borderRadius: 12, border: 'none', flexShrink: 0,
+            background: text.trim() ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.16)',
+            color: text.trim() ? '#1C1C1E' : 'rgba(255,255,255,0.6)',
           }}
         >
           {busy ? '…' : 'Senden'}
         </button>
       </div>
 
-      {error && <p style={{ fontSize: 12, color: '#FECACA', marginTop: 6 }}>⚠ {error}</p>}
+      {error && <p style={{ fontSize: 14, color: '#FECACA', marginTop: 8 }}>⚠ {error}</p>}
     </div>
   )
 }
