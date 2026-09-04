@@ -534,9 +534,17 @@ async function frageKi(prompt: string, bilder: Bildteil[]): Promise<string | nul
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }, ...bilder] }],
           // Höhere Temperatur als bei den Auswertungen: Hier ist Einfallsreichtum
-          // erwünscht, nicht Genauigkeit. Das Budget deckt Denken plus drei
-          // kurze Sätze ab.
-          generationConfig: { maxOutputTokens: 2048, temperature: 1.0 },
+          // erwünscht, nicht Genauigkeit.
+          //
+          // Das Budget stand auf 2048 und der Kommentar daneben verriet, warum:
+          // "deckt Denken plus drei kurze Sätze ab". Das stimmte, als es drei
+          // Sätze waren. Inzwischen sind es je Stimme ein Fazit und ein Satz je
+          // Bild, also bis zu einundzwanzig, dazu die Beobachtungen zu jedem
+          // Bild. Die Antwort brach mitten im JSON ab, das Lesen scheiterte,
+          // und die Karte fiel auf den Ersatztext zurück - sichtbar daran,
+          // dass ausgerechnet der Rueckblick mit den meisten Bildern gar keine
+          // Zeilen hatte.
+          generationConfig: { maxOutputTokens: 8192, temperature: 1.0 },
         }),
       })
       if (!res.ok) {
@@ -544,8 +552,16 @@ async function frageKi(prompt: string, bilder: Bildteil[]): Promise<string | nul
         continue
       }
       const daten = await res.json()
-      const text = daten.candidates?.[0]?.content?.parts
+      const kandidat = daten.candidates?.[0]
+      const text = kandidat?.content?.parts
         ?.map((p: { text?: string }) => p.text ?? '').join('').trim()
+
+      // Der Abbruchgrund ist die einzige Stelle, an der eine abgeschnittene
+      // Antwort sich zu erkennen gibt. Ohne diese Zeile sieht ein zu kleines
+      // Budget genauso aus wie ein Modell, das nichts Brauchbares liefert.
+      if (kandidat?.finishReason && kandidat.finishReason !== 'STOP') {
+        console.error(`Gedanken: ${model} endete mit ${kandidat.finishReason}`)
+      }
       if (text) return text
     } catch (e) {
       console.error(`Gedanken: ${model} fehlgeschlagen`, e)
@@ -735,7 +751,11 @@ export async function erzeuge(
     try {
       const beobachtungen = leseBeobachtungen(
         leseBeobachtungsteil(antwort),
-        bilder.map(b => b.id),
+        // Über die geschickten Bilder, nicht über die ausgewählten: "Bild 3"
+        // in der Antwort meint das dritte mitgeschickte. Liess sich eines
+        // nicht laden, zeigten die Beobachtungen sonst auf das falsche Foto -
+        // und landeten mit dieser falschen Zuordnung dauerhaft im Gedächtnis.
+        geladen.map(g => g.quelle.id),
         tag,
       )
       const kandidaten = zuKandidaten(beobachtungen, katzenIds, tag)
