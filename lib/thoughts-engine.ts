@@ -23,7 +23,7 @@ import {
   type Stimme, type Tagesbild, type Zeitraum,
 } from '@/lib/thoughts'
 import { tagesAnweisung, waehleBesten, bewerte, istPremisse, type Premisse } from '@/lib/humor'
-import { waehleFotos, waehleFotosUeberTage } from '@/lib/photo-select'
+import { waehleFotos, waehleFotosUeberTage, type Auswahl as Bildquelle } from '@/lib/photo-select'
 import { leseBeobachtungen, zuKandidaten } from '@/lib/memory/observe'
 import { verschmelze, veralte } from '@/lib/memory/merge'
 import { waehleRelevante, alsText, zuAehnlich, type Kontext } from '@/lib/memory/select'
@@ -44,7 +44,6 @@ export function makeAdmin() {
   )
 }
 
-type Bildquelle = { id: string; url: string }
 
 /**
  * Der Ausschnitt, über den geredet wird.
@@ -268,7 +267,7 @@ async function baueBild(
     admin.from('health_logs').select('*').in('cat_id', catIds).gte('logged_at', von).lte('logged_at', bis),
     // cat_ids mitlesen: Die Fotoauswahl bevorzugt eine Situation, auf der
     // beide zu sehen sind – dafür muss sie die Markierung kennen.
-    admin.from('photos').select('id, taken_at, place, cat_ids, cat_id, public_url, poster_url, media_type, caption')
+    admin.from('photos').select('id, taken_at, place, cat_ids, cat_id, public_url, poster_url, media_type, caption, thumb_url, view_url')
       .gte('taken_at', von).lte('taken_at', bis).order('taken_at', { ascending: true }),
     // Überlappung statt Punkttreffer: Bei einem Wochenfenster zählt jede
     // Betreuung, die irgendwann in diese sieben Tage hineinragt.
@@ -510,7 +509,9 @@ async function ladeBilder(quellen: Bildquelle[]): Promise<Geladen[]> {
   for (const quelle of quellen) {
     const url = quelle.url
     // Erst die verkleinerte Fassung, sonst das Original
-    let res = await holeMitLimit(kleinereFassung(url), 8_000)
+    // Liegt eine verkleinerte Fassung vor, ist sie schon klein genug – dann
+    // wird der Bilddienst gar nicht erst bemüht.
+    let res = await holeMitLimit(quelle.abgeleitet ? url : kleinereFassung(url), 8_000)
     if (!res?.ok) res = await holeMitLimit(url, 8_000)
     if (!res?.ok) continue
 
@@ -925,6 +926,9 @@ export async function erzeuge(
       .map(b => ({
         fotoId: b.id,
         fotoUrl: b.url,
+        fotoThumb: b.kachel,
+        // Damit die Karte weiss, ob sie das Bild unverändert ausliefern darf.
+        abgeleitet: b.abgeleitet,
         text: proBild.get(b.id)!.text,
         premise: proBild.get(b.id)!.premisse,
         // Bei einem Rückblick steht über dem Bild, von wann es ist. Ohne das

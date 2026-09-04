@@ -5,6 +5,11 @@ import { getActiveCat } from '@/lib/active-cat.server'
 import { berlinDayStart, berlinDayEnd, fromBerlinInputValue } from '@/lib/time'
 import { notifyNewPhoto } from '@/lib/notifications'
 import { reverseGeocode } from '@/lib/geocode'
+import { erzeugeAbleitungen } from '@/lib/bilder'
+
+// Beim Anlegen wird das frische Bild geladen, zweimal umgerechnet und wieder
+// hochgeladen. Das braucht mehr als die voreingestellten zehn Sekunden.
+export const maxDuration = 60
 
 function makeSupabase() {
   const cookieStore = cookies()
@@ -175,6 +180,36 @@ export async function POST(req: NextRequest) {
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  /**
+   * Die verkleinerten Fassungen gleich mit erzeugen.
+   *
+   * Sofort und nicht erst im nächtlichen Nachlauf: Sonst zeigt die Galerie
+   * das frische Foto stundenlang in voller Auflösung – zweieinhalb Megabyte
+   * für eine Kachel von 130 Punkten. Es kostet ein paar Sekunden am Ende
+   * eines Vorgangs, der ohnehin welche gedauert hat.
+   *
+   * Awaited wie die Benachrichtigung darunter, und aus demselben Grund: In
+   * einer Serverless-Funktion würde ein nicht abgewarteter Aufruf mit dem Ende
+   * der Antwort abgebrochen. Scheitert es, bleibt derivate_state offen und der
+   * Nachlauf holt es; gezeigt wird solange das Original.
+   */
+  const quelle = isVideo ? posterUrl : public_url
+  if (data?.id && quelle) {
+    try {
+      const admin = makeAdminSupabase()
+      const fassungen = await erzeugeAbleitungen(admin, data.id, quelle)
+      if (fassungen) {
+        await admin.from('photos')
+          .update({ ...fassungen, derivate_state: 'fertig' })
+          .eq('id', data.id)
+        Object.assign(data, fassungen)
+      }
+    } catch (e) {
+      console.error('Verkleinerte Fassungen fehlgeschlagen:', e)
+    }
+  }
+
   // Die anderen im Haushalt über das neue Bild informieren. Bewusst awaited:
   // In einer Serverless-Funktion würde ein nicht abgewarteter Aufruf mit dem
   // Ende der Antwort abgebrochen. Fehler dürfen den Upload nicht kippen –

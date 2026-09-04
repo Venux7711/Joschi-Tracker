@@ -30,6 +30,16 @@ import type { Cat } from '@/lib/types'
 type Zeile = {
   fotoId: string
   fotoUrl: string
+  /** Verkleinerte Fassung für den Streifen; fehlt bei älteren Einträgen. */
+  fotoThumb?: string | null
+  /**
+   * Ob die Adressen schon verkleinerte Fassungen sind.
+   *
+   * Dann werden sie unverändert ausgeliefert – kleiner macht sie ohnehin
+   * niemand mehr, und der Bilddienst hat ein Monatskontingent, das sich
+   * unbemerkt leert.
+   */
+  abgeleitet?: boolean
   text: string
   premise: string | null
   datum?: string | null
@@ -334,6 +344,7 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
                 <Image
                   key={aktuelleZeile.fotoUrl}
                   src={aktuelleZeile.fotoUrl}
+                  unoptimized={aktuelleZeile.abgeleitet ?? false}
                   alt="Das Foto, über das gesprochen wird"
                   fill
                   className="object-cover"
@@ -396,7 +407,11 @@ export default function CatThoughts({ cats }: { cats: Cat[] }) {
                         transition: 'opacity 0.2s ease',
                       }}
                     >
-                      <Image src={z.fotoUrl} alt="" fill className="object-cover" sizes="58px" />
+                      <Image
+                        src={z.fotoThumb ?? z.fotoUrl}
+                        unoptimized={z.abgeleitet ?? false}
+                        alt="" fill className="object-cover" sizes="58px"
+                      />
                     </div>
                     {/* Der Wochentag unter der Station: Ohne ihn ist eine
                         Woche eine Reihe beliebiger Bilder. */}

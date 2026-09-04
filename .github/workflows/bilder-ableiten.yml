@@ -1,0 +1,54 @@
+name: Bilder verkleinern
+
+# Rechnet die verkleinerten Fassungen der Bestandsfotos nach.
+#
+# Der Anlass war eine Rechnung, die nicht aufging: Vercels Bilddienst rechnete
+# bei jedem Blick ein 2,4-MB-Foto auf 130 Pixel herunter, und weil eine fertige
+# Größe nur eine Stunde als frisch galt, tat er es täglich wieder. Das
+# Freikontingent von 5000 Umrechnungen im Monat war nach wenigen Wochen
+# aufgebraucht; danach liefern neue Bildgrößen einen Fehler statt eines Bildes.
+#
+# Ein hochgeladenes Foto ändert sich nie. Also einmal verkleinern, das Ergebnis
+# danebenlegen und von da an unverändert ausliefern. Neue Fotos bekommen ihre
+# Fassungen beim Hochladen; die 99, die schon da waren, holt dieser Lauf nach.
+#
+# Läuft danach kostenlos weiter: Ist nichts offen, ist der Lauf nach einer
+# einzigen Abfrage vorbei.
+
+on:
+  schedule:
+    # Stündlich zur 25. Minute. Der ungerade Wert ist Absicht: Zur vollen
+    # Stunde sind die GitHub-Runner am stärksten ausgelastet.
+    - cron: '25 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: bilder-ableiten
+  cancel-in-progress: false
+
+jobs:
+  ableiten:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Offene Bilder verkleinern
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "⏸ CRON_SECRET ist nicht gesetzt – übersprungen."
+            echo "  Ohne das Secret bleiben die Bestandsfotos ohne verkleinerte"
+            echo "  Fassung und werden weiter über den Bilddienst ausgeliefert."
+            exit 0
+          fi
+
+          response=$(curl -sS --fail-with-body -m 320 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "https://joschi-tracker.vercel.app/api/photos/ableitungen/cron")
+
+          echo "$response" | node -e "
+            let d=''; process.stdin.on('data',c=>c&&(d+=c)).on('end',()=>{
+              const r = JSON.parse(d)
+              console.log('verkleinert  :', r.fertig)
+              console.log('gescheitert  :', r.gescheitert)
+              console.log('noch offen   :', r.offen)
+            })"

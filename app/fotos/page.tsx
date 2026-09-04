@@ -12,7 +12,7 @@ import { aktuellerOrt, istFrisch } from '@/lib/geolocation'
 import { kannKomprimieren, komprimiereVideo, type Fortschritt } from '@/lib/video-compress'
 import { merkeProtokoll } from '@/lib/video-debug'
 import ProtokollAnzeige from '@/components/ProtokollAnzeige'
-import { captureVideoPoster, formatDuration, hasStill, isVideoFile, stillUrl, MAX_VIDEO_BYTES, ZIEL_BYTES } from '@/lib/media'
+import { captureVideoPoster, formatDuration, hasStill, isVideoFile, stillUrl, kachelQuelle, MAX_VIDEO_BYTES, ZIEL_BYTES } from '@/lib/media'
 import PhotoViewer from '@/components/PhotoViewer'
 import type { Cat } from '@/lib/types'
 
@@ -644,7 +644,7 @@ export default function FotosPage() {
                       className="aspect-square relative overflow-hidden group sm:rounded-xl"
                     >
                       {hasStill(photo) ? (
-                        <Image src={stillUrl(photo)} alt="" fill className="object-cover transition-transform group-hover:scale-105" sizes="33vw" />
+                        <Image {...kachelQuelle(photo)} alt="" fill className="object-cover transition-transform group-hover:scale-105" sizes="33vw" />
                       ) : (
                         // Video, aus dem sich kein Standbild greifen ließ – ein
                         // <Image> mit einer .mp4-Adresse bliebe hier leer.

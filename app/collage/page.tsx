@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { pickActiveCat } from '@/lib/active-cat-client'
 import { dedupeSharedFeedings } from '@/lib/utils'
 import { berlinDateKey, berlinDayEnd, berlinDayStart, formatBerlin, pastBerlinDays } from '@/lib/time'
-import { hasStill, stillUrl } from '@/lib/media'
+import { hasStill, kachelQuelle } from '@/lib/media'
 import type { Cat } from '@/lib/types'
 
 interface Photo { id: string; public_url: string; mood_tag: string; taken_at: string; media_type?: string | null; poster_url?: string | null }
@@ -163,7 +163,7 @@ export default function CollagePage() {
               return (
                 <div key={day.date} className="aspect-square relative rounded-2xl overflow-hidden">
                   {day.photo ? (
-                    <Image src={stillUrl(day.photo)} alt={day.label} fill className="object-cover" sizes="25vw" />
+                    <Image {...kachelQuelle(day.photo)} alt={day.label} fill className="object-cover" sizes="25vw" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center" style={{ background: `${stoolInfo.color}20` }}>
                       <span className="text-2xl" style={{ color: stoolInfo.color }}>{stoolInfo.emoji}</span>

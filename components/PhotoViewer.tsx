@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import PhotoInteractions from '@/components/PhotoInteractions'
 import { formatBerlin } from '@/lib/time'
-import { isVideo } from '@/lib/media'
+import { isVideo, ansichtQuelle } from '@/lib/media'
 import type { Cat } from '@/lib/types'
 
 export type ViewerPhoto = {
@@ -136,7 +136,7 @@ export default function PhotoViewer({
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video
               key={photo.id}
-              src={photo.public_url}
+              {...ansichtQuelle(photo)}
               poster={photo.poster_url ?? undefined}
               controls
               playsInline

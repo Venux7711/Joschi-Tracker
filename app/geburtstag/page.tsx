@@ -8,7 +8,7 @@ import { getCatTheme } from '@/lib/cat-theme'
 import { dedupeSharedFeedings, dedupeFeedingsPerDay } from '@/lib/utils'
 import { addBerlinDays, berlinDateKey, formatBerlin } from '@/lib/time'
 import { birthdayInfo } from '@/lib/birthday'
-import { hasStill, stillUrl } from '@/lib/media'
+import { hasStill, kachelQuelle, ansichtQuelle } from '@/lib/media'
 import type { Cat, FeedingLog, HealthLog } from '@/lib/types'
 
 type Stat = { value: string; label: string; hint?: string }
@@ -224,7 +224,7 @@ export default async function GeburtstagPage({
               {[firstPhoto, lastPhoto].map((p, i) => (
                 <div key={p.id} style={{ background: 'white', padding: 12 }}>
                   <div style={{ position: 'relative', aspectRatio: '1', borderRadius: 12, overflow: 'hidden' }}>
-                    <Image src={stillUrl(p)} alt="" fill className="object-cover" sizes="50vw" />
+                    <Image {...ansichtQuelle(p)} alt="" fill className="object-cover" sizes="50vw" />
                   </div>
                   <p style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 7, textAlign: 'center' }}>
                     {i === 0 ? 'erstes Foto' : 'neuestes Foto'}<br />
@@ -245,7 +245,7 @@ export default async function GeburtstagPage({
             <div className="grid grid-cols-4 gap-1 p-3">
               {photosInYear.slice(-12).reverse().map(p => (
                 <Link key={p.id} href="/fotos" style={{ position: 'relative', aspectRatio: '1', borderRadius: 8, overflow: 'hidden' }}>
-                  <Image src={stillUrl(p)} alt="" fill className="object-cover" sizes="25vw" />
+                  <Image {...kachelQuelle(p)} alt="" fill className="object-cover" sizes="25vw" />
                 </Link>
               ))}
             </div>

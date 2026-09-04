@@ -10,6 +10,40 @@ export type MediaLike = {
   media_type?: string | null
   poster_url?: string | null
   duration_seconds?: number | null
+  /** Verkleinerte Fassung ~400 px, siehe lib/bilder.ts. */
+  thumb_url?: string | null
+  /** Verkleinerte Fassung ~1600 px. */
+  view_url?: string | null
+}
+
+/**
+ * Woher ein Bild kommt – und ob es noch durch den Bilddienst muss.
+ *
+ * Der Hintergrund: Der Bilddienst von Vercel rechnete bei jedem Blick ein
+ * 2,4-MB-Foto auf 130 Pixel herunter, und weil eine fertige Größe nur eine
+ * Stunde als frisch galt, tat er es täglich wieder. Nach wenigen Wochen war
+ * das Freikontingent aufgebraucht und neue Bildgrößen lieferten Fehler.
+ *
+ * Jetzt liegen die verkleinerten Fassungen im eigenen Speicher. Wo eine
+ * vorliegt, wird sie unverändert ausgeliefert – kleiner macht sie ohnehin
+ * niemand mehr. Wo noch keine liegt (ein Bestandsfoto, das der Nachlauf noch
+ * nicht hatte), bleibt es beim Original samt Optimierung, damit nichts kaputt
+ * aussieht.
+ */
+export type Bildquelle = { src: string; unoptimized: boolean }
+
+/** Für Kacheln, Streifen und kleine Vorschauen. */
+export function kachelQuelle(row: MediaLike): Bildquelle {
+  return row.thumb_url
+    ? { src: row.thumb_url, unoptimized: true }
+    : { src: stillUrl(row), unoptimized: false }
+}
+
+/** Für Vollbild, große Karten und alles, was den Bildschirm füllt. */
+export function ansichtQuelle(row: MediaLike): Bildquelle {
+  return row.view_url
+    ? { src: row.view_url, unoptimized: true }
+    : { src: stillUrl(row), unoptimized: false }
 }
 
 /**

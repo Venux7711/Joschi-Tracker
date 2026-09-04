@@ -27,6 +27,9 @@ export type FotoKandidat = {
   public_url: string | null
   poster_url: string | null
   media_type: string | null
+  /** Verkleinerte Fassungen aus dem eigenen Speicher, siehe lib/bilder.ts. */
+  thumb_url?: string | null
+  view_url?: string | null
 }
 
 export type Situation = {
@@ -85,6 +88,23 @@ export function bildAdresse(f: FotoKandidat): string | null {
 }
 
 /**
+ * Was tatsächlich geladen wird.
+ *
+ * Liegt eine verkleinerte Fassung vor, ist sie die richtige Quelle – für die
+ * Anzeige wie für die Bildanalyse. Das Original ist ein Handyfoto von
+ * zweieinhalb Megabyte; es dafür zu laden hiesse, es entweder durch einen
+ * Bilddienst zu schicken (der kostet und war schon aufgebraucht) oder es in
+ * voller Grösse über Mobilfunk zu ziehen.
+ */
+export function kachelAdresse(f: FotoKandidat): string | null {
+  return f.thumb_url ?? bildAdresse(f)
+}
+
+export function ansichtAdresse(f: FotoKandidat): string | null {
+  return f.view_url ?? bildAdresse(f)
+}
+
+/**
  * Wählt die Fotos aus, die den Tag am besten erklären.
  *
  * Nicht die schönsten – die weiß niemand zu bestimmen –, sondern die
@@ -101,7 +121,7 @@ export function waehleFotos(
   fotos: FotoKandidat[],
   anzahl = 3,
   versatz = 0,
-): { id: string; url: string }[] {
+): Auswahl[] {
   const brauchbar = fotos.filter(f => bildAdresse(f))
   if (brauchbar.length === 0) return []
 
@@ -152,7 +172,21 @@ export function waehleFotos(
 
   return gewaehlt
     .sort((a, b) => a.taken_at.localeCompare(b.taken_at))
-    .map(f => ({ id: f.id, url: bildAdresse(f)! }))
+    .map(alsAuswahl)
+}
+
+/** Ein ausgewähltes Foto samt beider Grössen und der Frage, ob es abgeleitet ist. */
+export type Auswahl = { id: string; url: string; kachel: string; abgeleitet: boolean }
+
+export function alsAuswahl(f: FotoKandidat): Auswahl {
+  return {
+    id: f.id,
+    url: ansichtAdresse(f)!,
+    kachel: kachelAdresse(f)!,
+    // Nur wenn beide Fassungen vorliegen: Sonst zeigte die App ein Original
+    // ohne Optimierung, und das ist der teuerste aller Fälle.
+    abgeleitet: !!(f.view_url && f.thumb_url),
+  }
 }
 
 /**
@@ -177,7 +211,7 @@ export function waehleFotosUeberTage(
   anzahl: number,
   versatz = 0,
   tagVon: (f: FotoKandidat) => string = f => f.taken_at.slice(0, 10),
-): { id: string; url: string }[] {
+): Auswahl[] {
   const brauchbar = fotos.filter(f => bildAdresse(f))
   if (brauchbar.length === 0) return []
 
@@ -222,7 +256,7 @@ export function waehleFotosUeberTage(
     for (const tag of tage) if (!reihe.includes(tag)) reihe.push(tag)
   }
 
-  const gewaehlt: { id: string; url: string }[] = []
+  const gewaehlt: Auswahl[] = []
   const genommen = new Set<string>()
 
   for (let runde = 0; runde < 3 && gewaehlt.length < anzahl; runde++) {

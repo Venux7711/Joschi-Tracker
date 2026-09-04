@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { formatBerlin } from '@/lib/time'
-import { hasStill, isVideo, stillUrl } from '@/lib/media'
+import { hasStill, isVideo, ansichtQuelle } from '@/lib/media'
 
 interface Photo {
   id: string
@@ -114,7 +114,7 @@ export default function SlideshowPage() {
         onClick={() => setPlaying(p => !p)}
         style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.4s ease' }}
       >
-        <Image src={stillUrl(photo)} alt="" fill className="object-contain" sizes="100vw" priority />
+        <Image {...ansichtQuelle(photo)} alt="" fill className="object-contain" sizes="100vw" priority />
         {isVideo(photo) && (
           <span className="absolute inset-0 flex items-center justify-center text-white text-4xl pointer-events-none" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>▶</span>
         )}
