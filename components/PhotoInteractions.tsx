@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { REACTIONS } from '@/lib/reactions'
+import { formatBerlinZeitstempel } from '@/lib/time'
 import EmojiPicker from '@/components/EmojiPicker'
 
 type Reaction = { id: string; photo_id: string; user_id: string; emoji: string }
@@ -197,7 +198,7 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
 
       {/* Kommentare */}
       {comments.length > 0 && (
-        <div className="mt-3 space-y-1.5">
+        <div className="mt-3 space-y-3">
           {comments.map(c => {
             const meine = commentReactions.filter(r => r.comment_id === c.id)
             // Gleiche Emojis bündeln, damit unter einem Kommentar nicht
@@ -216,53 +217,78 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
                 </p>
 
                 {/*
-                  Die Knöpfe stehen in einer eigenen Zeile und tragen ihren
-                  Namen.
+                  Die Fußzeile: Zeitpunkt und Handlungen, alles in einer
+                  ruhigen Zeile.
 
-                  Vorher war "Reagieren" ein zwölf Pixel großes ☺+ bei 40 %
-                  Deckkraft, rechts an den Text gequetscht, ohne Fläche und
-                  ohne Beschriftung. Auf einem Foto war das für jemanden, der
-                  nicht gut sieht, schlicht nicht vorhanden – und die Trefffläche
-                  lag bei etwa vierzehn Pixeln, ein Drittel dessen, was ein
-                  Finger braucht.
+                  Zwei Fehler nacheinander, beide lehrreich. Zuerst war
+                  "Reagieren" ein zwölf Pixel großes ☺+ bei 40 % Deckkraft ohne
+                  Beschriftung – auf einem Foto für jemanden, der nicht gut
+                  sieht, schlicht nicht vorhanden. Dann ein gefüllter Knopf mit
+                  Rahmen in 44 Pixeln Höhe – gut zu finden, aber so laut, dass
+                  er den Lesefluss einer Kommentarreihe zerschnitt.
 
-                  Ein Wort ist hier besser als ein Zeichen: Ein Symbol muss man
-                  erraten, "Reagieren" liest man.
+                  Auflösung: Sichtbarkeit und Trefffläche sind zwei
+                  verschiedene Dinge. Der Text bleibt klein und unauffällig,
+                  die Trefffläche wächst über unsichtbaren Innenabstand auf die
+                  nötigen 44 Pixel. Was das Auge beruhigt, muss den Finger
+                  nicht ärgern.
+
+                  Bleibt vom ersten Anlauf: das Wort. Ein Symbol muss man
+                  erraten, "Reagieren" liest man – und mit 75 % Deckkraft statt
+                  40 % steht es auch auf einem hellen Foto noch da.
                 */}
-                <div className="flex items-center gap-2" style={{ marginTop: 6 }}>
+                <div
+                  className="flex items-center flex-wrap"
+                  style={{
+                    fontSize: 12.5,
+                    // Negative Raender: Die Knoepfe sind 44 Pixel hoch, die
+                    // Zeile beansprucht davon nur dreissig. Der Rest ragt in
+                    // den Abstand hinein, der ohnehin da ist - Trefflaeche
+                    // ohne Bauhoehe.
+                    marginTop: -7, marginBottom: -7, marginLeft: -8,
+                  }}
+                >
+                  <time
+                    dateTime={c.created_at}
+                    style={{ color: 'rgba(255,255,255,0.5)', padding: '0 8px' }}
+                  >
+                    {formatBerlinZeitstempel(c.created_at)}
+                  </time>
+
+                  <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
+
                   <button
                     onClick={() => setOffeneAuswahl(offeneAuswahl === c.id ? null : c.id)}
                     aria-expanded={offeneAuswahl === c.id}
                     aria-label="Auf diesen Kommentar reagieren"
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      fontSize: 14, fontWeight: 600, lineHeight: 1,
-                      // 44 Pixel ist das Maß, unter dem ein Finger anfängt
-                      // danebenzutippen.
-                      minHeight: 44, padding: '0 16px', borderRadius: 999,
-                      border: '1px solid rgba(255,255,255,0.25)',
-                      background: offeneAuswahl === c.id ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.16)',
-                      color: offeneAuswahl === c.id ? '#1C1C1E' : 'white',
+                      // Der Innenabstand macht die Trefffläche, nicht die
+                      // Schrift: 44 Pixel hoch, optisch aber nur eine Zeile.
+                      minHeight: 44, padding: '0 8px',
+                      border: 'none', background: 'transparent',
+                      fontSize: 12.5, fontWeight: 600,
+                      color: offeneAuswahl === c.id ? 'white' : 'rgba(255,255,255,0.75)',
+                      textDecoration: offeneAuswahl === c.id ? 'underline' : 'none',
                     }}
                   >
-                    <span style={{ fontSize: 17 }}>🙂</span>
                     Reagieren
                   </button>
 
                   {c.user_id === me && (
-                    // Sichtbar, aber ruhiger als "Reagieren": Ein Kommentar
-                    // ist schnell gelöscht und kommt nicht zurück.
-                    <button
-                      onClick={() => loeschen(c.id)}
-                      aria-label="Diesen Kommentar löschen"
-                      style={{
-                        fontSize: 13, lineHeight: 1, minHeight: 44, padding: '0 14px',
-                        borderRadius: 999, border: 'none',
-                        background: 'transparent', color: 'rgba(255,255,255,0.65)',
-                      }}
-                    >
-                      Löschen
-                    </button>
+                    <>
+                      <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
+                      <button
+                        onClick={() => loeschen(c.id)}
+                        aria-label="Diesen Kommentar löschen"
+                        style={{
+                          minHeight: 44, padding: '0 8px',
+                          border: 'none', background: 'transparent',
+                          fontSize: 12.5, color: 'rgba(255,255,255,0.5)',
+                        }}
+                      >
+                        Löschen
+                      </button>
+                    </>
                   )}
                 </div>
 
@@ -320,15 +346,15 @@ export default function PhotoInteractions({ photoId }: { photoId: string }) {
                           onClick={() => toggleKommentar(c.id, emoji)}
                           aria-label={`${emoji}: ${leute.map(r => (r.user_id === me ? 'du' : nameOf(r.user_id))).join(', ')}`}
                           style={{
-                            fontSize: 17, lineHeight: 1, minHeight: 38, padding: '0 12px',
+                            fontSize: 15, lineHeight: 1, minHeight: 34, padding: '0 10px',
                             borderRadius: 999,
-                            border: 'none', display: 'flex', alignItems: 'center', gap: 6,
+                            border: 'none', display: 'flex', alignItems: 'center', gap: 5,
                             background: meins ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.16)',
                             color: meins ? '#1C1C1E' : 'white',
                           }}
                         >
                           {emoji}
-                          <span style={{ fontWeight: 600, fontSize: 13 }}>
+                          <span style={{ fontWeight: 600, fontSize: 12 }}>
                             {leute.map(r => (r.user_id === me ? 'du' : nameOf(r.user_id))).join(', ')}
                           </span>
                         </button>

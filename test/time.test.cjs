@@ -120,3 +120,41 @@ test('Silvester 23:30 gehört noch ins alte Jahr', () => {
   // Umgekehrt: 00:30 Berliner Zeit am 1.1. ist in UTC noch der 31.12.
   assert.equal(berlinYear(new Date('2025-12-31T23:30:00Z')), 2026)
 })
+
+// ── Zeitstempel an Kommentaren ───────────────────────────────────
+
+const { formatBerlinZeitstempel } = require('../.test-build/time')
+
+test('heute reicht die Uhrzeit', () => {
+  // Der Zusammenhang liefert den Rest: Wer einen Kommentar von heute liest,
+  // braucht kein Datum.
+  const jetzt = new Date('2026-09-05T20:00:00Z')
+  assert.equal(formatBerlinZeitstempel('2026-09-05T17:37:00Z', jetzt), '19:37')
+})
+
+test('gestern wird benannt, nicht datiert', () => {
+  const jetzt = new Date('2026-09-05T20:00:00Z')
+  assert.equal(formatBerlinZeitstempel('2026-09-04T17:37:00Z', jetzt), 'Gestern 19:37')
+})
+
+test('älter im selben Jahr: Tag und Uhrzeit, kein Jahr', () => {
+  const jetzt = new Date('2026-09-05T20:00:00Z')
+  const text = formatBerlinZeitstempel('2026-09-01T17:37:00Z', jetzt)
+  assert.ok(text.startsWith('1.'), text)
+  assert.ok(text.endsWith('19:37'), text)
+  assert.ok(!text.includes('2026'), text)
+})
+
+test('ein anderes Jahr bekommt das Jahr dazu', () => {
+  const jetzt = new Date('2026-09-05T20:00:00Z')
+  const text = formatBerlinZeitstempel('2025-09-01T17:37:00Z', jetzt)
+  assert.ok(text.includes('2025'), text)
+  assert.ok(text.endsWith('19:37'), text)
+})
+
+test('der Zeitstempel rechnet in Berliner Zeit, nicht in UTC', () => {
+  // Ein Kommentar um 00:30 Berliner Zeit gehört zum neuen Tag, obwohl er in
+  // UTC noch zum alten zählt. Genau hier verrutschen solche Anzeigen sonst.
+  const jetzt = new Date('2026-07-15T12:00:00Z')
+  assert.equal(formatBerlinZeitstempel('2026-07-14T22:30:00Z', jetzt), '00:30')
+})

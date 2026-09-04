@@ -158,3 +158,35 @@ export function formatBerlin(date: Date | string | number, options: Intl.DateTim
 export function formatBerlinDate(date: Date | string | number): string {
   return formatBerlin(date, { day: 'numeric', month: 'numeric', year: 'numeric' })
 }
+
+/**
+ * Zeitstempel für Kommentare – so kurz wie möglich, so genau wie nötig.
+ *
+ * Der Zusammenhang liefert das meiste mit: Wer einen Kommentar von heute
+ * liest, braucht kein Datum, sondern die Uhrzeit. Erst wenn der Tag nicht mehr
+ * selbstverständlich ist, kommt er dazu, und das Jahr erst, wenn es ein
+ * anderes ist. So bleibt die Zeile in fast allen Fällen vier Zeichen lang.
+ *
+ *   heute        19:37
+ *   gestern      Gestern 19:37
+ *   dieses Jahr  3. Sep, 19:37
+ *   davor        3. Sep 2025, 19:37
+ */
+export function formatBerlinZeitstempel(
+  date: Date | string | number,
+  jetzt: Date | string | number = new Date(),
+): string {
+  const uhr = formatBerlin(date, { hour: '2-digit', minute: '2-digit' })
+  const abstand = berlinDaysBetween(date, jetzt)
+
+  if (abstand === 0) return uhr
+  if (abstand === 1) return `Gestern ${uhr}`
+
+  const gleichesJahr = berlinYear(date) === berlinYear(jetzt)
+  const tag = formatBerlin(date, {
+    day: 'numeric',
+    month: 'short',
+    ...(gleichesJahr ? {} : { year: 'numeric' }),
+  })
+  return `${tag}, ${uhr}`
+}
