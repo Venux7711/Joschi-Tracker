@@ -31,7 +31,15 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          # 24, nicht 20. Der Supabase-Client bringt seinen Realtime-Teil mit,
+          # und der verlangt ein eingebautes WebSocket – das gibt es erst ab
+          # Node 22. Unter 20 bricht das Skript in der ersten Zeile ab, noch
+          # bevor es ein Video anfassen kann.
+          #
+          # Aufgefallen ist das erst jetzt: Solange die Zugangsdaten fehlten,
+          # stieg der Lauf vorher aus und meldete freundlich, dass nichts zu
+          # tun sei. Ein zweiter Fehler dahinter blieb dadurch unsichtbar.
+          node-version: '24'
           cache: npm
 
       - name: ffmpeg prüfen
