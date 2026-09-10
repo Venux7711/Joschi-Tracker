@@ -10,8 +10,11 @@ name: Videos verkleinern
 #
 # Wer nicht warten will, startet den Lauf über "Run workflow" von Hand.
 #
-# Der Runner bringt ffmpeg mit, hat sechs Stunden Zeit und nichts anderes zu
-# tun. Genau das fehlt einem iPhone, an dem vier Anläufe gescheitert sind.
+# Der Runner hat sechs Stunden Zeit und nichts anderes zu tun. Genau das fehlt
+# einem iPhone, an dem vier Anläufe gescheitert sind.
+#
+# ffmpeg bringt er allerdings nicht mehr mit - fruehere Ubuntu-Abbilder taten
+# das, das aktuelle nicht. Deshalb wird es hier installiert.
 
 on:
   schedule:
@@ -42,8 +45,17 @@ jobs:
           node-version: '24'
           cache: npm
 
+      - name: ffmpeg installieren
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
       - name: ffmpeg prüfen
-        run: ffmpeg -version | head -1
+        # Ohne Rohr. Vorher stand hier "ffmpeg -version | head -1", und der
+        # Exit-Code einer Rohrkette ist der des letzten Glieds: head lieferte
+        # brav 0, waehrend ffmpeg gar nicht existierte. Die Pruefung meldete
+        # also Erfolg und das Skript scheiterte eine Zeile spaeter mit ENOENT.
+        run: ffmpeg -version
 
       - run: npm ci
 
