@@ -134,11 +134,27 @@ export default function PhotoViewer({
         {video ? (
           <div className="absolute inset-0 flex items-center justify-center">
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            {/*
+              src ist immer das Original, niemals ansichtQuelle().
+
+              Genau daran ist es zerbrochen: ansichtQuelle() liefert die
+              verkleinerte Fassung, und die ist bei einem Video das Standbild –
+              ein JPEG. Ein <video> mit einer JPEG-Adresse spielt nicht ab, und
+              weil das Standbild als Vorschau trotzdem erschien, sah es nach
+              einem stummen Video statt nach einer falschen Adresse aus.
+
+              Fürs Standbild ist die verkleinerte Fassung dagegen richtig: Das
+              ist ein Bild, und es soll nicht in voller Auflösung geladen
+              werden, nur um eine Sekunde lang dazustehen.
+            */}
             <video
               key={photo.id}
-              {...ansichtQuelle(photo)}
-              poster={photo.poster_url ?? undefined}
+              src={photo.public_url}
+              poster={photo.view_url ?? photo.poster_url ?? undefined}
               controls
+              // Ton gehört dazu. Kein muted, kein autoPlay: Ein Video, das von
+              // selbst losläuft, muss stumm sein – eines, das der Mensch
+              // startet, darf klingen.
               playsInline
               preload="metadata"
               className="max-h-full max-w-full"
