@@ -131,6 +131,24 @@ export async function POST(req: NextRequest) {
    * fast immer die Hälfte oder mehr eingespart.
    */
   const VERKLEINERN_AB = 20 * 1024 * 1024
+
+  /**
+   * Ein iPhone lädt .mov hoch, und das ist mehr als eine andere Endung.
+   *
+   * Nachgesehen an der Datei, die nicht abspielte: Container "qt", also
+   * Content-Type video/quicktime. Die Codecs darin sind harmlos – H.264 und
+   * AAC –, aber der Container ist es nicht: Safari spielt ihn, Chrome und
+   * Firefox nur manchmal. Wer die App am Rechner öffnet, sieht dann ein
+   * schwarzes Feld.
+   *
+   * Dazu lag der Inhaltsverzeichnis-Block (moov) am Dateiende. Der Browser
+   * muss ihn erst suchen, bevor er anfangen kann.
+   *
+   * Beides behebt derselbe Durchlauf, der ohnehin für große Videos existiert:
+   * neu kodiert nach mp4, mit -movflags +faststart. Also auch dann anstoßen,
+   * wenn die Datei klein ist, aber im falschen Behälter steckt.
+   */
+  const istMp4 = typeof storage_path === 'string' && /\.mp4$/i.test(storage_path)
   const bytes =
     typeof body.bytes === 'number' && Number.isFinite(body.bytes) && body.bytes > 0
       ? Math.round(body.bytes)
@@ -174,9 +192,12 @@ export async function POST(req: NextRequest) {
     duration_seconds: duration,
     original_bytes: isVideo ? bytes : null,
     // In die Warteschlange stellen, wenn es sich lohnt. Auch ein Video ohne
-    // Standbild kommt hinein – der Hintergrundlauf holt beides nach.
+    // Standbild kommt hinein – der Hintergrundlauf holt beides nach –, und
+    // eines im falschen Behälter, selbst wenn es klein ist.
     compress_state:
-      isVideo && (!posterUrl || (bytes !== null && bytes > VERKLEINERN_AB)) ? 'wartet' : null,
+      isVideo && (!posterUrl || !istMp4 || (bytes !== null && bytes > VERKLEINERN_AB))
+        ? 'wartet'
+        : null,
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

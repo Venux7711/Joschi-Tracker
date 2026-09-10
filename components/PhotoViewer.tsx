@@ -22,6 +22,9 @@ export type ViewerPhoto = {
   media_type: string | null
   poster_url: string | null
   duration_seconds: number | null
+  /** Verkleinerte Fassungen aus dem eigenen Speicher, siehe lib/bilder.ts. */
+  thumb_url?: string | null
+  view_url?: string | null
 }
 
 const MOOD_LABELS: Record<string, { label: string; color: string }> = {

@@ -108,9 +108,22 @@ async function bearbeite(zeile) {
       console.log('  Standbild erzeugt')
     }
 
-    // Lohnt sich das? Unter 10 % Ersparnis bleibt das Original – ein zweites
-    // Umrechnen verliert nur Qualität.
-    if (nachher >= vorher * 0.9) {
+    /**
+     * Lohnt sich das? Unter 10 % Ersparnis bleibt das Original – ein zweites
+     * Umrechnen verliert nur Qualität.
+     *
+     * Aber nur, wenn das Original schon ein mp4 war. Bei einem .mov vom iPhone
+     * ist die Größe gar nicht der Grund: Der Container heißt "qt", also
+     * video/quicktime, und den spielen Chrome und Firefox nur manchmal. Dazu
+     * liegt der Inhaltsverzeichnis-Block am Dateiende, sodass der Browser erst
+     * suchen muss, bevor er anfangen kann. Beides ist nach dem Durchlauf
+     * behoben, auch wenn kein einziges Byte gespart wurde – das Ergebnis
+     * deshalb zu verwerfen hieße, das eigentliche Problem stehenzulassen.
+     */
+    const warMp4 = /\.mp4$/i.test(zeile.storage_path)
+    if (!warMp4) console.log('  Anderer Behälter – Ergebnis wird auch ohne Ersparnis behalten')
+
+    if (warMp4 && nachher >= vorher * 0.9) {
       console.log('  Kaum kleiner – Original behalten')
       await db.from('photos').update({
         compress_state: 'uebersprungen',
