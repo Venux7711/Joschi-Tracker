@@ -58,3 +58,51 @@ test('isVideoFile geht notfalls nach der Dateiendung', () => {
   assert.equal(isVideoFile({ type: 'image/jpeg', name: 'IMG_1.JPG' }), false)
   assert.equal(isVideoFile({ type: '', name: 'katze.heic' }), false)
 })
+
+// ── Sichern aufs Gerät ──────────────────────────────────────────
+
+const { dateiEndung, dateiname } = require('../.test-build/speichern')
+
+test('die Endung kommt aus der Adresse', () => {
+  assert.equal(dateiEndung('https://x/y/1789063902090-klein.mp4'), 'mp4')
+  assert.equal(dateiEndung('https://x/y/foto.JPEG'), 'jpeg')
+  assert.equal(dateiEndung('https://x/y/film.mov?token=abc'), 'mov')
+})
+
+test('ohne Endung in der Adresse hilft der Mime-Typ', () => {
+  assert.equal(dateiEndung('https://x/y/ohne', 'video/quicktime'), 'mov')
+  assert.equal(dateiEndung('https://x/y/ohne', 'video/mp4'), 'mp4')
+  assert.equal(dateiEndung('https://x/y/ohne', 'image/png'), 'png')
+  assert.equal(dateiEndung('https://x/y/ohne', null), 'jpg')
+})
+
+test('der Dateiname nennt, wer drauf ist und wann es war', () => {
+  // "IMG_4711.jpg" sagt in einem Album mit zehntausend Bildern nichts.
+  const name = dateiname({
+    url: 'https://x/y/bild.jpg',
+    aufgenommen: '2026-09-10T18:11:42.000Z',
+    namen: ['Joschi', 'Bella'],
+  })
+  assert.equal(name, 'Joschi-Bella-2026-09-10T18-11.jpg')
+})
+
+test('Umlaute und Sonderzeichen überleben den Namen nicht', () => {
+  // Sie überstehen nicht jedes Dateisystem, und ein Name, der beim Sichern
+  // abgeschnitten wird, ist schlimmer als ein schlichter.
+  const name = dateiname({
+    url: 'https://x/y/bild.jpg',
+    aufgenommen: '2026-09-10T18:11:42.000Z',
+    namen: ['Käthe Müller-Lüdenscheidt'],
+  })
+  assert.ok(/^[A-Za-z0-9.\-]+$/.test(name), name)
+  assert.ok(name.startsWith('KatheMuller'), name)
+})
+
+test('ohne Markierung bleibt ein brauchbarer Name übrig', () => {
+  const name = dateiname({
+    url: 'https://x/y/bild.jpg',
+    aufgenommen: '2026-09-10T18:11:42.000Z',
+    namen: [],
+  })
+  assert.ok(name.startsWith('Katzen-2026-09-10'), name)
+})

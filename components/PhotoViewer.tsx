@@ -5,6 +5,7 @@ import Image from 'next/image'
 import PhotoInteractions from '@/components/PhotoInteractions'
 import { formatBerlin } from '@/lib/time'
 import { isVideo, ansichtQuelle } from '@/lib/media'
+import { insAlbum } from '@/lib/speichern'
 import type { Cat } from '@/lib/types'
 
 export type ViewerPhoto = {
@@ -69,6 +70,8 @@ export default function PhotoViewer({
   const [chrome, setChrome] = useState(true)
   const [savingTag, setSavingTag] = useState(false)
   const [savingPlace, setSavingPlace] = useState(false)
+  /** Zustand des Sichern-Knopfes: bereit → laeuft → fertig/fehler → bereit. */
+  const [sichern, setSichern] = useState<'bereit' | 'laeuft' | 'fertig' | 'fehler'>('bereit')
   const touchStart = useRef<{ x: number; y: number } | null>(null)
 
   const photo = photos[index]
@@ -168,9 +171,13 @@ export default function PhotoViewer({
             />
           </div>
         ) : (
+          // Die verkleinerte Fassung, nicht das Original. Bei der Umstellung
+          // im September traf die Ersetzung versehentlich das <video> daneben
+          // statt dieser Stelle - das Vollbild zog seitdem weiter das
+          // Handyfoto in voller Auflösung durch den Bilddienst.
           <Image
             key={photo.id}
-            src={photo.public_url}
+            {...ansichtQuelle(photo)}
             alt={photo.caption ?? ''}
             fill
             className="object-contain"
@@ -283,13 +290,58 @@ export default function PhotoViewer({
                 </button>
               )}
             </div>
-            <button
-              onClick={() => onDelete(photo)}
-              className="text-red-400 text-xs px-2 py-1 rounded-lg flex-shrink-0"
-              style={{ border: '1px solid rgba(248,113,113,0.35)' }}
-            >
-              Löschen
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/*
+                Sichern – auf dem iPhone landet es damit im Fotoalbum.
+
+                Steht neben "Löschen" und sieht genauso aus: Es sind beides
+                Handlungen am ganzen Eintrag, und eine davon lauter zu machen
+                hieße nur, die andere zu übersehen.
+              */}
+              <button
+                onClick={async () => {
+                  if (sichern !== 'bereit') return
+                  setSichern('laeuft')
+                  const ergebnis = await insAlbum({
+                    // Immer das Original, nie die verkleinerte Fassung: Wer ein
+                    // Foto ins Album holt, will es in voller Auflösung.
+                    url: photo.public_url,
+                    aufgenommen: photo.taken_at,
+                    namen: (photo.cat_ids ?? []).map(id => cats.find(c => c.id === id)?.name ?? '').filter(Boolean),
+                  })
+                  // Geteilt heißt: Das Blatt hat übernommen, hier ist nichts
+                  // mehr zu melden. Abgebrochen heißt dasselbe - wer wegwischt,
+                  // hat nichts falsch gemacht und braucht keine Meldung.
+                  if (ergebnis === 'geteilt' || ergebnis === 'abgebrochen') {
+                    setSichern('bereit')
+                    return
+                  }
+                  setSichern(ergebnis === 'fehler' ? 'fehler' : 'fertig')
+                  setTimeout(() => setSichern('bereit'), 2500)
+                }}
+                disabled={sichern === 'laeuft'}
+                aria-label={video ? 'Video sichern' : 'Foto sichern'}
+                className="text-xs px-2 py-1 rounded-lg"
+                style={{
+                  color: sichern === 'fehler' ? '#FCA5A5' : 'rgba(255,255,255,0.8)',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  background: 'transparent',
+                }}
+              >
+                {sichern === 'laeuft' ? 'lädt…'
+                  : sichern === 'fertig' ? 'gespeichert'
+                    : sichern === 'fehler' ? 'ging nicht'
+                      : '⤓ Sichern'}
+              </button>
+
+              <button
+                onClick={() => onDelete(photo)}
+                className="text-red-400 text-xs px-2 py-1 rounded-lg"
+                style={{ border: '1px solid rgba(248,113,113,0.35)' }}
+              >
+                Löschen
+              </button>
+            </div>
           </div>
 
           {/* Wer ist drauf */}
